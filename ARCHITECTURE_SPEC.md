@@ -513,6 +513,11 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
 - [**Issue 1.4.3: REST API & CLI Integration**](https://github.com/morphy76/vuhive-cloud/issues/10)
   - Build Gin router with Bearer/API Key authentication middleware.
   - Implement `vuhive-cloud` CLI client for suite upload, triggering runs, and viewing reports in the terminal.
+- [**Issue 1.4.4: Execution Reports, Logs & Performance Metrics Query API**](https://github.com/morphy76/vuhive-cloud/issues/24)
+  - Implement `GET /api/v1/runs` with filtering (`suite_id`, `status`, date ranges) and pagination.
+  - Implement `GET /api/v1/runs/{id}` returning run metadata, exit code, SLA status, and indexed KPIs.
+  - Implement `GET /api/v1/runs/{id}/report` returning full `summary.json` from S3.
+  - Implement `GET /api/v1/runs/{id}/logs` retrieving execution log output.
 
 #### Epic 1.5: Helm Deployment & Infrastructure Packaging
 - [**Issue 1.5.1: Helm Chart for vuhive-cloud Control Plane & Infrastructure**](https://github.com/morphy76/vuhive-cloud/issues/21)
