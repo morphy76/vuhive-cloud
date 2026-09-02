@@ -21,9 +21,9 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
 All work is organized across three primary milestones on GitHub:
 
 - **[Milestone 1: Core Foundation & Single-Runner Cloud Engine](https://github.com/morphy76/vuhive-cloud/milestone/1)**
-  - Epic 1.1: Core Foundation, Domain Models & Data Layer (#1, #2, #3)
+  - Epic 1.1: Core Foundation, Domain Models & Data Layer (#1, #2, #3, #26)
   - Epic 1.2: Source-to-Binary Compilation & Framework Enforcement (#4, #5, #22)
-  - Epic 1.3: Runner Pod Orchestration, Profiles & Security Hardening (#6, #7, #8, #23)
+  - Epic 1.3: Runner Pod Orchestration, Profiles & Security Hardening (#6, #7, #8, #23, #25)
   - Epic 1.4: Scheduling, Reporting & CLI (#9, #10, #20, #24)
   - Epic 1.5: Helm Deployment & Infrastructure Packaging (#21)
 - **[Milestone 2: Distributed Multi-Pod Coordination & Live Streaming](https://github.com/morphy76/vuhive-cloud/milestone/2)**

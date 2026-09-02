@@ -476,6 +476,10 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
   - Implement outbound repository ports using `pgxpool`.
 - [**Issue 1.1.3: S3 Storage Adapter**](https://github.com/morphy76/vuhive-cloud/issues/3)
   - Implement outbound `StoragePort` using AWS SDK v2 / MinIO for source tarballs, binary artifacts, yaml configs, logs, and reports.
+- [**Issue 1.1.4: Execution Artifact Housekeeping & Retention Lifecycle Engine**](https://github.com/morphy76/vuhive-cloud/issues/26)
+  - Implement automated retention and housekeeping policies for S3 artifacts (`summary.json`, `run.log`, source archives, binaries).
+  - Implement database pruning service for historical `test_runs` past configurable TTL.
+  - S3 object lifecycle configuration rules and background cleanup worker.
 
 #### Epic 1.2: Source Compilation & Framework Enforcement Subsystem
 - [**Issue 1.2.1: Ephemeral Build Job Generator**](https://github.com/morphy76/vuhive-cloud/issues/4)
@@ -502,6 +506,10 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
   - Configure runner pods conforming to Kubernetes `restricted` Pod Security Standards (`runAsNonRoot`, `readOnlyRootFilesystem`, `capabilities.drop: ["ALL"]`).
   - Generate egress `NetworkPolicy` blocking cloud instance metadata (`169.254.169.254`) and cluster API servers.
   - Inject `activeDeadlineSeconds` timeouts and provide optional gVisor runtime class support.
+- [**Issue 1.3.5: Execution Lifecycle Control & Abort/Cancellation Service**](https://github.com/morphy76/vuhive-cloud/issues/25)
+  - Implement `POST /api/v1/runs/{id}/abort` API endpoint and use case.
+  - Terminate running Kubernetes Jobs and pods with SIGTERM/SIGINT propagation.
+  - Transition state machine to `ABORTED` with cancellation audit metadata and emit `RunAborted` domain event.
 
 #### Epic 1.4: Scheduling & Reporting
 - [**Issue 1.4.1: Native K8s CronJob Manager**](https://github.com/morphy76/vuhive-cloud/issues/9)
