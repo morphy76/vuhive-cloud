@@ -42,15 +42,18 @@ flowchart TD
     end
 
     subgraph K8sCluster["Kubernetes Cluster (vuhive-runners namespace)"]
-        subgraph BuildSub["Ephemeral Build Subsystem"]
-            BuildJob["Ephemeral Go Compiler Job\n(golang:1.26-alpine)"]
+        subgraph BuildSub["Ephemeral Build Subsystem (vuhive-system)"]
+            BuildJob["Ephemeral Build Job\n(golang:1.26-alpine)"]
+            ASTValidator["Pre-Build Gate:\n- go.mod verification\n- Go AST inspection\n- Import blocklist\n- Injected main.go driver"]
+            BuildJob --> ASTValidator
         end
 
-        subgraph RunnerSub["Execution Subsystem"]
+        subgraph RunnerSub["Execution Subsystem (Restricted PSS)"]
             CronJob["K8s native CronJob\n(batch/v1)"]
-            RunnerJob["K8s Runner Job\n(batch/v1)"]
+            RunnerJob["K8s Runner Job\n(batch/v1, activeDeadlineSeconds)"]
+            NetPol["Egress NetworkPolicy:\nDeny K8s API & Metadata\nAllow Target & S3"]
             
-            subgraph RunnerPod["Runner Pod"]
+            subgraph RunnerPod["Runner Pod (Non-Root, Read-Only FS)"]
                 InitC["Init Container:\nDownload binary + vuhive.yaml from S3"]
                 SharedVol["emptyDir Shared Volume\n(/vuhive/bin, /vuhive/config)"]
                 MainC["Main Runner Container:\nExecute compiled test binary"]
@@ -139,35 +142,43 @@ vuhive-cloud/
 
 ## 4. Detailed Workflows
 
-### 4.1 Source-to-Binary Build Workflow
-1. **Upload:** User/CI posts a tarball/zip of Go source code (or Git reference) and target architecture (`linux/amd64` or `linux/arm64`) to `POST /api/v1/suites/{id}/builds`.
-2. **Staging:** Control plane saves the source archive to S3 bucket `vuhive-sources/{suite_id}/{build_id}.tar.gz`.
-3. **Build Job:** Control plane dispatches an ephemeral Kubernetes Job (`vuhive-build-{build_id}`) in `vuhive-system` using image `golang:1.26-alpine`.
-4. **Compilation:** The build pod downloads sources, executes:
+### 4.1 Source-to-Binary Build Workflow & Framework Enforcement
+1. **Upload:** User/CI posts a tarball/zip of Go source code (or Git reference) and target architecture (`linux/amd64` or `linux/arm64`) to `POST /api/v1/suites/{id}/builds`. The archive contains the test scenario implementation.
+2. **Staging:** Control plane validates archive integrity and saves the source archive to S3 bucket `vuhive-sources/{suite_id}/{build_id}.tar.gz`.
+3. **Build Job Dispatch:** Control plane dispatches an ephemeral Kubernetes Job (`vuhive-build-{build_id}`) in `vuhive-system` using image `golang:1.26-alpine`.
+4. **Pre-Build Static Analysis & Framework Enforcement:**
+   Before invoking the Go compiler, the build pod executes an automated static verification gate:
+   - **`go.mod` Dependency Verification:** Validates that `go.mod` exists and declares `github.com/morphy76/vuhive` as a required direct dependency.
+   - **Go AST Analysis (`go/parser` & `go/ast`):** Parses all uploaded Go source files to verify that the code implements the `vuhive.Scenario` contract or scenario registration entrypoints.
+   - **Disallowed Package Import Blocklist:** Rejects any source code importing unauthorized system or execution libraries (e.g. `os/exec`, `syscall`, `unsafe`, `plugin`, raw network socket creation) to prevent crypto-mining, backdoors, or non-load-testing batch workloads.
+   - **Platform-Managed Driver Injection (`main.go`):** To enforce framework lifecycle and telemetry compliance, the build pipeline injects a trusted, immutable `main.go` template that wires the uploaded scenario into `vuhive.NewEngine()`, ensuring that `--summary-export`, signal trapping, and metrics emitters cannot be bypassed.
+   - **Fast Rejection:** If static inspection fails, compilation is aborted immediately, build status transitions to `FAILED`, and the error report is returned to the user.
+5. **Compilation:** If static checks pass, the build pod compiles the static binary:
    ```bash
    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGET_ARCH} go build -trimpath -ldflags="-s -w" -o /workspace/runner .
    ```
-5. **Publish:** The build pod uploads the static binary to `s3://vuhive-binaries/{suite_id}/{build_id}/{target_arch}/runner` and notifies the control plane API.
-6. **Ready State:** Build status transitions to `READY`. The artifact is registered with hash, size, target platform, and created timestamp.
+6. **Publish:** The build pod uploads the static binary to `s3://vuhive-binaries/{suite_id}/{build_id}/{target_arch}/runner` and notifies the control plane API.
+7. **Ready State:** Build status transitions to `READY`. The artifact is registered with hash, size, target platform, and created timestamp.
 
-### 4.2 Runner Execution Workflow (Ad-Hoc Run)
+### 4.2 Runner Execution Workflow & Security Isolation (Ad-Hoc Run)
 1. **Trigger:** User issues `POST /api/v1/runs` selecting a `suite_id`, `build_id`, optional `config_id` (vuhive.yaml), and a `runner_profile_id`.
-2. **K8s Job Creation:** Control plane resolves the runner profile (tolerations, affinity, CPU/RAM) and manifests a Kubernetes `batch/v1` `Job` with labels:
-   - `vuhive.io/run-id: <uuid>`
-   - `vuhive.io/suite-id: <uuid>`
+2. **K8s Job & Security Context Generation:** Control plane resolves the runner profile (tolerations, affinity, CPU/RAM, execution deadline) and manifests:
+   - A Kubernetes `batch/v1` `Job` with labels (`vuhive.io/run-id`, `vuhive.io/suite-id`) and `activeDeadlineSeconds` timeout.
+   - **Pod Security Standards (`restricted` PSS):** `runAsNonRoot: true` (UID 10001), `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, and `capabilities.drop: ["ALL"]`.
+   - **Egress NetworkPolicy:** Applied to the runner namespace, allowing egress only to S3/MinIO, the control plane callback endpoint, and explicit target IP/CIDRs defined for the load test, while blocking internal cluster IPs (e.g., `10.96.0.1:443`) and cloud instance metadata (`169.254.169.254`).
 3. **Init Container Execution:**
    - Pod starts with init container `vuhive-cloud/runner-init:latest`.
-   - Fetches the compiled binary and selected `vuhive.yaml` from S3 into `/shared`.
-   - Makes `/shared/runner` executable (`chmod +x`).
+   - Fetches the compiled binary and selected `vuhive.yaml` from S3 into an `emptyDir` shared volume (`/shared`).
+   - Sets executable permissions (`chmod +x /shared/runner`).
 4. **Runner Execution:**
-   - Main container (generic runner or user-supplied custom image) mounts `/shared`.
+   - Main container mounts `/shared` with read-only root filesystem.
    - Runs `/shared/runner --summary-export=/shared/summary.json` with execution output piped to `/shared/run.log`.
 5. **Post-Run Hook & Report Ingestion:**
    - Injected wrapper / post-execution step uploads `/shared/summary.json` and `/shared/run.log` to S3:
      - `s3://vuhive-reports/{run_id}/summary.json`
      - `s3://vuhive-reports/{run_id}/run.log`
-   - Wrapper posts completion to `POST /api/v1/runs/{id}/complete`.
-   - Control plane parses `summary.json`, extracts SLA passed/failed flag, latency percentiles (`p50`, `p90`, `p95`, `p99`), total iterations, throughput TPS, and updates the `test_runs` record in PostgreSQL.
+   - Wrapper posts completion callback to `POST /api/v1/runs/{id}/complete`.
+   - Control plane parses `summary.json`, verifies the deterministic `vuhive` report schema, extracts SLA pass/fail status, latency percentiles (`p50`, `p90`, `p95`, `p99`), total iterations, throughput TPS, and updates the `test_runs` record in PostgreSQL. Runs with invalid or missing summary reports are flagged as `FAILED`.
 
 ### 4.3 Native K8s CronJob Workflow (Scheduled Runs)
 1. **Creation:** User issues `POST /api/v1/schedules` specifying cron expression (e.g. `0 2 * * *`), `suite_id`, `build_id`, `config_id`, and `runner_profile_id`.
@@ -314,9 +325,9 @@ All endpoints require Header `Authorization: Bearer <token>` or `X-API-Key: <key
 
 ---
 
-## 7. Kubernetes Runner Pod Specification
+## 7. Kubernetes Runner Pod Specification & Hardening
 
-A generated execution Job in `vuhive-runners` namespace:
+A generated execution Job in `vuhive-runners` namespace conforming to Kubernetes Pod Security Standards (`restricted`):
 
 ```yaml
 apiVersion: batch/v1
@@ -330,6 +341,7 @@ metadata:
     vuhive.io/suite-id: "suite-uuid"
 spec:
   backoffLimit: 0
+  activeDeadlineSeconds: 3600 # Terminates runaway executions
   ttlSecondsAfterFinished: 86400
   template:
     metadata:
@@ -338,6 +350,13 @@ spec:
         vuhive.io/run-id: "a1b2c3d4-e5f6-7890-abcd-ef0123456789"
     spec:
       restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -356,6 +375,11 @@ spec:
       initContainers:
         - name: fetch-artifacts
           image: ghcr.io/morphy76/vuhive-cloud/runner-init:v0.1.0
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           env:
             - name: S3_ENDPOINT
               value: "minio.storage.svc:9000"
@@ -368,7 +392,12 @@ spec:
               mountPath: /shared
       containers:
         - name: runner
-          image: alpine:3.20 # Or custom runner image
+          image: alpine:3.20 # Minimal unprivileged base runner
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           command: ["/shared/entrypoint.sh"]
           resources:
             requests:
@@ -382,80 +411,137 @@ spec:
               mountPath: /shared
 ```
 
+### 7.1 Egress NetworkPolicy (Runner Isolation)
+
+To block runners from connecting to internal cluster control planes or cloud instance metadata:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vuhive-runner-isolation
+  namespace: vuhive-runners
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vuhive-runner
+  policyTypes:
+    - Egress
+  egress:
+    # 1. DNS Resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # 2. Storage & Control Plane Callbacks
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vuhive-system
+      ports:
+        - protocol: TCP
+          port: 8080 # API
+        - protocol: TCP
+          port: 9000 # MinIO / S3
+    # 3. Public Target Systems Under Test (Excluding Cloud Metadata & Internal Cluster CIDRs)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32 # Cloud instance metadata API
+              - 10.96.0.0/12        # K8s Service CIDR / API Server
+```
+
 ---
 
 ## 8. Milestone Roadmap & GitHub Issues Breakdown
 
-Ready to convert directly into GitHub Milestones and Issues upon repository initialization:
+All issues and milestones are actively tracked via the [GitHub Issues Tracker](https://github.com/morphy76/vuhive-cloud/issues) and [GitHub Milestones](https://github.com/morphy76/vuhive-cloud/milestones):
 
-### Milestone 1: Core Foundation & Single-Runner Cloud Engine
-**Goal:** Deliver end-to-end functionality for uploading Go sources, compiling binaries via K8s Jobs, storing in S3, dispatching single-pod K8s Jobs/CronJobs with node affinities, and collecting reports.
+### [Milestone 1: Core Foundation & Single-Runner Cloud Engine](https://github.com/morphy76/vuhive-cloud/milestone/1)
+**Goal:** Deliver end-to-end functionality for uploading Go sources, verifying framework compliance, compiling binaries via K8s Jobs, storing in S3, dispatching single-pod K8s Jobs/CronJobs with node affinities, and collecting reports.
 
 #### Epic 1.1: Core Domain, Hexagonal Architecture & Database
-- **Issue 1.1.1: Initialize Hexagonal Scaffolding & Domain Aggregates**
+- [**Issue 1.1.1: Initialize Hexagonal Scaffolding & Domain Aggregates**](https://github.com/morphy76/vuhive-cloud/issues/1)
   - Define `TestSuite`, `Artifact`, `RunnerProfile`, `TestRun`, `Schedule` models and value objects in `internal/domain/model/`.
   - Add compile-time interface assertions and domain error sentinels.
-- **Issue 1.1.2: PostgreSQL Schema Migrations & pgx Repositories**
+- [**Issue 1.1.2: PostgreSQL Schema Migrations & pgx Repositories**](https://github.com/morphy76/vuhive-cloud/issues/2)
   - Create Golang migrate scripts for database tables, foreign keys, and indexes.
   - Implement outbound repository ports using `pgxpool`.
-- **Issue 1.1.3: S3 Storage Adapter**
+- [**Issue 1.1.3: S3 Storage Adapter**](https://github.com/morphy76/vuhive-cloud/issues/3)
   - Implement outbound `StoragePort` using AWS SDK v2 / MinIO for source tarballs, binary artifacts, yaml configs, logs, and reports.
 
-#### Epic 1.2: Source Compilation Subsystem
-- **Issue 1.2.1: Ephemeral Build Job Generator**
+#### Epic 1.2: Source Compilation & Framework Enforcement Subsystem
+- [**Issue 1.2.1: Ephemeral Build Job Generator**](https://github.com/morphy76/vuhive-cloud/issues/4)
   - Implement K8s client adapter to generate and launch `golang:1.26-alpine` build pods.
   - Inject cross-compilation environment variables (`GOOS=linux`, `GOARCH=amd64/arm64`).
-- **Issue 1.2.2: Build Status Tracking & Artifact Registry Inbound API**
+- [**Issue 1.2.2: Build Status Tracking & Artifact Registry Inbound API**](https://github.com/morphy76/vuhive-cloud/issues/5)
   - Provide endpoints `POST /api/v1/suites/{id}/builds` and callback handlers for build completion.
+- [**Issue 1.2.3: Pre-Build AST Static Analysis & vuhive Framework Enforcement**](https://github.com/morphy76/vuhive-cloud/issues/22)
+  - Inspect `go.mod` to ensure `github.com/morphy76/vuhive` is declared as a direct dependency.
+  - Implement AST inspector using Go's `go/parser` and `go/ast` to assert implementation of `vuhive.Scenario` or execution contracts.
+  - Enforce package import blocklist (blocking `os/exec`, `syscall`, `unsafe`, raw sockets).
+  - Implement platform-managed `main.go` entrypoint template stitching user scenario into trusted `vuhive.Engine` runner.
 
-#### Epic 1.3: Kubernetes Runner Orchestration & Profiles
-- **Issue 1.3.1: Runner Profile Management**
+#### Epic 1.3: Kubernetes Runner Orchestration, Profiles & Security Isolation
+- [**Issue 1.3.1: Runner Profile Management**](https://github.com/morphy76/vuhive-cloud/issues/6)
   - Implement CRUD services and API endpoints for reusable Runner Profiles (affinities, tolerations, CPU/RAM).
-- **Issue 1.3.2: Runner Pod Init Container & Injected Entrypoint**
+- [**Issue 1.3.2: Runner Pod Init Container & Injected Entrypoint**](https://github.com/morphy76/vuhive-cloud/issues/7)
   - Build `runner-init` image that fetches binary and YAML from S3 into an `emptyDir`.
   - Write standard entrypoint wrapper that runs the binary, captures exit code, and uploads `summary.json` and logs to S3.
-- **Issue 1.3.3: Ad-Hoc K8s Job Dispatcher**
+- [**Issue 1.3.3: Ad-Hoc K8s Job Dispatcher**](https://github.com/morphy76/vuhive-cloud/issues/8)
   - Implement `RunService` that manifests and launches `batch/v1` Jobs with profile affinities/tolerations.
   - Implement Informer / Watcher to track Job phase transitions (`Running`, `Succeeded`, `Failed`).
+- [**Issue 1.3.4: Runner Pod Security Hardening & Egress NetworkPolicies**](https://github.com/morphy76/vuhive-cloud/issues/23)
+  - Configure runner pods conforming to Kubernetes `restricted` Pod Security Standards (`runAsNonRoot`, `readOnlyRootFilesystem`, `capabilities.drop: ["ALL"]`).
+  - Generate egress `NetworkPolicy` blocking cloud instance metadata (`169.254.169.254`) and cluster API servers.
+  - Inject `activeDeadlineSeconds` timeouts and provide optional gVisor runtime class support.
 
 #### Epic 1.4: Scheduling & Reporting
-- **Issue 1.4.1: Native K8s CronJob Manager**
+- [**Issue 1.4.1: Native K8s CronJob Manager**](https://github.com/morphy76/vuhive-cloud/issues/9)
   - Implement `ScheduleService` creating/updating/deleting `batch/v1` `CronJob` resources in the runner namespace.
   - Add CronJob watcher to auto-create `TestRun` records when a scheduled job triggers.
-- **Issue 1.4.2: Report Ingestion & KPI Indexing**
+- [**Issue 1.4.2: Report Ingestion & KPI Indexing**](https://github.com/morphy76/vuhive-cloud/issues/20)
   - Implement `POST /api/v1/runs/{id}/complete` handler.
   - Parse `vuhive` `summary.json`, index SLA passed/failed, p50/p90/p95/p99 latency, TPS, and store parsed data in PostgreSQL.
-- **Issue 1.4.3: REST API & CLI Integration**
+- [**Issue 1.4.3: REST API & CLI Integration**](https://github.com/morphy76/vuhive-cloud/issues/10)
   - Build Gin router with Bearer/API Key authentication middleware.
   - Implement `vuhive-cloud` CLI client for suite upload, triggering runs, and viewing reports in the terminal.
 
 #### Epic 1.5: Helm Deployment & Infrastructure Packaging
-- **Issue 1.5.1: Helm Chart for vuhive-cloud Control Plane & Infrastructure**
+- [**Issue 1.5.1: Helm Chart for vuhive-cloud Control Plane & Infrastructure**](https://github.com/morphy76/vuhive-cloud/issues/21)
   - Create Helm chart under `deploy/helm/vuhive-cloud` packaging Deployment, Service, Ingress, and RBAC manifests.
   - Configure RBAC (ClusterRole/Role) allowing the control plane to manage Jobs, CronJobs, and pods across runner namespaces.
+  - Add templates for Pod Security Admission and Egress NetworkPolicies.
   - Add configuration values for external PostgreSQL and S3/MinIO, with optional local development subcharts.
 
 ---
 
-### Milestone 2: Distributed Multi-Pod Coordination & Live Streaming
+### [Milestone 2: Distributed Multi-Pod Coordination & Live Streaming](https://github.com/morphy76/vuhive-cloud/milestone/2)
 **Goal:** Expand execution engine to scale across multiple coordinated worker pods for massive load generation and stream metrics in real time.
 
 - **Epic 2.1: Distributed Test Coordination**
-  - **Issue 2.1.1: Distributed Workload Partitioning Engine:** Divide target VUs and arrival rate across $N$ worker pods.
-  - **Issue 2.1.2: Synchronized Pod Rendezvous / Start Barrier:** Coordinate simultaneous load generation across pods via Redis or K8s coordinator leader.
-  - **Issue 2.1.3: Multi-Report Merging Service:** Aggregate multiple `summary.json` reports into a unified test report combining HDR histograms.
+  - [**Issue 2.1.1: Distributed Workload Partitioning Engine**](https://github.com/morphy76/vuhive-cloud/issues/11): Divide target VUs and arrival rate across $N$ worker pods.
+  - [**Issue 2.1.2: Synchronized Pod Rendezvous / Start Barrier**](https://github.com/morphy76/vuhive-cloud/issues/12): Coordinate simultaneous load generation across pods via Redis or K8s coordinator leader.
+  - [**Issue 2.1.3: Multi-Report Merging Service**](https://github.com/morphy76/vuhive-cloud/issues/13): Aggregate multiple `summary.json` reports into a unified test report combining HDR histograms.
 - **Epic 2.2: Real-Time Telemetry Streaming**
-  - **Issue 2.2.1: Runner Live Telemetry Emitter:** Add periodic gRPC / WebSocket streaming adapter to `vuhive` runner to push 1-second metric snapshots.
-  - **Issue 2.2.2: Live Monitoring Web Dashboard:** Real-time throughput, latency graph, and live log viewer.
+  - [**Issue 2.2.1: Runner Live Telemetry Emitter**](https://github.com/morphy76/vuhive-cloud/issues/14): Add periodic gRPC / WebSocket streaming adapter to `vuhive` runner to push 1-second metric snapshots.
+  - [**Issue 2.2.2: Live Monitoring Web Dashboard**](https://github.com/morphy76/vuhive-cloud/issues/15): Real-time throughput, latency graph, and live log viewer.
 
 ---
 
-### Milestone 3: Multi-Namespace, Multi-Cluster & Enterprise SSO
+### [Milestone 3: Multi-Namespace, Multi-Cluster & Enterprise SSO](https://github.com/morphy76/vuhive-cloud/milestone/3)
 **Goal:** Enable enterprise tenancy across multiple teams, namespaces, and remote cloud clusters.
 
 - **Epic 3.1: Multi-Namespace & Multi-Cluster Dispatcher**
-  - **Issue 3.1.1: Dynamic Namespace Targeter:** Allow teams to specify arbitrary runner namespaces with auto-provisioned ServiceAccounts and RBAC.
-  - **Issue 3.1.2: Remote Multi-Cluster Kubeconfig Manager:** Connect remote EKS, GKE, and on-prem K8s clusters to dispatch distributed runners closer to target services.
+  - [**Issue 3.1.1: Dynamic Namespace Targeter**](https://github.com/morphy76/vuhive-cloud/issues/16): Allow teams to specify arbitrary runner namespaces with auto-provisioned ServiceAccounts and RBAC.
+  - [**Issue 3.1.2: Remote Multi-Cluster Kubeconfig Manager**](https://github.com/morphy76/vuhive-cloud/issues/17): Connect remote EKS, GKE, and on-prem K8s clusters to dispatch distributed runners closer to target services.
 - **Epic 3.2: Enterprise Authentication & RBAC**
-  - **Issue 3.2.1: OIDC / OAuth2 SSO Integration:** Support login via GitHub, Keycloak, and Google Identity.
-  - **Issue 3.2.2: Team Spaces & RBAC Permissions:** Role-based access control (Admin, Tester, Viewer) scoped to test suites.
+  - [**Issue 3.2.1: OIDC / OAuth2 SSO Integration**](https://github.com/morphy76/vuhive-cloud/issues/18): Support login via GitHub, Keycloak, and Google Identity.
+  - [**Issue 3.2.2: Team Spaces & RBAC Permissions**](https://github.com/morphy76/vuhive-cloud/issues/19): Role-based access control (Admin, Tester, Viewer) scoped to test suites.
