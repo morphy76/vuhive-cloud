@@ -537,6 +537,11 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
   - Implement `.github/workflows/ci.yaml` for PR testing, `golangci-lint`, unit tests with race detection, and `testcontainers-go`.
   - Implement `.github/workflows/docker.yaml` for multi-arch Docker image builds and GHCR publishing (`server`, `runner-init`).
   - Implement `.github/workflows/release.yaml` for automated tag-triggered releases, `ldflags` version injection, multi-platform CLI binary distribution, and Helm chart OCI publishing.
+- [**Issue 1.5.3: Repository Governance, Community Standards & GitHub Best Practices**](https://github.com/morphy76/vuhive-cloud/issues/28)
+  - Establish issue and PR templates (`bug_report.yml`, `feature_request.yml`, `PULL_REQUEST_TEMPLATE.md`).
+  - Add community health documentation (`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`).
+  - Configure automated dependency scanning via Dependabot (`.github/dependabot.yml`) and CodeQL static analysis.
+  - Document and configure branch protection rules for `main`.
 
 ---
 

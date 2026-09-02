@@ -25,7 +25,7 @@ All work is organized across three primary milestones on GitHub:
   - Epic 1.2: Source-to-Binary Compilation & Framework Enforcement (#4, #5, #22)
   - Epic 1.3: Runner Pod Orchestration, Profiles & Security Hardening (#6, #7, #8, #23, #25)
   - Epic 1.4: Scheduling, Reporting & CLI (#9, #10, #20, #24)
-  - Epic 1.5: Deployment, CI/CD & Infrastructure Packaging (#21, #27)
+  - Epic 1.5: Deployment, CI/CD & Infrastructure Packaging (#21, #27, #28)
 - **[Milestone 2: Distributed Multi-Pod Coordination & Live Streaming](https://github.com/morphy76/vuhive-cloud/milestone/2)**
   - Epic 2.1: Distributed Multi-Pod Coordination (#11, #12, #13)
   - Epic 2.2: Live Telemetry Streaming (#14, #15)
