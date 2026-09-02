@@ -527,12 +527,16 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
   - Implement `GET /api/v1/runs/{id}/report` returning full `summary.json` from S3.
   - Implement `GET /api/v1/runs/{id}/logs` retrieving execution log output.
 
-#### Epic 1.5: Helm Deployment & Infrastructure Packaging
+#### Epic 1.5: Deployment, CI/CD & Infrastructure Packaging
 - [**Issue 1.5.1: Helm Chart for vuhive-cloud Control Plane & Infrastructure**](https://github.com/morphy76/vuhive-cloud/issues/21)
   - Create Helm chart under `deploy/helm/vuhive-cloud` packaging Deployment, Service, Ingress, and RBAC manifests.
   - Configure RBAC (ClusterRole/Role) allowing the control plane to manage Jobs, CronJobs, and pods across runner namespaces.
   - Add templates for Pod Security Admission and Egress NetworkPolicies.
   - Add configuration values for external PostgreSQL and S3/MinIO, with optional local development subcharts.
+- [**Issue 1.5.2: GitHub Actions CI/CD Pipelines & Automated Release Management**](https://github.com/morphy76/vuhive-cloud/issues/27)
+  - Implement `.github/workflows/ci.yaml` for PR testing, `golangci-lint`, unit tests with race detection, and `testcontainers-go`.
+  - Implement `.github/workflows/docker.yaml` for multi-arch Docker image builds and GHCR publishing (`server`, `runner-init`).
+  - Implement `.github/workflows/release.yaml` for automated tag-triggered releases, `ldflags` version injection, multi-platform CLI binary distribution, and Helm chart OCI publishing.
 
 ---
 
