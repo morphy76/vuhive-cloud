@@ -138,6 +138,23 @@ This document provides a structured, issue-ready breakdown for `github.com/morph
 
 ---
 
+### Epic 1.5: Helm Deployment & Infrastructure Packaging
+
+#### Issue 1.5.1: Helm Chart for vuhive-cloud Control Plane & Infrastructure
+- **Labels:** `area/deploy`, `milestone-1`, `epic/deployment`
+- **Objective:** Provide an official Helm chart (`deploy/helm/vuhive-cloud`) to package and deploy the `vuhive-cloud` control plane, RBAC policies, service accounts, and backing services.
+- **Tasks:**
+  - Create Helm chart structure under `deploy/helm/vuhive-cloud` (`Chart.yaml`, `values.yaml`, templates).
+  - Define templates for `vuhive-cloud` Deployment, Service, Ingress, and ServiceAccount.
+  - Define RBAC templates (`ClusterRole`/`Role` and bindings) granting control plane permissions to manage `batch/v1` `Job`s, `CronJob`s, pods, and logs in runner namespaces.
+  - Add configuration for connecting to PostgreSQL and S3/MinIO (support external instances and optional subchart dependencies for quickstart/dev).
+  - Provide customizable values for resource requests/limits, environment variables, tolerations, and node selectors for the control plane.
+- **Acceptance Criteria:**
+  - `helm lint` and `helm template` render clean, valid Kubernetes manifests without errors.
+  - A clean deployment on a Kubernetes cluster brings up the control plane and allows it to orchestrate runner jobs.
+
+---
+
 ## Milestone 2: Distributed Multi-Pod Coordination & Live Streaming
 
 **Target Goal:** Scale load generation across multiple synchronized worker pods and stream live telemetry during test execution.

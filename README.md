@@ -19,6 +19,7 @@ This directory contains the architecture specification, system design, and miles
      - Epic 1.2: Source-to-Binary Compilation Subsystem (Issues 1.2.1 – 1.2.2)
      - Epic 1.3: Runner Pod Orchestration & Profiles (Issues 1.3.1 – 1.3.3)
      - Epic 1.4: Scheduling, Reporting & CLI (Issues 1.4.1 – 1.4.3)
+     - Epic 1.5: Helm Deployment & Infrastructure Packaging (Issue 1.5.1)
    - **Milestone 2: Distributed Multi-Pod Coordination & Live Streaming**
      - Epic 2.1: Distributed Multi-Pod Coordination (Issues 2.1.1 – 2.1.3)
      - Epic 2.2: Live Telemetry Streaming (Issues 2.2.1 – 2.2.2)

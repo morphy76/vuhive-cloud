@@ -130,6 +130,9 @@ vuhive-cloud/
 │           ├── postgres/    # pgx / sqlx repositories for PostgreSQL
 │           ├── s3/          # MinIO / AWS S3 client adapter
 │           └── k8s/         # client-go orchestrator (Job & CronJob builders, Informers)
+├── deploy/
+│   └── helm/
+│       └── vuhive-cloud/    # Helm chart for control plane, RBAC, and dependencies
 ```
 
 ---
@@ -425,6 +428,12 @@ Ready to convert directly into GitHub Milestones and Issues upon repository init
 - **Issue 1.4.3: REST API & CLI Integration**
   - Build Gin router with Bearer/API Key authentication middleware.
   - Implement `vuhive-cloud` CLI client for suite upload, triggering runs, and viewing reports in the terminal.
+
+#### Epic 1.5: Helm Deployment & Infrastructure Packaging
+- **Issue 1.5.1: Helm Chart for vuhive-cloud Control Plane & Infrastructure**
+  - Create Helm chart under `deploy/helm/vuhive-cloud` packaging Deployment, Service, Ingress, and RBAC manifests.
+  - Configure RBAC (ClusterRole/Role) allowing the control plane to manage Jobs, CronJobs, and pods across runner namespaces.
+  - Add configuration values for external PostgreSQL and S3/MinIO, with optional local development subcharts.
 
 ---
 
