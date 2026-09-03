@@ -116,6 +116,9 @@ func (m *MockBuildOrchestratorPort) StreamJobLogs(ctx context.Context, jobName s
 
 func (m *MockBuildOrchestratorPort) WaitForJob(ctx context.Context, jobName string) (*outbound.BuildJobExecution, error) {
 	args := m.Called(ctx, jobName)
+	if fn, ok := args.Get(0).(func(context.Context, string) *outbound.BuildJobExecution); ok {
+		return fn(ctx, jobName), args.Error(1)
+	}
 	if r := args.Get(0); r != nil {
 		return r.(*outbound.BuildJobExecution), args.Error(1)
 	}
@@ -269,11 +272,13 @@ func TestBuildService_BuildSuite_BothPlatforms(t *testing.T) {
 	storage.On("PresignDownload", mock.Anything, sourceKey, mock.Anything).Return("https://download", nil)
 	storage.On("PresignUpload", mock.Anything, mock.Anything, mock.Anything).Return("https://upload", nil)
 	orchestrator.On("DispatchBuildJob", mock.Anything, mock.Anything).Return("vuhive-build-job", nil)
-	orchestrator.On("WaitForJob", mock.Anything, mock.Anything).Return(&outbound.BuildJobExecution{
-		JobName:        "vuhive-build-job",
-		ExitCode:       0,
-		SHA256Checksum: checksum,
-		Logs:           io.NopCloser(bytes.NewReader([]byte("success"))),
+	orchestrator.On("WaitForJob", mock.Anything, mock.Anything).Return(func(ctx context.Context, jobName string) *outbound.BuildJobExecution {
+		return &outbound.BuildJobExecution{
+			JobName:        jobName,
+			ExitCode:       0,
+			SHA256Checksum: checksum,
+			Logs:           io.NopCloser(bytes.NewReader([]byte("success"))),
+		}
 	}, nil)
 	storage.On("Upload", mock.Anything, mock.Anything, mock.Anything, mock.Anything, "text/plain").Return(nil)
 
