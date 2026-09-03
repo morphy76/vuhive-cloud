@@ -35,4 +35,10 @@ var (
 
 	// ErrValidation indicates a generic domain validation rule violation.
 	ErrValidation = errors.New("validation failed")
+
+	// ErrTimeout indicates an operation timed out before completion.
+	ErrTimeout = errors.New("operation timed out")
+
+	// ErrBuildFailed indicates a build compilation job failed.
+	ErrBuildFailed = errors.New("build compilation failed")
 )

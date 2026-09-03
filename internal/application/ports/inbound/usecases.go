@@ -29,3 +29,12 @@ type SchedulesUseCase interface {
 	ListSchedules(ctx context.Context) ([]*model.Schedule, error)
 	DeleteSchedule(ctx context.Context, id string) error
 }
+
+// BuildsUseCase defines driving use cases for compiling test suite sources into binary artifacts.
+type BuildsUseCase interface {
+	BuildArtifact(ctx context.Context, suiteID, artifactID string) (*model.Artifact, error)
+	BuildSuite(ctx context.Context, suiteID string) ([]*model.Artifact, error)
+	GetArtifact(ctx context.Context, id string) (*model.Artifact, error)
+	ListArtifacts(ctx context.Context, suiteID string) ([]*model.Artifact, error)
+}
+
