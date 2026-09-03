@@ -131,7 +131,9 @@ func (s *BuildService) BuildArtifact(ctx context.Context, suiteID, artifactID st
 
 	logsKey := formatLogsKey(trimmedSuiteID, trimmedArtifactID)
 	if execResult != nil && execResult.Logs != nil {
-		defer execResult.Logs.Close()
+		defer func() {
+			_ = execResult.Logs.Close()
+		}()
 		logBuf := new(bytes.Buffer)
 		_, _ = io.Copy(logBuf, execResult.Logs)
 		_ = s.storage.Upload(ctx, logsKey, bytes.NewReader(logBuf.Bytes()), int64(logBuf.Len()), "text/plain")
@@ -319,7 +321,9 @@ func (s *BuildService) computeSHA256FromStorage(ctx context.Context, binaryKey s
 	if err != nil {
 		return "", err
 	}
-	defer reader.Close()
+	defer func() {
+		_ = reader.Close()
+	}()
 
 	hasher := sha256.New()
 	if _, err := io.Copy(hasher, reader); err != nil {

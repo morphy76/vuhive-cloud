@@ -95,7 +95,9 @@ func TestBuildOrchestrator_WaitForJob_Success(t *testing.T) {
 
 	// Note: in fake client, logs may be empty or contain fake output
 	if exec.Logs != nil {
-		defer exec.Logs.Close()
+		defer func() {
+			_ = exec.Logs.Close()
+		}()
 		_, _ = io.ReadAll(exec.Logs)
 	}
 

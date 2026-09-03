@@ -203,7 +203,9 @@ func (o *BuildOrchestrator) fetchLogsSafely(ctx context.Context, jobName string)
 	if err != nil {
 		return io.NopCloser(strings.NewReader("")), ""
 	}
-	defer stream.Close()
+	defer func() {
+		_ = stream.Close()
+	}()
 
 	buf := new(bytes.Buffer)
 	_, _ = io.Copy(buf, stream)
