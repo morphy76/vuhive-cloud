@@ -6,6 +6,9 @@ var (
 	// ErrNotFound indicates a requested entity was not found.
 	ErrNotFound = errors.New("resource not found")
 
+	// ErrConflict indicates a resource collision or unique constraint violation.
+	ErrConflict = errors.New("resource already exists")
+
 	// ErrInvalidStateTransition indicates an illegal transition between lifecycle states.
 	ErrInvalidStateTransition = errors.New("invalid state transition")
 
