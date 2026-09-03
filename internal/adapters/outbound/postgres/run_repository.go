@@ -211,19 +211,16 @@ func (r *TestRunRepository) List(ctx context.Context, suiteID string, status mod
 	var (
 		whereClauses []string
 		args         []interface{}
-		argIdx       = 1
 	)
 
 	if strings.TrimSpace(suiteID) != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("suite_id = $%d", argIdx))
+		whereClauses = append(whereClauses, fmt.Sprintf("suite_id = $%d", len(args)+1))
 		args = append(args, strings.TrimSpace(suiteID))
-		argIdx++
 	}
 
 	if status.IsValid() {
-		whereClauses = append(whereClauses, fmt.Sprintf("status = $%d", argIdx))
+		whereClauses = append(whereClauses, fmt.Sprintf("status = $%d", len(args)+1))
 		args = append(args, string(status))
-		argIdx++
 	}
 
 	if len(whereClauses) > 0 {
