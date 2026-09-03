@@ -2,6 +2,7 @@ package inbound
 
 import (
 	"context"
+	"io"
 
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 )
@@ -32,9 +33,11 @@ type SchedulesUseCase interface {
 
 // BuildsUseCase defines driving use cases for compiling test suite sources into binary artifacts.
 type BuildsUseCase interface {
+	TriggerBuild(ctx context.Context, suiteID string, platform *model.Platform, source io.Reader, size int64) ([]*model.Artifact, error)
 	BuildArtifact(ctx context.Context, suiteID, artifactID string) (*model.Artifact, error)
 	BuildSuite(ctx context.Context, suiteID string) ([]*model.Artifact, error)
 	GetArtifact(ctx context.Context, id string) (*model.Artifact, error)
 	ListArtifacts(ctx context.Context, suiteID string) ([]*model.Artifact, error)
 }
+
 

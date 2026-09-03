@@ -25,6 +25,7 @@ const (
 
 // BuildService implements the inbound.BuildsUseCase port to orchestrate multi-arch binary compilation.
 type BuildService struct {
+	suiteRepo    outbound.TestSuiteRepository
 	artifactRepo outbound.ArtifactRepository
 	storage      outbound.StoragePort
 	orchestrator outbound.BuildOrchestratorPort
@@ -32,16 +33,125 @@ type BuildService struct {
 
 // NewBuildService creates a new BuildService with the supplied outbound ports.
 func NewBuildService(
+	suiteRepo outbound.TestSuiteRepository,
 	artifactRepo outbound.ArtifactRepository,
 	storage outbound.StoragePort,
 	orchestrator outbound.BuildOrchestratorPort,
 ) *BuildService {
 	return &BuildService{
+		suiteRepo:    suiteRepo,
 		artifactRepo: artifactRepo,
 		storage:      storage,
 		orchestrator: orchestrator,
 	}
 }
+
+// TriggerBuild stages a source tarball in S3, creates artifact records, and initiates compilation asynchronously.
+func (s *BuildService) TriggerBuild(
+	ctx context.Context,
+	suiteID string,
+	platform *model.Platform,
+	source io.Reader,
+	size int64,
+) ([]*model.Artifact, error) {
+	start := time.Now()
+	trimmedSuiteID := strings.TrimSpace(suiteID)
+	if trimmedSuiteID == "" {
+		return nil, fmt.Errorf("%w: suiteID cannot be empty", model.ErrValidation)
+	}
+	if source == nil {
+		return nil, fmt.Errorf("%w: source archive cannot be nil", model.ErrValidation)
+	}
+
+	var targetPlatforms []model.Platform
+	if platform != nil {
+		if !platform.IsValid() {
+			return nil, model.ErrInvalidPlatform
+		}
+		targetPlatforms = []model.Platform{*platform}
+	} else {
+		targetPlatforms = []model.Platform{model.PlatformLinuxAmd64, model.PlatformLinuxArm64}
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "BuildService.TriggerBuild").
+		Str("suite_id", trimmedSuiteID).
+		Logger()
+	log.Debug().Msg("starting source upload and async build trigger")
+
+	if s.suiteRepo != nil {
+		if _, err := s.suiteRepo.FindByID(ctx, trimmedSuiteID); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed verifying test suite")
+			return nil, err
+		}
+	}
+
+	sourceKey := formatSourceKey(trimmedSuiteID)
+	if err := s.storage.Upload(ctx, sourceKey, source, size, "application/gzip"); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed uploading source archive to s3")
+		return nil, fmt.Errorf("failed to upload source archive: %w", err)
+	}
+
+	existingArtifacts, err := s.artifactRepo.ListBySuiteID(ctx, trimmedSuiteID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed listing existing artifacts")
+		return nil, err
+	}
+
+	artifacts := make([]*model.Artifact, 0, len(targetPlatforms))
+	for _, p := range targetPlatforms {
+		var found *model.Artifact
+		for _, a := range existingArtifacts {
+			if a.Platform() == p && a.Status() != model.ArtifactStatusReady {
+				found = a
+				break
+			}
+		}
+
+		if found == nil {
+			newArt, err := model.NewArtifact(trimmedSuiteID, p)
+			if err != nil {
+				log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed creating artifact model")
+				return nil, err
+			}
+			if err := s.artifactRepo.Save(ctx, newArt); err != nil {
+				log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed saving initial artifact")
+				return nil, err
+			}
+			artifacts = append(artifacts, newArt)
+		} else {
+			artifacts = append(artifacts, found)
+		}
+	}
+
+	// Trigger build jobs asynchronously
+	for _, art := range artifacts {
+		artToBuild := art
+		go func() {
+			bgCtx := context.Background()
+			bgLog := zerolog.Nop().With().
+				Str("op", "BuildService.AsyncBuild").
+				Str("suite_id", trimmedSuiteID).
+				Str("artifact_id", artToBuild.ID()).
+				Str("platform", string(artToBuild.Platform())).
+				Logger()
+			bgCtx = bgLog.WithContext(bgCtx)
+			if _, err := s.BuildArtifact(bgCtx, trimmedSuiteID, artToBuild.ID()); err != nil {
+				bgLog.Error().Err(err).Msg("asynchronous artifact build failed")
+			} else {
+				bgLog.Info().Msg("asynchronous artifact build completed successfully")
+			}
+		}()
+	}
+
+	log.Info().
+		Int("artifacts_count", len(artifacts)).
+		Dur("duration_ms", time.Since(start)).
+		Msg("successfully triggered asynchronous build")
+
+	return artifacts, nil
+}
+
 
 // BuildArtifact triggers compilation for a specific artifact, streams logs, and updates the artifact status.
 func (s *BuildService) BuildArtifact(ctx context.Context, suiteID, artifactID string) (*model.Artifact, error) {
@@ -301,6 +411,13 @@ func (s *BuildService) ListArtifacts(ctx context.Context, suiteID string) ([]*mo
 		Str("suite_id", trimmedSuiteID).
 		Logger()
 	log.Debug().Msg("listing artifacts for suite")
+
+	if s.suiteRepo != nil {
+		if _, err := s.suiteRepo.FindByID(ctx, trimmedSuiteID); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding suite for listing artifacts")
+			return nil, err
+		}
+	}
 
 	artifacts, err := s.artifactRepo.ListBySuiteID(ctx, trimmedSuiteID)
 	if err != nil {

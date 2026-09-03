@@ -19,10 +19,48 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 )
 
+// MockTestSuiteRepository mocks outbound.TestSuiteRepository
+type MockTestSuiteRepository struct {
+	mock.Mock
+}
+
+func (m *MockTestSuiteRepository) Save(ctx context.Context, suite *model.TestSuite) error {
+	return m.Called(ctx, suite).Error(0)
+}
+
+func (m *MockTestSuiteRepository) FindByID(ctx context.Context, id string) (*model.TestSuite, error) {
+	args := m.Called(ctx, id)
+	if s := args.Get(0); s != nil {
+		return s.(*model.TestSuite), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockTestSuiteRepository) FindByName(ctx context.Context, name string) (*model.TestSuite, error) {
+	args := m.Called(ctx, name)
+	if s := args.Get(0); s != nil {
+		return s.(*model.TestSuite), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockTestSuiteRepository) List(ctx context.Context) ([]*model.TestSuite, error) {
+	args := m.Called(ctx)
+	if s := args.Get(0); s != nil {
+		return s.([]*model.TestSuite), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockTestSuiteRepository) Delete(ctx context.Context, id string) error {
+	return m.Called(ctx, id).Error(0)
+}
+
 // MockArtifactRepository mocks outbound.ArtifactRepository
 type MockArtifactRepository struct {
 	mock.Mock
 }
+
 
 func (m *MockArtifactRepository) Save(ctx context.Context, artifact *model.Artifact) error {
 	args := m.Called(ctx, artifact)
@@ -135,7 +173,7 @@ func TestBuildService_BuildArtifact_Success(t *testing.T) {
 	storage := new(MockStoragePort)
 	orchestrator := new(MockBuildOrchestratorPort)
 
-	svc := service.NewBuildService(repo, storage, orchestrator)
+	svc := service.NewBuildService(nil, repo, storage, orchestrator)
 
 	suiteID := "suite-1111"
 	artifact, err := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
@@ -191,7 +229,7 @@ func TestBuildService_BuildArtifact_CompilationFailed(t *testing.T) {
 	storage := new(MockStoragePort)
 	orchestrator := new(MockBuildOrchestratorPort)
 
-	svc := service.NewBuildService(repo, storage, orchestrator)
+	svc := service.NewBuildService(nil, repo, storage, orchestrator)
 
 	suiteID := "suite-1111"
 	artifact, err := model.NewArtifact(suiteID, model.PlatformLinuxArm64)
@@ -242,7 +280,7 @@ func TestBuildService_BuildSuite_BothPlatforms(t *testing.T) {
 	storage := new(MockStoragePort)
 	orchestrator := new(MockBuildOrchestratorPort)
 
-	svc := service.NewBuildService(repo, storage, orchestrator)
+	svc := service.NewBuildService(nil, repo, storage, orchestrator)
 
 	suiteID := "suite-2222"
 	ctx := context.Background()
@@ -298,7 +336,7 @@ func TestBuildService_ValidationAndQueries(t *testing.T) {
 	storage := new(MockStoragePort)
 	orchestrator := new(MockBuildOrchestratorPort)
 
-	svc := service.NewBuildService(repo, storage, orchestrator)
+	svc := service.NewBuildService(nil, repo, storage, orchestrator)
 	ctx := context.Background()
 
 	t.Run("GetArtifact successfully", func(t *testing.T) {
@@ -347,7 +385,130 @@ func TestBuildService_ValidationAndQueries(t *testing.T) {
 	})
 }
 
+func TestBuildService_TriggerBuild(t *testing.T) {
+	ctx := context.Background()
+	suiteID := "suite-12345"
+
+	t.Run("TriggerBuild specific platform successfully", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		suite, _ := model.NewTestSuite("Test Suite", "desc")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		sourceContent := []byte("tar.gz content")
+		storage.On("Upload", ctx, "suites/"+suiteID+"/sources/source.tar.gz", mock.Anything, int64(len(sourceContent)), "application/gzip").Return(nil)
+		repo.On("ListBySuiteID", ctx, suiteID).Return([]*model.Artifact{}, nil)
+		repo.On("Save", ctx, mock.AnythingOfType("*model.Artifact")).Return(nil)
+
+		// Mock async build calls
+		repo.On("FindByID", mock.Anything, mock.Anything).Return(func(ctx context.Context, id string) *model.Artifact {
+			art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+			return art
+		}, nil).Maybe()
+		storage.On("Exists", mock.Anything, "suites/"+suiteID+"/sources/source.tar.gz").Return(true, nil).Maybe()
+		storage.On("PresignDownload", mock.Anything, mock.Anything, mock.Anything).Return("https://download", nil).Maybe()
+		storage.On("PresignUpload", mock.Anything, mock.Anything, mock.Anything).Return("https://upload", nil).Maybe()
+		orchestrator.On("DispatchBuildJob", mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
+		orchestrator.On("WaitForJob", mock.Anything, "job-1").Return(&outbound.BuildJobExecution{
+			JobName:        "job-1",
+			SHA256Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			Logs:           io.NopCloser(strings.NewReader("logs")),
+		}, nil).Maybe()
+		storage.On("Upload", mock.Anything, mock.Anything, mock.Anything, mock.Anything, "text/plain").Return(nil).Maybe()
+
+		svc := service.NewBuildService(suiteRepo, repo, storage, orchestrator)
+		platform := model.PlatformLinuxAmd64
+
+		artifacts, err := svc.TriggerBuild(ctx, suiteID, &platform, bytes.NewReader(sourceContent), int64(len(sourceContent)))
+		require.NoError(t, err)
+		require.Len(t, artifacts, 1)
+		assert.Equal(t, model.PlatformLinuxAmd64, artifacts[0].Platform())
+		assert.Equal(t, model.ArtifactStatusPending, artifacts[0].Status())
+	})
+
+	t.Run("TriggerBuild multi-arch all platforms", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		suite, _ := model.NewTestSuite("Test Suite", "desc")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		sourceContent := []byte("tar.gz content")
+		storage.On("Upload", ctx, "suites/"+suiteID+"/sources/source.tar.gz", mock.Anything, int64(len(sourceContent)), "application/gzip").Return(nil)
+		repo.On("ListBySuiteID", ctx, suiteID).Return([]*model.Artifact{}, nil)
+		repo.On("Save", ctx, mock.AnythingOfType("*model.Artifact")).Return(nil)
+
+		repo.On("FindByID", mock.Anything, mock.Anything).Return(func(ctx context.Context, id string) *model.Artifact {
+			art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+			return art
+		}, nil).Maybe()
+		storage.On("Exists", mock.Anything, "suites/"+suiteID+"/sources/source.tar.gz").Return(true, nil).Maybe()
+		storage.On("PresignDownload", mock.Anything, mock.Anything, mock.Anything).Return("https://download", nil).Maybe()
+		storage.On("PresignUpload", mock.Anything, mock.Anything, mock.Anything).Return("https://upload", nil).Maybe()
+		orchestrator.On("DispatchBuildJob", mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
+		orchestrator.On("WaitForJob", mock.Anything, mock.Anything).Return(func(ctx context.Context, jobName string) *outbound.BuildJobExecution {
+			return &outbound.BuildJobExecution{
+				JobName:        jobName,
+				SHA256Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+				Logs:           io.NopCloser(strings.NewReader("logs")),
+			}
+		}, nil).Maybe()
+		storage.On("Upload", mock.Anything, mock.Anything, mock.Anything, mock.Anything, "text/plain").Return(nil).Maybe()
+
+		svc := service.NewBuildService(suiteRepo, repo, storage, orchestrator)
+
+		artifacts, err := svc.TriggerBuild(ctx, suiteID, nil, bytes.NewReader(sourceContent), int64(len(sourceContent)))
+		require.NoError(t, err)
+		require.Len(t, artifacts, 2)
+	})
+
+	t.Run("TriggerBuild suite not found", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		suiteRepo.On("FindByID", ctx, suiteID).Return(nil, model.ErrNotFound)
+
+		svc := service.NewBuildService(suiteRepo, repo, storage, orchestrator)
+		sourceContent := []byte("tar.gz content")
+
+		_, err := svc.TriggerBuild(ctx, suiteID, nil, bytes.NewReader(sourceContent), int64(len(sourceContent)))
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("TriggerBuild validation errors", func(t *testing.T) {
+		svc := service.NewBuildService(nil, nil, nil, nil)
+
+		_, err := svc.TriggerBuild(ctx, "", nil, strings.NewReader("data"), 4)
+		assert.ErrorIs(t, err, model.ErrValidation)
+
+		_, err = svc.TriggerBuild(ctx, "suite-1", nil, nil, 0)
+		assert.ErrorIs(t, err, model.ErrValidation)
+
+		invalidPlatform := model.Platform("windows/386")
+		_, err = svc.TriggerBuild(ctx, "suite-1", &invalidPlatform, strings.NewReader("data"), 4)
+		assert.ErrorIs(t, err, model.ErrInvalidPlatform)
+	})
+}
+
+func TestBuildService_ListArtifacts_SuiteNotFound(t *testing.T) {
+	ctx := context.Background()
+	suiteRepo := new(MockTestSuiteRepository)
+	suiteRepo.On("FindByID", ctx, "non-existent").Return(nil, model.ErrNotFound)
+
+	svc := service.NewBuildService(suiteRepo, nil, nil, nil)
+	_, err := svc.ListArtifacts(ctx, "non-existent")
+	assert.ErrorIs(t, err, model.ErrNotFound)
+}
+
 func TestBuildService_ImplementsUseCase(t *testing.T) {
 	var _ inbound.BuildsUseCase = (*service.BuildService)(nil)
 	assert.True(t, true)
 }
+
