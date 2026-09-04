@@ -1,0 +1,23 @@
+apiVersion: v2
+name: vuhive-cloud-infra
+description: >-
+  vuhive-cloud — Infrastructure Helm chart.
+  Deploys all external backing services (PostgreSQL and MinIO) as a self-contained
+  release, separate from the control plane application chart.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/morphy76/vuhive-cloud
+sources:
+  - https://github.com/morphy76/vuhive-cloud
+
+dependencies:
+  - name: postgres
+    version: "1.6.3"
+    repository: https://groundhog2k.github.io/helm-charts/
+    condition: postgresql.enabled
+    alias: postgresql
+  - name: minio
+    version: "5.4.0"
+    repository: https://charts.min.io/
+    condition: minio.enabled

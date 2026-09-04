@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+data:
+  PORT: {{ .Values.service.targetPort | toString | quote }}
+  S3_ENDPOINT: {{ .Values.s3.endpoint | quote }}
+  S3_REGION: {{ .Values.s3.region | quote }}
+  S3_BUCKET: {{ .Values.s3.bucket | quote }}
+  S3_USE_PATH_STYLE: {{ .Values.s3.usePathStyle | toString | quote }}
+  RUNNER_NAMESPACE: {{ .Values.runner.namespace | quote }}
+  RUNNER_INIT_IMAGE: {{ .Values.runner.initImage | quote }}
+  RUNNER_DEFAULT_IMAGE: {{ .Values.runner.defaultImage | quote }}
+  BUILDER_NAMESPACE: {{ .Values.builder.namespace | quote }}
+  BUILDER_IMAGE: {{ .Values.builder.image | quote }}
+  API_CALLBACK_URL: {{ include "vuhive-cloud.apiCallbackUrl" . | quote }}

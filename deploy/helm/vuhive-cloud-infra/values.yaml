@@ -1,0 +1,37 @@
+# vuhive-cloud — Infrastructure Helm values
+# Deploys PostgreSQL and MinIO backing services.
+# vuhive-cloud control plane deployment references this release.
+
+# ── PostgreSQL (persistence for runs, suites, profiles, schedules) ───────
+postgresql:
+  enabled: true
+  settings:
+    superuser:
+      value: postgres
+    superuserPassword:
+      value: vuhive-dev
+  userDatabase:
+    name:
+      value: vuhive
+    user:
+      value: vuhive
+    password:
+      value: vuhive-dev
+  storage:
+    requestedSize: 1Gi
+
+# ── MinIO (S3-compatible artifact and log storage) ──────────────────────
+minio:
+  enabled: true
+  mode: standalone
+  resources:
+    requests:
+      memory: "256Mi"
+  rootUser: "vuhive-dev"
+  rootPassword: "vuhive-dev-secret"
+  buckets:
+    - name: vuhive-artifacts
+      policy: none
+      purge: false
+  persistence:
+    size: 2Gi

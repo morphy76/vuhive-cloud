@@ -1,0 +1,171 @@
+{{- if .Values.rbac.create -}}
+{{- if .Values.rbac.clusterScoped -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - jobs/status
+      - cronjobs
+      - cronjobs/status
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/status
+      - pods/log
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - events
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "vuhive-cloud.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vuhive-cloud.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- else -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - jobs/status
+      - cronjobs
+      - cronjobs/status
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/status
+      - pods/log
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - events
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "vuhive-cloud.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vuhive-cloud.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- if and .Values.runner.namespace (ne .Values.runner.namespace .Release.Namespace) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}-runner
+  namespace: {{ .Values.runner.namespace }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - jobs/status
+      - cronjobs
+      - cronjobs/status
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/status
+      - pods/log
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - events
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}-runner
+  namespace: {{ .Values.runner.namespace }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "vuhive-cloud.fullname" . }}-runner
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vuhive-cloud.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if and .Values.builder.namespace (ne .Values.builder.namespace .Release.Namespace) (ne .Values.builder.namespace .Values.runner.namespace) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}-builder
+  namespace: {{ .Values.builder.namespace }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - jobs/status
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/status
+      - pods/log
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - events
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}-builder
+  namespace: {{ .Values.builder.namespace }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "vuhive-cloud.fullname" . }}-builder
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vuhive-cloud.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- end }}
