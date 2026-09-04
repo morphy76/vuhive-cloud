@@ -13,3 +13,8 @@ func TestBuildOrchestrator_ImplementsPort(t *testing.T) {
 	var _ outbound.BuildOrchestratorPort = (*k8s.BuildOrchestrator)(nil)
 	assert.True(t, true)
 }
+
+func TestRunnerOrchestrator_ImplementsPort(t *testing.T) {
+	var _ outbound.RunnerOrchestratorPort = (*k8s.RunnerOrchestrator)(nil)
+	assert.True(t, true)
+}

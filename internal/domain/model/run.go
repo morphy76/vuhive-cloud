@@ -270,6 +270,11 @@ func (r *TestRun) CreatedAt() time.Time {
 	return r.createdAt
 }
 
+// SetK8sJobName sets the Kubernetes Job name.
+func (r *TestRun) SetK8sJobName(jobName string) {
+	r.k8sJobName = strings.TrimSpace(jobName)
+}
+
 // Start transitions the run from QUEUED to RUNNING.
 func (r *TestRun) Start(jobName string, startTime time.Time) error {
 	if r.status.IsTerminal() {
@@ -279,7 +284,10 @@ func (r *TestRun) Start(jobName string, startTime time.Time) error {
 		return ErrInvalidStateTransition
 	}
 
-	r.k8sJobName = strings.TrimSpace(jobName)
+	trimmedName := strings.TrimSpace(jobName)
+	if trimmedName != "" {
+		r.k8sJobName = trimmedName
+	}
 	r.startedAt = &startTime
 	r.status = RunStatusRunning
 	return nil

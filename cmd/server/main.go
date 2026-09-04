@@ -61,9 +61,12 @@ func main() {
 	// Outbound dependencies initialization
 	var suiteRepo outbound.TestSuiteRepository
 	var artifactRepo outbound.ArtifactRepository
+	var configRepo outbound.ConfigurationRepository
 	var profileRepo outbound.RunnerProfileRepository
+	var runRepo outbound.TestRunRepository
 	var storageAdapter outbound.StoragePort
 	var buildOrchestrator outbound.BuildOrchestratorPort
+	var runnerOrchestrator outbound.RunnerOrchestratorPort
 
 	// 1. PostgreSQL Database
 	dbURL := os.Getenv("DATABASE_URL")
@@ -82,7 +85,9 @@ func main() {
 				defer pool.Close()
 				suiteRepo = pgadapter.NewTestSuiteRepository(pool)
 				artifactRepo = pgadapter.NewArtifactRepository(pool)
+				configRepo = pgadapter.NewConfigurationRepository(pool)
 				profileRepo = pgadapter.NewRunnerProfileRepository(pool)
+				runRepo = pgadapter.NewTestRunRepository(pool)
 				log.Info().Msg("connected to postgresql repository")
 			}
 		}
@@ -133,8 +138,38 @@ func main() {
 		if err != nil {
 			log.Warn().Err(err).Msg("failed creating kubernetes clientset")
 		} else {
-			buildOrchestrator = k8sadapter.NewBuildOrchestrator(k8sClientset, k8sadapter.DefaultConfig())
-			log.Info().Msg("connected to kubernetes build orchestrator")
+			k8sCfg := k8sadapter.DefaultConfig()
+			if runnerNs := os.Getenv("RUNNER_NAMESPACE"); runnerNs != "" {
+				k8sCfg.RunnerNamespace = runnerNs
+			}
+			if s3Bucket != "" {
+				k8sCfg.S3Endpoint = os.Getenv("S3_ENDPOINT")
+				k8sCfg.S3Region = os.Getenv("S3_REGION")
+				k8sCfg.S3Bucket = s3Bucket
+				k8sCfg.S3AccessKeyID = os.Getenv("S3_ACCESS_KEY_ID")
+				if k8sCfg.S3AccessKeyID == "" {
+					k8sCfg.S3AccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
+				}
+				k8sCfg.S3SecretAccessKey = os.Getenv("S3_SECRET_ACCESS_KEY")
+				if k8sCfg.S3SecretAccessKey == "" {
+					k8sCfg.S3SecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+				}
+				k8sCfg.S3UsePathStyle = os.Getenv("S3_USE_PATH_STYLE") == "true" || k8sCfg.S3Endpoint != ""
+			}
+			k8sCfg.APICallbackURL = os.Getenv("API_CALLBACK_URL")
+
+			buildOrchestrator = k8sadapter.NewBuildOrchestrator(k8sClientset, k8sCfg)
+			runnerOrchestrator = k8sadapter.NewRunnerOrchestrator(k8sClientset, k8sCfg)
+			log.Info().Msg("connected to kubernetes orchestrator")
+
+			if runRepo != nil {
+				runnerWatcher := k8sadapter.NewRunnerJobWatcher(k8sClientset, runRepo, k8sCfg)
+				go func() {
+					if err := runnerWatcher.Start(ctx); err != nil && !errors.Is(err, context.Canceled) {
+						log.Error().Err(err).Msg("runner job informer watcher failed")
+					}
+				}()
+			}
 		}
 	} else {
 		log.Warn().Msg("kubernetes cluster configuration not found; orchestrator unavailable")
@@ -143,6 +178,8 @@ func main() {
 	// Application services wiring
 	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator)
 	profileService := service.NewProfileService(profileRepo)
+	runService := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, runnerOrchestrator)
+	_ = runService
 
 	// Router setup
 	router := rest.SetupRouter(buildService, profileService)
