@@ -240,7 +240,7 @@ func (w *RunnerWrapper) sendCallback(ctx context.Context, cfg WrapperConfig, exi
 		log.Error().Err(err).Msg("failed to execute callback request")
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Warn().Int("status_code", resp.StatusCode).Msg("callback responded with non-2xx status")

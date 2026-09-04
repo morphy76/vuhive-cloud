@@ -98,7 +98,7 @@ func (r *RunnerInitializer) downloadToFile(ctx context.Context, s3Key, dstPath s
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Use temporary file in destination directory for atomic write
 	tmpFile, err := os.CreateTemp(filepath.Dir(dstPath), "tmp-download-*")
@@ -106,10 +106,10 @@ func (r *RunnerInitializer) downloadToFile(ctx context.Context, s3Key, dstPath s
 		return fmt.Errorf("failed to create temporary download file: %w", err)
 	}
 	tmpName := tmpFile.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 
 	if _, err := io.Copy(tmpFile, reader); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("failed writing downloaded bytes: %w", err)
 	}
 	if err := tmpFile.Close(); err != nil {
@@ -132,13 +132,13 @@ func copyFile(src, dst string, perm os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return err
