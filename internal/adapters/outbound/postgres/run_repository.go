@@ -189,6 +189,95 @@ func (r *TestRunRepository) FindByID(ctx context.Context, id string) (*model.Tes
 	return run, nil
 }
 
+// FindByK8sJobName retrieves a TestRun aggregate by Kubernetes Job name.
+func (r *TestRunRepository) FindByK8sJobName(ctx context.Context, jobName string) (*model.TestRun, error) {
+	start := time.Now()
+	trimmedJobName := strings.TrimSpace(jobName)
+	if trimmedJobName == "" {
+		return nil, model.ErrValidation
+	}
+
+	log := zerolog.Ctx(ctx).With().Str("op", "TestRunRepository.FindByK8sJobName").Str("job_name", trimmedJobName).Logger()
+	log.Debug().Msg("finding test run by k8s job name")
+
+	query := `
+		SELECT
+			id, suite_id, artifact_id, configuration_id, runner_profile_id, schedule_id,
+			status, k8s_job_name, k8s_namespace, started_at, finished_at, exit_code, sla_passed,
+			total_iterations, total_requests, avg_tps,
+			p50_duration_ms, p90_duration_ms, p95_duration_ms, p99_duration_ms,
+			error_rate_pct, s3_report_key, s3_logs_key, summary_json, abort_reason, created_at
+		FROM test_runs
+		WHERE k8s_job_name = $1
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	var (
+		runID           string
+		suiteID         string
+		artifactID      string
+		configurationID *string
+		runnerProfileID string
+		scheduleID      *string
+		status          string
+		k8sJobName      string
+		k8sNamespace    string
+		startedAt       *time.Time
+		finishedAt      *time.Time
+		exitCode        *int
+		slaPassed       *bool
+		totalIterations int64
+		totalRequests   int64
+		avgTPS          float64
+		p50DurationMs   float64
+		p90DurationMs   float64
+		p95DurationMs   float64
+		p99DurationMs   float64
+		errorRatePct    float64
+		s3ReportKey     string
+		s3LogsKey       string
+		summaryJSON     []byte
+		abortReason     string
+		createdAt       time.Time
+	)
+	err := r.pool.QueryRow(ctx, query, trimmedJobName).Scan(
+		&runID, &suiteID, &artifactID, &configurationID, &runnerProfileID, &scheduleID,
+		&status, &k8sJobName, &k8sNamespace, &startedAt, &finishedAt, &exitCode, &slaPassed,
+		&totalIterations, &totalRequests, &avgTPS,
+		&p50DurationMs, &p90DurationMs, &p95DurationMs, &p99DurationMs,
+		&errorRatePct, &s3ReportKey, &s3LogsKey, &summaryJSON, &abortReason, &createdAt,
+	)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to find test run by k8s job name")
+		return nil, MapError(err)
+	}
+
+	metrics := model.RunMetrics{
+		TotalIterations: totalIterations,
+		TotalRequests:   totalRequests,
+		AvgTPS:          avgTPS,
+		P50DurationMs:   p50DurationMs,
+		P90DurationMs:   p90DurationMs,
+		P95DurationMs:   p95DurationMs,
+		P99DurationMs:   p99DurationMs,
+		ErrorRatePct:    errorRatePct,
+	}
+
+	run, err := model.NewTestRunWithID(
+		runID, suiteID, artifactID, configurationID, runnerProfileID, scheduleID,
+		model.RunStatus(status), k8sJobName, k8sNamespace,
+		startedAt, finishedAt, exitCode, slaPassed,
+		metrics, s3ReportKey, s3LogsKey, summaryJSON, abortReason, createdAt,
+	)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to reconstitute test run")
+		return nil, err
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("successfully found test run by k8s job name")
+	return run, nil
+}
+
 // List returns TestRun aggregates optionally filtered by suiteID and status.
 func (r *TestRunRepository) List(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error) {
 	start := time.Now()

@@ -8,7 +8,11 @@ import (
 )
 
 // SetupRouter initializes and configures the Gin HTTP engine with routes and middleware.
-func SetupRouter(buildsUC inbound.BuildsUseCase, profilesUC inbound.ProfilesUseCase) *gin.Engine {
+func SetupRouter(
+	buildsUC inbound.BuildsUseCase,
+	profilesUC inbound.ProfilesUseCase,
+	schedulesUC inbound.SchedulesUseCase,
+) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
@@ -43,6 +47,18 @@ func SetupRouter(buildsUC inbound.BuildsUseCase, profilesUC inbound.ProfilesUseC
 				profiles.GET("/:id", profileHandler.GetProfile)
 				profiles.PUT("/:id", profileHandler.UpdateProfile)
 				profiles.DELETE("/:id", profileHandler.DeleteProfile)
+			}
+		}
+
+		if schedulesUC != nil {
+			scheduleHandler := NewScheduleHandler(schedulesUC)
+			schedules := v1.Group("/schedules")
+			{
+				schedules.POST("", scheduleHandler.CreateSchedule)
+				schedules.GET("", scheduleHandler.ListSchedules)
+				schedules.GET("/:id", scheduleHandler.GetSchedule)
+				schedules.PUT("/:id", scheduleHandler.UpdateSchedule)
+				schedules.DELETE("/:id", scheduleHandler.DeleteSchedule)
 			}
 		}
 	}

@@ -20,21 +20,24 @@ import (
 // RunnerJobWatcher watches Kubernetes Job lifecycle events via client-go Informer
 // and reflects status updates (Running, Succeeded, Failed) onto TestRun aggregates.
 type RunnerJobWatcher struct {
-	client  kubernetes.Interface
-	runRepo outbound.TestRunRepository
-	cfg     Config
+	client       kubernetes.Interface
+	runRepo      outbound.TestRunRepository
+	scheduleRepo outbound.ScheduleRepository
+	cfg          Config
 }
 
 // NewRunnerJobWatcher constructs a new RunnerJobWatcher.
 func NewRunnerJobWatcher(
 	client kubernetes.Interface,
 	runRepo outbound.TestRunRepository,
+	scheduleRepo outbound.ScheduleRepository,
 	cfg Config,
 ) *RunnerJobWatcher {
 	return &RunnerJobWatcher{
-		client:  client,
-		runRepo: runRepo,
-		cfg:     cfg,
+		client:       client,
+		runRepo:      runRepo,
+		scheduleRepo: scheduleRepo,
+		cfg:          cfg,
 	}
 }
 
@@ -105,7 +108,8 @@ func (w *RunnerJobWatcher) SyncJob(ctx context.Context, job *batchv1.Job) error 
 	}
 
 	runID := strings.TrimSpace(job.Labels["vuhive.io/run-id"])
-	if runID == "" {
+	scheduleID := strings.TrimSpace(job.Labels["vuhive.io/schedule-id"])
+	if runID == "" && scheduleID == "" {
 		return nil
 	}
 
@@ -113,17 +117,74 @@ func (w *RunnerJobWatcher) SyncJob(ctx context.Context, job *batchv1.Job) error 
 		Str("op", "RunnerJobWatcher.SyncJob").
 		Str("job_name", job.Name).
 		Str("run_id", runID).
+		Str("schedule_id", scheduleID).
 		Logger()
 	log.Debug().Msg("processing job status sync")
 
-	run, err := w.runRepo.FindByID(ctx, runID)
-	if err != nil {
-		if errors.Is(err, model.ErrNotFound) {
-			log.Debug().Msg("test run not found in repository for job; skipping")
-			return nil
+	var run *model.TestRun
+	var err error
+
+	// 1. Try finding TestRun by runID if present
+	if runID != "" {
+		run, err = w.runRepo.FindByID(ctx, runID)
+		if err != nil && !errors.Is(err, model.ErrNotFound) {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed fetching test run by id")
+			return err
 		}
-		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed fetching test run")
-		return err
+	}
+
+	// 2. If not found, try finding TestRun by k8s job name
+	if run == nil {
+		run, err = w.runRepo.FindByK8sJobName(ctx, job.Name)
+		if err != nil && !errors.Is(err, model.ErrNotFound) {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed fetching test run by job name")
+			return err
+		}
+	}
+
+	// 3. If TestRun does not exist yet and scheduleID is present, auto-create linked TestRun
+	if run == nil && scheduleID != "" && w.scheduleRepo != nil {
+		schedule, err := w.scheduleRepo.FindByID(ctx, scheduleID)
+		if err != nil {
+			if errors.Is(err, model.ErrNotFound) {
+				log.Warn().Str("schedule_id", scheduleID).Msg("schedule not found for CronJob-spawned job; skipping")
+				return nil
+			}
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed fetching schedule for job")
+			return err
+		}
+
+		newRun, err := model.NewTestRun(
+			schedule.SuiteID(),
+			schedule.ArtifactID(),
+			schedule.ConfigurationID(),
+			schedule.RunnerProfileID(),
+			&scheduleID,
+		)
+		if err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed creating new test run for schedule")
+			return err
+		}
+
+		newRun.SetK8sJobName(job.Name)
+
+		if err := w.runRepo.Save(ctx, newRun); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed persisting new scheduled test run")
+			return err
+		}
+
+		log.Info().
+			Str("run_id", newRun.ID()).
+			Str("schedule_id", scheduleID).
+			Str("job_name", job.Name).
+			Msg("auto-created tracked test run from CronJob-spawned job")
+
+		run = newRun
+	}
+
+	if run == nil {
+		log.Debug().Msg("test run not found in repository for job; skipping")
+		return nil
 	}
 
 	if run.Status().IsTerminal() {

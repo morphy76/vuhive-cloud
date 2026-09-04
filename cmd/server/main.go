@@ -64,9 +64,11 @@ func main() {
 	var configRepo outbound.ConfigurationRepository
 	var profileRepo outbound.RunnerProfileRepository
 	var runRepo outbound.TestRunRepository
+	var scheduleRepo outbound.ScheduleRepository
 	var storageAdapter outbound.StoragePort
 	var buildOrchestrator outbound.BuildOrchestratorPort
 	var runnerOrchestrator outbound.RunnerOrchestratorPort
+	var scheduleOrchestrator outbound.ScheduleOrchestratorPort
 
 	// 1. PostgreSQL Database
 	dbURL := os.Getenv("DATABASE_URL")
@@ -88,6 +90,7 @@ func main() {
 				configRepo = pgadapter.NewConfigurationRepository(pool)
 				profileRepo = pgadapter.NewRunnerProfileRepository(pool)
 				runRepo = pgadapter.NewTestRunRepository(pool)
+				scheduleRepo = pgadapter.NewScheduleRepository(pool)
 				log.Info().Msg("connected to postgresql repository")
 			}
 		}
@@ -160,10 +163,11 @@ func main() {
 
 			buildOrchestrator = k8sadapter.NewBuildOrchestrator(k8sClientset, k8sCfg)
 			runnerOrchestrator = k8sadapter.NewRunnerOrchestrator(k8sClientset, k8sCfg)
+			scheduleOrchestrator = k8sadapter.NewScheduleOrchestrator(k8sClientset, k8sCfg)
 			log.Info().Msg("connected to kubernetes orchestrator")
 
 			if runRepo != nil {
-				runnerWatcher := k8sadapter.NewRunnerJobWatcher(k8sClientset, runRepo, k8sCfg)
+				runnerWatcher := k8sadapter.NewRunnerJobWatcher(k8sClientset, runRepo, scheduleRepo, k8sCfg)
 				go func() {
 					if err := runnerWatcher.Start(ctx); err != nil && !errors.Is(err, context.Canceled) {
 						log.Error().Err(err).Msg("runner job informer watcher failed")
@@ -180,9 +184,10 @@ func main() {
 	profileService := service.NewProfileService(profileRepo)
 	runService := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, runnerOrchestrator)
 	_ = runService
+	scheduleService := service.NewScheduleService(suiteRepo, artifactRepo, configRepo, profileRepo, scheduleRepo, scheduleOrchestrator)
 
 	// Router setup
-	router := rest.SetupRouter(buildService, profileService)
+	router := rest.SetupRouter(buildService, profileService, scheduleService)
 
 	server := &http.Server{
 		Addr:         ":" + port,

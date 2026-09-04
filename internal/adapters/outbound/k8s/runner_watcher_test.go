@@ -59,6 +59,22 @@ func (r *inMemoryRunRepo) FindByID(_ context.Context, id string) (*model.TestRun
 	)
 }
 
+func (r *inMemoryRunRepo) FindByK8sJobName(_ context.Context, jobName string) (*model.TestRun, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, run := range r.runs {
+		if run.K8sJobName() == jobName {
+			return model.NewTestRunWithID(
+				run.ID(), run.SuiteID(), run.ArtifactID(), run.ConfigurationID(), run.RunnerProfileID(), run.ScheduleID(),
+				run.Status(), run.K8sJobName(), run.K8sNamespace(),
+				run.StartedAt(), run.FinishedAt(), run.ExitCode(), run.SLAPassed(),
+				run.Metrics(), run.S3ReportKey(), run.S3LogsKey(), run.SummaryJSON(), run.AbortReason(), run.CreatedAt(),
+			)
+		}
+	}
+	return nil, model.ErrNotFound
+}
+
 func (r *inMemoryRunRepo) List(_ context.Context, _ string, _ model.RunStatus) ([]*model.TestRun, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -76,6 +92,65 @@ func (r *inMemoryRunRepo) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+type inMemoryScheduleRepo struct {
+	mu        sync.Mutex
+	schedules map[string]*model.Schedule
+}
+
+func newInMemoryScheduleRepo() *inMemoryScheduleRepo {
+	return &inMemoryScheduleRepo{
+		schedules: make(map[string]*model.Schedule),
+	}
+}
+
+func (r *inMemoryScheduleRepo) Save(_ context.Context, schedule *model.Schedule) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.schedules[schedule.ID()] = schedule
+	return nil
+}
+
+func (r *inMemoryScheduleRepo) FindByID(_ context.Context, id string) (*model.Schedule, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	sched, exists := r.schedules[id]
+	if !exists {
+		return nil, model.ErrNotFound
+	}
+	return sched, nil
+}
+
+func (r *inMemoryScheduleRepo) ListBySuiteID(_ context.Context, suiteID string) ([]*model.Schedule, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var list []*model.Schedule
+	for _, s := range r.schedules {
+		if s.SuiteID() == suiteID {
+			list = append(list, s)
+		}
+	}
+	return list, nil
+}
+
+func (r *inMemoryScheduleRepo) ListActive(_ context.Context) ([]*model.Schedule, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var list []*model.Schedule
+	for _, s := range r.schedules {
+		if s.IsActive() {
+			list = append(list, s)
+		}
+	}
+	return list, nil
+}
+
+func (r *inMemoryScheduleRepo) Delete(_ context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.schedules, id)
+	return nil
+}
+
 func TestRunnerJobWatcher_SyncJob(t *testing.T) {
 	ctx := context.Background()
 	cfg := k8s.DefaultConfig()
@@ -83,7 +158,8 @@ func TestRunnerJobWatcher_SyncJob(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset()
 
 	repo := newInMemoryRunRepo()
-	watcher := k8s.NewRunnerJobWatcher(fakeClient, repo, cfg)
+	schedRepo := newInMemoryScheduleRepo()
+	watcher := k8s.NewRunnerJobWatcher(fakeClient, repo, schedRepo, cfg)
 
 	t.Run("transition QUEUED to RUNNING when job becomes active", func(t *testing.T) {
 		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
@@ -230,6 +306,66 @@ func TestRunnerJobWatcher_SyncJob(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, model.RunStatusFailed, updated.Status())
 	})
+
+	t.Run("auto-creates and tracks linked TestRun when CronJob-spawned Job is detected", func(t *testing.T) {
+		schedule, err := model.NewSchedule(
+			"suite-sched-1",
+			"art-sched-1",
+			nil,
+			"prof-sched-1",
+			"nightly-cron",
+			"0 0 * * *",
+		)
+		require.NoError(t, err)
+		require.NoError(t, schedRepo.Save(ctx, schedule))
+
+		now := metav1.Now()
+		spawnedJob := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "vuhive-sched-12345678-28492020",
+				Namespace: "vuhive-runners",
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "vuhive-runner",
+					"vuhive.io/schedule-id":  schedule.ID(),
+				},
+			},
+			Status: batchv1.JobStatus{
+				Active:    1,
+				StartTime: &now,
+			},
+		}
+
+		// Initial sync when Job appears
+		err = watcher.SyncJob(ctx, spawnedJob)
+		require.NoError(t, err)
+
+		// TestRun must have been auto-created and linked to schedule
+		foundRun, err := repo.FindByK8sJobName(ctx, spawnedJob.Name)
+		require.NoError(t, err)
+		require.NotNil(t, foundRun)
+		assert.Equal(t, schedule.SuiteID(), foundRun.SuiteID())
+		assert.Equal(t, schedule.ArtifactID(), foundRun.ArtifactID())
+		assert.Equal(t, schedule.RunnerProfileID(), foundRun.RunnerProfileID())
+		require.NotNil(t, foundRun.ScheduleID())
+		assert.Equal(t, schedule.ID(), *foundRun.ScheduleID())
+		assert.Equal(t, spawnedJob.Name, foundRun.K8sJobName())
+		assert.Equal(t, model.RunStatusRunning, foundRun.Status())
+
+		// Second sync when Job completes
+		spawnedJob.Status.Active = 0
+		spawnedJob.Status.Succeeded = 1
+		completionTime := metav1.Now()
+		spawnedJob.Status.CompletionTime = &completionTime
+
+		err = watcher.SyncJob(ctx, spawnedJob)
+		require.NoError(t, err)
+
+		completedRun, err := repo.FindByID(ctx, foundRun.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusCompleted, completedRun.Status())
+		assert.NotEmpty(t, completedRun.S3ReportKey())
+		assert.NotEmpty(t, completedRun.S3LogsKey())
+	})
 }
 
 func TestRunnerJobWatcher_InformerLifecycle(t *testing.T) {
@@ -241,7 +377,8 @@ func TestRunnerJobWatcher_InformerLifecycle(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset()
 
 	repo := newInMemoryRunRepo()
-	watcher := k8s.NewRunnerJobWatcher(fakeClient, repo, cfg)
+	schedRepo := newInMemoryScheduleRepo()
+	watcher := k8s.NewRunnerJobWatcher(fakeClient, repo, schedRepo, cfg)
 
 	run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
 	require.NoError(t, err)
