@@ -137,13 +137,13 @@ func (w *RunnerJobWatcher) SyncJob(ctx context.Context, job *batchv1.Job) error 
 	if isJobSuccessful(job) {
 		finishTime := now
 		if job.Status.CompletionTime != nil {
-			finishTime = job.Status.CompletionTime.Time.UTC()
+			finishTime = job.Status.CompletionTime.UTC()
 		}
 
 		if run.Status() == model.RunStatusQueued {
 			startTime := finishTime
 			if job.Status.StartTime != nil {
-				startTime = job.Status.StartTime.Time.UTC()
+				startTime = job.Status.StartTime.UTC()
 			}
 			_ = run.Start(job.Name, startTime)
 		}
@@ -180,7 +180,7 @@ func (w *RunnerJobWatcher) SyncJob(ctx context.Context, job *batchv1.Job) error 
 		if run.Status() == model.RunStatusQueued {
 			startTime := finishTime
 			if job.Status.StartTime != nil {
-				startTime = job.Status.StartTime.Time.UTC()
+				startTime = job.Status.StartTime.UTC()
 			}
 			_ = run.Start(job.Name, startTime)
 		}
@@ -213,7 +213,7 @@ func (w *RunnerJobWatcher) SyncJob(ctx context.Context, job *batchv1.Job) error 
 		if run.Status() == model.RunStatusQueued {
 			startTime := now
 			if job.Status.StartTime != nil {
-				startTime = job.Status.StartTime.Time.UTC()
+				startTime = job.Status.StartTime.UTC()
 			}
 
 			if err := run.Start(job.Name, startTime); err != nil {
