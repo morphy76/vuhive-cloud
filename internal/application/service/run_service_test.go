@@ -143,6 +143,14 @@ func (m *mockRunRepo) FindByID(_ context.Context, id string) (*model.TestRun, er
 	}
 	return nil, model.ErrNotFound
 }
+func (m *mockRunRepo) FindByK8sJobName(_ context.Context, jobName string) (*model.TestRun, error) {
+	for _, r := range m.runs {
+		if r.K8sJobName() == jobName {
+			return r, nil
+		}
+	}
+	return nil, model.ErrNotFound
+}
 func (m *mockRunRepo) List(_ context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error) {
 	var res []*model.TestRun
 	for _, r := range m.runs {

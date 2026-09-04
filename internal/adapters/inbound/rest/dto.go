@@ -236,3 +236,68 @@ func ToProfileListResponse(profiles []*model.RunnerProfile) ProfileListResponse 
 	}
 }
 
+// CreateScheduleRequest defines the JSON payload for creating a recurring test schedule.
+type CreateScheduleRequest struct {
+	SuiteID         string  `json:"suite_id" binding:"required"`
+	ArtifactID      string  `json:"artifact_id" binding:"required"`
+	ConfigurationID *string `json:"configuration_id"`
+	RunnerProfileID string  `json:"runner_profile_id" binding:"required"`
+	Name            string  `json:"name" binding:"required"`
+	CronExpression  string  `json:"cron_expression" binding:"required"`
+}
+
+// UpdateScheduleRequest defines the JSON payload for updating an existing schedule.
+type UpdateScheduleRequest struct {
+	CronExpression string `json:"cron_expression" binding:"required"`
+}
+
+// ScheduleResponse represents the JSON response for a Schedule aggregate.
+type ScheduleResponse struct {
+	ID              string  `json:"id"`
+	SuiteID         string  `json:"suite_id"`
+	ArtifactID      string  `json:"artifact_id"`
+	ConfigurationID *string `json:"configuration_id,omitempty"`
+	RunnerProfileID string  `json:"runner_profile_id"`
+	Name            string  `json:"name"`
+	CronExpression  string  `json:"cron_expression"`
+	K8sCronJobName  string  `json:"k8s_cronjob_name"`
+	IsActive        bool    `json:"is_active"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
+}
+
+// ScheduleListResponse represents the JSON response for a list of schedules.
+type ScheduleListResponse struct {
+	Schedules []ScheduleResponse `json:"schedules"`
+	Count     int                `json:"count"`
+}
+
+// ToScheduleResponse maps a domain Schedule aggregate to a ScheduleResponse DTO.
+func ToScheduleResponse(s *model.Schedule) ScheduleResponse {
+	return ScheduleResponse{
+		ID:              s.ID(),
+		SuiteID:         s.SuiteID(),
+		ArtifactID:      s.ArtifactID(),
+		ConfigurationID: s.ConfigurationID(),
+		RunnerProfileID: s.RunnerProfileID(),
+		Name:            s.Name(),
+		CronExpression:  s.CronExpression(),
+		K8sCronJobName:  s.K8sCronJobName(),
+		IsActive:        s.IsActive(),
+		CreatedAt:       s.CreatedAt().Format(time.RFC3339),
+		UpdatedAt:       s.UpdatedAt().Format(time.RFC3339),
+	}
+}
+
+// ToScheduleListResponse maps a slice of domain Schedule aggregates to a ScheduleListResponse DTO.
+func ToScheduleListResponse(schedules []*model.Schedule) ScheduleListResponse {
+	items := make([]ScheduleResponse, 0, len(schedules))
+	for _, s := range schedules {
+		items = append(items, ToScheduleResponse(s))
+	}
+	return ScheduleListResponse{
+		Schedules: items,
+		Count:     len(items),
+	}
+}
+

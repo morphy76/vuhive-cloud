@@ -412,6 +412,11 @@ func TestRepositories_FullCRUD(t *testing.T) {
 		assert.Equal(t, "vuhive-job-xyz123", foundRunning.K8sJobName())
 		assert.NotNil(t, foundRunning.StartedAt())
 
+		foundByJobName, err := runRepo.FindByK8sJobName(ctx, "vuhive-job-xyz123")
+		require.NoError(t, err)
+		assert.Equal(t, run.ID(), foundByJobName.ID())
+		assert.Equal(t, model.RunStatusRunning, foundByJobName.Status())
+
 		// 3. Complete (COMPLETED)
 		finishTm := startTm.Add(5 * time.Minute)
 		metrics := model.RunMetrics{

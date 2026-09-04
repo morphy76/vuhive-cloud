@@ -44,6 +44,7 @@ type RunnerProfileRepository interface {
 type TestRunRepository interface {
 	Save(ctx context.Context, run *model.TestRun) error
 	FindByID(ctx context.Context, id string) (*model.TestRun, error)
+	FindByK8sJobName(ctx context.Context, jobName string) (*model.TestRun, error)
 	List(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error)
 	Delete(ctx context.Context, id string) error
 }

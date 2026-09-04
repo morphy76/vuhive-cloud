@@ -98,7 +98,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 
 	t.Run("success with specific platform", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		expectedPlatform := model.PlatformLinuxAmd64
 		art, err := model.NewArtifact(suiteID, expectedPlatform)
@@ -129,7 +129,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 
 	t.Run("success with arch parameter alias", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		expectedPlatform := model.PlatformLinuxArm64
 		art, err := model.NewArtifact(suiteID, expectedPlatform)
@@ -150,7 +150,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 
 	t.Run("success with multi-arch when arch is omitted or all", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		art1, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
 		art2, _ := model.NewArtifact(suiteID, model.PlatformLinuxArm64)
@@ -173,7 +173,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 
 	t.Run("failure when file is missing in multipart form", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "wrong_field", "", nil, map[string]string{
 			"platform": "linux/amd64",
@@ -191,7 +191,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 
 	t.Run("failure with unsupported platform", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("content"), map[string]string{
 			"platform": "windows/amd64",
@@ -209,7 +209,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 
 	t.Run("failure when suite is not found", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		mockUC.On("TriggerBuild", mock.Anything, "non-existent-suite", (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64")).
 			Return(nil, model.ErrNotFound)
@@ -224,7 +224,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 
 	t.Run("failure with internal server error", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		mockUC.On("TriggerBuild", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64")).
 			Return(nil, errors.New("s3 connection failed"))
@@ -243,7 +243,7 @@ func TestArtifactHandler_ListArtifacts(t *testing.T) {
 
 	t.Run("success with available artifacts and checksums", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		art1, err := model.NewArtifactWithID(
 			"art-1", suiteID, model.PlatformLinuxAmd64,
@@ -286,7 +286,7 @@ func TestArtifactHandler_ListArtifacts(t *testing.T) {
 
 	t.Run("success with empty artifact list", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		mockUC.On("ListArtifacts", mock.Anything, suiteID).Return([]*model.Artifact{}, nil)
 
@@ -307,7 +307,7 @@ func TestArtifactHandler_ListArtifacts(t *testing.T) {
 
 	t.Run("failure when suite not found", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		mockUC.On("ListArtifacts", mock.Anything, "non-existent").Return(nil, model.ErrNotFound)
 
@@ -321,7 +321,7 @@ func TestArtifactHandler_ListArtifacts(t *testing.T) {
 
 	t.Run("failure with internal server error", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
-		router := rest.SetupRouter(mockUC, nil)
+		router := rest.SetupRouter(mockUC, nil, nil)
 
 		mockUC.On("ListArtifacts", mock.Anything, suiteID).Return(nil, errors.New("db error"))
 
@@ -336,7 +336,7 @@ func TestArtifactHandler_ListArtifacts(t *testing.T) {
 
 func TestHealthCheck(t *testing.T) {
 	mockUC := new(MockBuildsUseCase)
-	router := rest.SetupRouter(mockUC, nil)
+	router := rest.SetupRouter(mockUC, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()

@@ -85,7 +85,7 @@ func createSampleProfile(t *testing.T, id, name string) *model.RunnerProfile {
 func TestProfileHandler_CreateProfile(t *testing.T) {
 	t.Run("successfully create profile returns 201 Created", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		sampleProfile := createSampleProfile(t, "prof-1", "high-perf")
 		mockProfilesUC.On("CreateProfile", mock.Anything, mock.MatchedBy(func(cmd inbound.CreateProfileCommand) bool {
@@ -130,7 +130,7 @@ func TestProfileHandler_CreateProfile(t *testing.T) {
 
 	t.Run("fail with invalid json body returns 400", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/profiles", bytes.NewReader([]byte("{invalid-json")))
 		req.Header.Set("Content-Type", "application/json")
@@ -143,7 +143,7 @@ func TestProfileHandler_CreateProfile(t *testing.T) {
 
 	t.Run("fail with missing required name returns 400", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		reqBody := map[string]string{"description": "missing name"}
 		raw, _ := json.Marshal(reqBody)
@@ -159,7 +159,7 @@ func TestProfileHandler_CreateProfile(t *testing.T) {
 
 	t.Run("fail with resource quantity error returns 400", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		mockProfilesUC.On("CreateProfile", mock.Anything, mock.Anything).
 			Return(nil, model.ErrInvalidResourceQuantity)
@@ -179,7 +179,7 @@ func TestProfileHandler_CreateProfile(t *testing.T) {
 
 	t.Run("fail with conflict on duplicate name returns 409", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		mockProfilesUC.On("CreateProfile", mock.Anything, mock.Anything).
 			Return(nil, model.ErrConflict)
@@ -199,7 +199,7 @@ func TestProfileHandler_CreateProfile(t *testing.T) {
 
 	t.Run("fail with internal server error returns 500", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		mockProfilesUC.On("CreateProfile", mock.Anything, mock.Anything).
 			Return(nil, errors.New("db failure"))
@@ -221,7 +221,7 @@ func TestProfileHandler_CreateProfile(t *testing.T) {
 func TestProfileHandler_ListProfiles(t *testing.T) {
 	t.Run("successfully list profiles returns 200 OK", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		p1 := createSampleProfile(t, "prof-1", "profile-1")
 		p2 := createSampleProfile(t, "prof-2", "profile-2")
@@ -245,7 +245,7 @@ func TestProfileHandler_ListProfiles(t *testing.T) {
 
 	t.Run("internal error on listing returns 500", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		mockProfilesUC.On("ListProfiles", mock.Anything).Return(nil, errors.New("list failed"))
 
@@ -262,7 +262,7 @@ func TestProfileHandler_ListProfiles(t *testing.T) {
 func TestProfileHandler_GetProfile(t *testing.T) {
 	t.Run("successfully get profile returns 200 OK", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		p := createSampleProfile(t, "prof-100", "my-profile")
 		mockProfilesUC.On("GetProfile", mock.Anything, "prof-100").Return(p, nil)
@@ -282,7 +282,7 @@ func TestProfileHandler_GetProfile(t *testing.T) {
 
 	t.Run("not found returns 404", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		mockProfilesUC.On("GetProfile", mock.Anything, "missing").Return(nil, model.ErrNotFound)
 
@@ -299,7 +299,7 @@ func TestProfileHandler_GetProfile(t *testing.T) {
 func TestProfileHandler_UpdateProfile(t *testing.T) {
 	t.Run("successfully update profile returns 200 OK", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		updatedProfile := createSampleProfile(t, "prof-1", "updated-profile")
 		mockProfilesUC.On("UpdateProfile", mock.Anything, "prof-1", mock.MatchedBy(func(cmd inbound.UpdateProfileCommand) bool {
@@ -328,7 +328,7 @@ func TestProfileHandler_UpdateProfile(t *testing.T) {
 
 	t.Run("update non-existent profile returns 404", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		mockProfilesUC.On("UpdateProfile", mock.Anything, "missing", mock.Anything).
 			Return(nil, model.ErrNotFound)
@@ -350,7 +350,7 @@ func TestProfileHandler_UpdateProfile(t *testing.T) {
 func TestProfileHandler_DeleteProfile(t *testing.T) {
 	t.Run("successfully delete profile returns 204 No Content", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		mockProfilesUC.On("DeleteProfile", mock.Anything, "prof-1").Return(nil)
 
@@ -365,7 +365,7 @@ func TestProfileHandler_DeleteProfile(t *testing.T) {
 
 	t.Run("delete non-existent profile returns 404 Not Found", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
-		router := rest.SetupRouter(nil, mockProfilesUC)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil)
 
 		mockProfilesUC.On("DeleteProfile", mock.Anything, "missing").Return(model.ErrNotFound)
 
