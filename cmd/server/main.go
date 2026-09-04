@@ -145,6 +145,20 @@ func main() {
 			if runnerNs := os.Getenv("RUNNER_NAMESPACE"); runnerNs != "" {
 				k8sCfg.RunnerNamespace = runnerNs
 			}
+			if builderNs := os.Getenv("BUILDER_NAMESPACE"); builderNs != "" {
+				k8sCfg.Namespace = builderNs
+			} else if podNs := os.Getenv("POD_NAMESPACE"); podNs != "" {
+				k8sCfg.Namespace = podNs
+			}
+			if builderImg := os.Getenv("BUILDER_IMAGE"); builderImg != "" {
+				k8sCfg.BuilderImage = builderImg
+			}
+			if runnerInitImg := os.Getenv("RUNNER_INIT_IMAGE"); runnerInitImg != "" {
+				k8sCfg.RunnerInitImage = runnerInitImg
+			}
+			if runnerDefaultImg := os.Getenv("RUNNER_DEFAULT_IMAGE"); runnerDefaultImg != "" {
+				k8sCfg.RunnerDefaultImage = runnerDefaultImg
+			}
 			if s3Bucket != "" {
 				k8sCfg.S3Endpoint = os.Getenv("S3_ENDPOINT")
 				k8sCfg.S3Region = os.Getenv("S3_REGION")

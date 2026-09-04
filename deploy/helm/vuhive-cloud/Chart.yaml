@@ -1,0 +1,17 @@
+apiVersion: v2
+name: vuhive-cloud
+description: Helm chart for vuhive-cloud Control Plane
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+keywords:
+  - vuhive
+  - load-testing
+  - control-plane
+  - kubernetes
+home: https://github.com/morphy76/vuhive-cloud
+sources:
+  - https://github.com/morphy76/vuhive-cloud
+maintainers:
+  - name: morphy76
+    url: https://github.com/morphy76
