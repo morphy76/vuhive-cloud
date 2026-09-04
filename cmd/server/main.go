@@ -1,15 +1,34 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/morphy76/vuhive-cloud/internal/adapters/inbound/rest"
+	k8sadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/k8s"
+	pgadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/postgres"
+	s3adapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/s3"
+	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
+	"github.com/morphy76/vuhive-cloud/internal/application/service"
 	"github.com/morphy76/vuhive-cloud/internal/version"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"k8s.io/client-go/kubernetes"
+	k8srest "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func main() {
 	showVersion := flag.Bool("version", false, "Print version information and exit")
+	portFlag := flag.String("port", "", "Server HTTP port (defaults to PORT env or 8080)")
 	flag.Parse()
 
 	if *showVersion {
@@ -17,5 +36,141 @@ func main() {
 		os.Exit(0)
 	}
 
-	fmt.Printf("Starting vuhive-cloud server %s...\n", version.Version)
+	// Configure structured logging with zerolog
+	zerolog.TimeFieldFormat = time.RFC3339
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+
+	port := *portFlag
+	if port == "" {
+		port = os.Getenv("PORT")
+	}
+	if port == "" {
+		port = "8080"
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	log.Info().
+		Str("version", version.Version).
+		Str("commit", version.Commit).
+		Str("build_time", version.BuildTime).
+		Str("port", port).
+		Msg("starting vuhive-cloud control plane server")
+
+	// Outbound dependencies initialization
+	var suiteRepo outbound.TestSuiteRepository
+	var artifactRepo outbound.ArtifactRepository
+	var storageAdapter outbound.StoragePort
+	var buildOrchestrator outbound.BuildOrchestratorPort
+
+	// 1. PostgreSQL Database
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = os.Getenv("POSTGRES_URL")
+	}
+	if dbURL != "" {
+		poolConfig, err := pgxpool.ParseConfig(dbURL)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed parsing database url, running without postgres")
+		} else {
+			pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed connecting to postgres, running without postgres")
+			} else {
+				defer pool.Close()
+				suiteRepo = pgadapter.NewTestSuiteRepository(pool)
+				artifactRepo = pgadapter.NewArtifactRepository(pool)
+				log.Info().Msg("connected to postgresql repository")
+			}
+		}
+	} else {
+		log.Warn().Msg("DATABASE_URL not set; database repositories unavailable")
+	}
+
+	// 2. S3 / MinIO Storage
+	s3Bucket := os.Getenv("S3_BUCKET")
+	if s3Bucket != "" {
+		accessKey := os.Getenv("S3_ACCESS_KEY_ID")
+		if accessKey == "" {
+			accessKey = os.Getenv("AWS_ACCESS_KEY_ID")
+		}
+		secretKey := os.Getenv("S3_SECRET_ACCESS_KEY")
+		if secretKey == "" {
+			secretKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+		}
+		s3Cfg := s3adapter.Config{
+			Endpoint:        os.Getenv("S3_ENDPOINT"),
+			Region:          os.Getenv("S3_REGION"),
+			Bucket:          s3Bucket,
+			AccessKeyID:     accessKey,
+			SecretAccessKey: secretKey,
+		}
+		s3Client, err := s3adapter.NewAdapter(ctx, s3Cfg)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed initializing s3 adapter")
+		} else {
+			storageAdapter = s3Client
+			log.Info().Str("bucket", s3Bucket).Msg("connected to s3 storage adapter")
+		}
+	} else {
+		log.Warn().Msg("S3_BUCKET not set; s3 storage adapter unavailable")
+	}
+
+	// 3. Kubernetes Orchestrator
+	k8sConfig, err := k8srest.InClusterConfig()
+	if err != nil {
+		kubeconfigPath := os.Getenv("KUBECONFIG")
+		if kubeconfigPath == "" {
+			kubeconfigPath = clientcmd.RecommendedHomeFile
+		}
+		k8sConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	}
+	if err == nil && k8sConfig != nil {
+		k8sClientset, err := kubernetes.NewForConfig(k8sConfig)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed creating kubernetes clientset")
+		} else {
+			buildOrchestrator = k8sadapter.NewBuildOrchestrator(k8sClientset, k8sadapter.DefaultConfig())
+			log.Info().Msg("connected to kubernetes build orchestrator")
+		}
+	} else {
+		log.Warn().Msg("kubernetes cluster configuration not found; orchestrator unavailable")
+	}
+
+	// Build service wiring
+	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator)
+
+	// Router setup
+	router := rest.SetupRouter(buildService)
+
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+
+	// Listen for OS interrupt and termination signals for graceful teardown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Info().Str("addr", server.Addr).Msg("listening for incoming HTTP requests")
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal().Err(err).Msg("failed starting http server")
+		}
+	}()
+
+	sig := <-sigChan
+	log.Info().Str("signal", sig.String()).Msg("received shutdown signal, shutting down gracefully")
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("server graceful shutdown encountered error")
+	} else {
+		log.Info().Msg("server gracefully stopped")
+	}
 }
