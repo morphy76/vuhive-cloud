@@ -222,3 +222,18 @@ func TestNewTestRunWithID(t *testing.T) {
 	)
 	assert.ErrorIs(t, err, model.ErrInvalidStateTransition)
 }
+
+func TestTestRun_SetK8sJobName(t *testing.T) {
+	run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+	require.NoError(t, err)
+	assert.Empty(t, run.K8sJobName())
+
+	run.SetK8sJobName("vuhive-run-abc")
+	assert.Equal(t, "vuhive-run-abc", run.K8sJobName())
+
+	// Start preserves or updates job name
+	now := time.Now().UTC()
+	err = run.Start("", now)
+	require.NoError(t, err)
+	assert.Equal(t, "vuhive-run-abc", run.K8sJobName())
+}

@@ -15,9 +15,17 @@ type SuitesUseCase interface {
 	ArchiveSuite(ctx context.Context, id string) error
 }
 
+// TriggerRunCommand encapsulates input parameters for triggering a new test run.
+type TriggerRunCommand struct {
+	SuiteID         string
+	ArtifactID      string
+	ConfigurationID *string
+	RunnerProfileID string
+}
+
 // RunsUseCase defines driving use cases for triggering, tracking, and aborting TestRun aggregates.
 type RunsUseCase interface {
-	TriggerRun(ctx context.Context, suiteID, artifactID string, configID *string, runnerProfileID string) (*model.TestRun, error)
+	TriggerRun(ctx context.Context, cmd TriggerRunCommand) (*model.TestRun, error)
 	GetRun(ctx context.Context, id string) (*model.TestRun, error)
 	ListRuns(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error)
 	AbortRun(ctx context.Context, id string, reason string) error
