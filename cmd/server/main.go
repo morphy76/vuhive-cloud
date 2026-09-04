@@ -61,6 +61,7 @@ func main() {
 	// Outbound dependencies initialization
 	var suiteRepo outbound.TestSuiteRepository
 	var artifactRepo outbound.ArtifactRepository
+	var profileRepo outbound.RunnerProfileRepository
 	var storageAdapter outbound.StoragePort
 	var buildOrchestrator outbound.BuildOrchestratorPort
 
@@ -81,6 +82,7 @@ func main() {
 				defer pool.Close()
 				suiteRepo = pgadapter.NewTestSuiteRepository(pool)
 				artifactRepo = pgadapter.NewArtifactRepository(pool)
+				profileRepo = pgadapter.NewRunnerProfileRepository(pool)
 				log.Info().Msg("connected to postgresql repository")
 			}
 		}
@@ -138,11 +140,12 @@ func main() {
 		log.Warn().Msg("kubernetes cluster configuration not found; orchestrator unavailable")
 	}
 
-	// Build service wiring
+	// Application services wiring
 	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator)
+	profileService := service.NewProfileService(profileRepo)
 
 	// Router setup
-	router := rest.SetupRouter(buildService)
+	router := rest.SetupRouter(buildService, profileService)
 
 	server := &http.Server{
 		Addr:         ":" + port,
