@@ -16,7 +16,7 @@ help: ## Display this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: build
-build: build-server build-runner-wrapper ## Build all binaries
+build: build-server build-runner-wrapper build-runner-init ## Build all binaries
 
 .PHONY: build-server
 build-server: ## Build control plane server binary
@@ -27,6 +27,11 @@ build-server: ## Build control plane server binary
 build-runner-wrapper: ## Build runner wrapper binary
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/runner-wrapper ./cmd/runner-wrapper
+
+.PHONY: build-runner-init
+build-runner-init: ## Build runner init binary
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/runner-init ./cmd/runner-init
 
 .PHONY: test
 test: ## Run unit tests
