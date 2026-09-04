@@ -20,6 +20,10 @@ func HandleError(c *gin.Context, err error) {
 	case errors.Is(err, model.ErrValidation),
 		errors.Is(err, model.ErrInvalidPlatform),
 		errors.Is(err, model.ErrEmptyName),
+		errors.Is(err, model.ErrInvalidResourceQuantity),
+		errors.Is(err, model.ErrInvalidAffinity),
+		errors.Is(err, model.ErrInvalidToleration),
+		errors.Is(err, model.ErrInvalidCronExpression),
 		errors.Is(err, model.ErrInvalidStateTransition):
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 	case errors.Is(err, model.ErrConflict),

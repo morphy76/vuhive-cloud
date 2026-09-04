@@ -41,4 +41,10 @@ var (
 
 	// ErrBuildFailed indicates a build compilation job failed.
 	ErrBuildFailed = errors.New("build compilation failed")
+
+	// ErrInvalidAffinity indicates an invalid Kubernetes node affinity configuration.
+	ErrInvalidAffinity = errors.New("invalid affinity configuration")
+
+	// ErrInvalidToleration indicates an invalid Kubernetes toleration configuration.
+	ErrInvalidToleration = errors.New("invalid toleration configuration")
 )

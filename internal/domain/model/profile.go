@@ -18,6 +18,46 @@ type Toleration struct {
 	TolerationSeconds *int64
 }
 
+// Validate checks that the toleration adheres to Kubernetes specifications.
+func (t Toleration) Validate() error {
+	op := strings.TrimSpace(t.Operator)
+	if op == "" {
+		op = "Equal"
+	}
+	switch op {
+	case "Exists":
+		if strings.TrimSpace(t.Value) != "" {
+			return fmt.Errorf("%w: operator Exists cannot have a value", ErrInvalidToleration)
+		}
+	case "Equal":
+		if strings.TrimSpace(t.Key) == "" {
+			return fmt.Errorf("%w: operator Equal requires a key", ErrInvalidToleration)
+		}
+	default:
+		return fmt.Errorf("%w: unsupported operator %q (must be Exists or Equal)", ErrInvalidToleration, t.Operator)
+	}
+
+	effect := strings.TrimSpace(t.Effect)
+	if effect != "" {
+		switch effect {
+		case "NoSchedule", "PreferNoSchedule", "NoExecute":
+		default:
+			return fmt.Errorf("%w: unsupported effect %q", ErrInvalidToleration, t.Effect)
+		}
+	}
+
+	if t.TolerationSeconds != nil {
+		if effect != "NoExecute" {
+			return fmt.Errorf("%w: tolerationSeconds only allowed with NoExecute effect", ErrInvalidToleration)
+		}
+		if *t.TolerationSeconds < 0 {
+			return fmt.Errorf("%w: tolerationSeconds cannot be negative", ErrInvalidToleration)
+		}
+	}
+
+	return nil
+}
+
 // NodeAffinityTerm represents a single matching condition for node affinity scheduling.
 type NodeAffinityTerm struct {
 	Key      string
@@ -25,9 +65,48 @@ type NodeAffinityTerm struct {
 	Values   []string
 }
 
+// Validate checks that the node affinity term conforms to Kubernetes NodeSelectorRequirement specifications.
+func (t NodeAffinityTerm) Validate() error {
+	key := strings.TrimSpace(t.Key)
+	if key == "" {
+		return fmt.Errorf("%w: affinity term key cannot be empty", ErrInvalidAffinity)
+	}
+
+	switch t.Operator {
+	case "In", "NotIn":
+		if len(t.Values) == 0 {
+			return fmt.Errorf("%w: operator %q requires at least one value", ErrInvalidAffinity, t.Operator)
+		}
+	case "Exists", "DoesNotExist":
+		if len(t.Values) > 0 {
+			return fmt.Errorf("%w: operator %q must not have values", ErrInvalidAffinity, t.Operator)
+		}
+	case "Gt", "Lt":
+		if len(t.Values) != 1 {
+			return fmt.Errorf("%w: operator %q requires exactly one value", ErrInvalidAffinity, t.Operator)
+		}
+		if _, err := strconv.ParseInt(t.Values[0], 10, 64); err != nil {
+			return fmt.Errorf("%w: operator %q requires an integer value, got %q", ErrInvalidAffinity, t.Operator, t.Values[0])
+		}
+	default:
+		return fmt.Errorf("%w: unsupported affinity operator %q", ErrInvalidAffinity, t.Operator)
+	}
+	return nil
+}
+
 // Affinity represents node affinity specifications for runner pods.
 type Affinity struct {
 	NodeSelectorTerms []NodeAffinityTerm
+}
+
+// Validate checks that all node selector terms in the affinity are valid.
+func (a Affinity) Validate() error {
+	for _, term := range a.NodeSelectorTerms {
+		if err := term.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ResourceRequirements represents CPU and memory requests and limits for test runners.
@@ -121,6 +200,15 @@ func NewRunnerProfile(
 		return nil, ErrEmptyName
 	}
 
+	if err := affinity.Validate(); err != nil {
+		return nil, err
+	}
+	for _, tol := range tolerations {
+		if err := tol.Validate(); err != nil {
+			return nil, err
+		}
+	}
+
 	img := strings.TrimSpace(runnerImage)
 	if img == "" {
 		img = DefaultRunnerImage
@@ -153,6 +241,15 @@ func NewRunnerProfileWithID(
 	trimmedName := strings.TrimSpace(name)
 	if trimmedName == "" {
 		return nil, ErrEmptyName
+	}
+
+	if err := affinity.Validate(); err != nil {
+		return nil, err
+	}
+	for _, tol := range tolerations {
+		if err := tol.Validate(); err != nil {
+			return nil, err
+		}
 	}
 
 	img := strings.TrimSpace(runnerImage)
@@ -233,6 +330,45 @@ func (p *RunnerProfile) UpdatedAt() time.Time {
 func (p *RunnerProfile) UpdateResources(resources ResourceRequirements) error {
 	p.resources = resources
 	p.updatedAt = time.Now().UTC()
+	return nil
+}
+
+// UpdateDetails updates the runner profile configuration and attributes.
+func (p *RunnerProfile) UpdateDetails(
+	name, description, runnerImage string,
+	resources ResourceRequirements,
+	nodeSelector map[string]string,
+	affinity Affinity,
+	tolerations []Toleration,
+) error {
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		return ErrEmptyName
+	}
+
+	if err := affinity.Validate(); err != nil {
+		return err
+	}
+	for _, tol := range tolerations {
+		if err := tol.Validate(); err != nil {
+			return err
+		}
+	}
+
+	img := strings.TrimSpace(runnerImage)
+	if img == "" {
+		img = DefaultRunnerImage
+	}
+
+	p.name = trimmedName
+	p.description = strings.TrimSpace(description)
+	p.runnerImage = img
+	p.resources = resources
+	p.nodeSelector = nodeSelector
+	p.affinity = affinity
+	p.tolerations = tolerations
+	p.updatedAt = time.Now().UTC()
+
 	return nil
 }
 

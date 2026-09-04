@@ -40,4 +40,39 @@ type BuildsUseCase interface {
 	ListArtifacts(ctx context.Context, suiteID string) ([]*model.Artifact, error)
 }
 
+// CreateProfileCommand encapsulates input parameters for creating a new runner profile.
+type CreateProfileCommand struct {
+	Name          string
+	Description   string
+	RunnerImage   string
+	CPURequest    string
+	CPULimit      string
+	MemoryRequest string
+	MemoryLimit   string
+	NodeSelector  map[string]string
+	Affinity      model.Affinity
+	Tolerations   []model.Toleration
+}
 
+// UpdateProfileCommand encapsulates input parameters for updating a runner profile.
+type UpdateProfileCommand struct {
+	Name          string
+	Description   string
+	RunnerImage   string
+	CPURequest    string
+	CPULimit      string
+	MemoryRequest string
+	MemoryLimit   string
+	NodeSelector  map[string]string
+	Affinity      model.Affinity
+	Tolerations   []model.Toleration
+}
+
+// ProfilesUseCase defines driving use cases for managing reusable RunnerProfile entities.
+type ProfilesUseCase interface {
+	CreateProfile(ctx context.Context, cmd CreateProfileCommand) (*model.RunnerProfile, error)
+	GetProfile(ctx context.Context, id string) (*model.RunnerProfile, error)
+	ListProfiles(ctx context.Context) ([]*model.RunnerProfile, error)
+	UpdateProfile(ctx context.Context, id string, cmd UpdateProfileCommand) (*model.RunnerProfile, error)
+	DeleteProfile(ctx context.Context, id string) error
+}
