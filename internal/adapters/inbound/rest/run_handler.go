@@ -2,6 +2,7 @@ package rest
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -105,6 +106,59 @@ func (h *RunHandler) CompleteRun(c *gin.Context) {
 	c.JSON(http.StatusOK, ToRunResponse(run))
 }
 
+// AbortRun handles POST /api/v1/runs/:id/abort.
+// Cancels an active or queued test run, terminates its K8s Job, and marks it ABORTED.
+func (h *RunHandler) AbortRun(c *gin.Context) {
+	start := time.Now()
+	ctx := c.Request.Context()
+	runID := strings.TrimSpace(c.Param("id"))
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunHandler.AbortRun").
+		Str("run_id", runID).
+		Logger()
+	log.Debug().Msg("handling test run abort request")
+
+	if runID == "" {
+		log.Warn().Msg("missing run id parameter")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "run id cannot be empty"})
+		return
+	}
+
+	var req AbortRunRequest
+	if c.Request.Body != nil && c.Request.ContentLength > 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			log.Warn().Err(err).Msg("invalid abort run request payload")
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request payload: " + err.Error()})
+			return
+		}
+	}
+
+	reason := strings.TrimSpace(req.Reason)
+	requestedBy := strings.TrimSpace(req.RequestedBy)
+	if reason == "" {
+		reason = "manual cancellation via API"
+	}
+	if requestedBy != "" {
+		reason = fmt.Sprintf("%s (requested by: %s)", reason, requestedBy)
+	}
+
+	run, err := h.runsUC.AbortRun(ctx, runID, reason)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed aborting test run")
+		HandleError(c, err)
+		return
+	}
+
+	log.Info().
+		Str("run_id", run.ID()).
+		Str("status", string(run.Status())).
+		Dur("duration_ms", time.Since(start)).
+		Msg("successfully processed test run abort")
+
+	c.JSON(http.StatusOK, ToRunResponse(run))
+}
+
 // GetRun handles GET /api/v1/runs/:id.
 // Returns execution status, metadata, duration, exit code, SLA status, and indexed performance KPIs.
 func (h *RunHandler) GetRun(c *gin.Context) {
@@ -138,6 +192,7 @@ func (h *RunHandler) GetRun(c *gin.Context) {
 
 	c.JSON(http.StatusOK, ToRunResponse(run))
 }
+
 
 // ListRuns handles GET /api/v1/runs.
 // Supports filtering by suite_id, status, schedule_id, from, to date range, limit and offset.
@@ -313,4 +368,3 @@ func (h *RunHandler) GetRunLogs(c *gin.Context) {
 
 // Compile-time assertion
 var _ = (*RunHandler)(nil)
-

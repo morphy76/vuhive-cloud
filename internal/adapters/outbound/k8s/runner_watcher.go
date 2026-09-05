@@ -78,6 +78,22 @@ func (w *RunnerJobWatcher) Start(ctx context.Context) error {
 				}
 			}
 		},
+		DeleteFunc: func(obj interface{}) {
+			job, ok := obj.(*batchv1.Job)
+			if !ok {
+				tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+				if !ok {
+					return
+				}
+				job, ok = tombstone.Obj.(*batchv1.Job)
+				if !ok {
+					return
+				}
+			}
+			if err := w.HandleJobDeletion(ctx, job); err != nil {
+				log.Error().Err(err).Str("job_name", job.Name).Msg("failed handling job delete event")
+			}
+		},
 	})
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed registering informer event handler")
@@ -194,6 +210,30 @@ func (w *RunnerJobWatcher) SyncJob(ctx context.Context, job *batchv1.Job) error 
 
 	now := time.Now().UTC()
 
+	// Check if Job is being deleted or terminated asynchronously
+	if job.DeletionTimestamp != nil {
+		abortTime := now
+		if !job.DeletionTimestamp.IsZero() {
+			abortTime = job.DeletionTimestamp.UTC()
+		}
+
+		if err := run.Abort("job deleted in kubernetes", abortTime); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed transitioning run to ABORTED")
+			return err
+		}
+
+		if err := w.runRepo.Save(ctx, run); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed saving aborted run")
+			return err
+		}
+
+		log.Info().
+			Str("status", string(model.RunStatusAborted)).
+			Dur("duration_ms", time.Since(start)).
+			Msg("test run transitioned to ABORTED due to job deletion")
+		return nil
+	}
+
 	// 1. Check if Job succeeded
 	if isJobSuccessful(job) {
 		finishTime := now
@@ -295,5 +335,56 @@ func (w *RunnerJobWatcher) SyncJob(ctx context.Context, job *batchv1.Job) error 
 		}
 	}
 
+	return nil
+}
+
+// HandleJobDeletion handles asynchronous deletion of a Job from Kubernetes.
+func (w *RunnerJobWatcher) HandleJobDeletion(ctx context.Context, job *batchv1.Job) error {
+	start := time.Now()
+	if job == nil {
+		return nil
+	}
+
+	runID := strings.TrimSpace(job.Labels["vuhive.io/run-id"])
+	if runID == "" {
+		return nil
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunnerJobWatcher.HandleJobDeletion").
+		Str("job_name", job.Name).
+		Str("run_id", runID).
+		Logger()
+	log.Debug().Msg("processing job deletion event")
+
+	run, err := w.runRepo.FindByID(ctx, runID)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			return nil
+		}
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed fetching test run on job deletion")
+		return err
+	}
+
+	if run.Status().IsTerminal() {
+		log.Debug().Str("status", string(run.Status())).Msg("test run already in terminal state; ignoring deletion")
+		return nil
+	}
+
+	now := time.Now().UTC()
+	if err := run.Abort("job deleted in kubernetes", now); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed transitioning run to ABORTED on deletion")
+		return err
+	}
+
+	if err := w.runRepo.Save(ctx, run); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed saving aborted run on deletion")
+		return err
+	}
+
+	log.Info().
+		Str("status", string(model.RunStatusAborted)).
+		Dur("duration_ms", time.Since(start)).
+		Msg("test run transitioned to ABORTED on job deletion event")
 	return nil
 }

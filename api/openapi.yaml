@@ -30,6 +30,20 @@ paths:
                     type: string
                     example: ok
 
+  /version:
+    get:
+      summary: Component version
+      description: Returns semantic version, git commit hash, and build timestamp.
+      operationId: getVersion
+      responses:
+        '200':
+          description: Build version details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+
+
   /api/v1/health:
     get:
       summary: API health status
@@ -235,6 +249,57 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Test run is still in-flight; logs not yet finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/runs/{id}/abort:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Unique TestRun UUID to abort
+        schema:
+          type: string
+    post:
+      summary: Abort in-flight test run
+      description: |
+        Stops and cancels an active (QUEUED or RUNNING) test run on demand.
+        Deletes the underlying Kubernetes batch/v1 Job and terminates associated runner pods
+        with SIGTERM signal propagation, allowing the runner wrapper to flush partial execution
+        logs before pod eviction. Transitions the aggregate state to ABORTED and records audit metadata.
+        Rejects abort requests on already finalized runs with 409 Conflict.
+      operationId: abortRun
+      tags:
+        - Runs
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AbortRunRequest'
+      responses:
+        '200':
+          description: Test execution successfully aborted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '400':
+          description: Malformed or invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Run is already in a terminal status (COMPLETED, FAILED, or ABORTED)
           content:
             application/json:
               schema:
@@ -639,6 +704,19 @@ components:
           type: string
           example: "resource not found"
 
+    VersionResponse:
+      type: object
+      properties:
+        version:
+          type: string
+          example: 0.1.0
+        commit:
+          type: string
+          example: 9b0665a
+        build_time:
+          type: string
+          example: "2026-09-05T11:00:00Z"
+
     PresignedURLResponse:
       type: object
       required:
@@ -806,6 +884,16 @@ components:
         offset:
           type: integer
           example: 0
+
+    AbortRunRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          example: "high error rate detected"
+        requested_by:
+          type: string
+          example: "operator-alice"
 
     CompleteRunRequest:
       type: object

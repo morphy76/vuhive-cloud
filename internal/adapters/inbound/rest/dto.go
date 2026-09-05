@@ -414,6 +414,12 @@ func ToRunResponse(r *model.TestRun) RunResponse {
 	}
 }
 
+// AbortRunRequest defines the optional JSON payload for requesting a test run abort.
+type AbortRunRequest struct {
+	Reason      string `json:"reason,omitempty"`
+	RequestedBy string `json:"requested_by,omitempty"`
+}
+
 // ToRunListResponse maps a slice of domain TestRuns and pagination parameters to a RunListResponse DTO.
 func ToRunListResponse(runs []*model.TestRun, total int64, limit, offset int) RunListResponse {
 	items := make([]RunResponse, 0, len(runs))
@@ -505,4 +511,3 @@ func ToBarrierResponse(s *model.BarrierSession) BarrierResponse {
 		Participants:    participants,
 	}
 }
-

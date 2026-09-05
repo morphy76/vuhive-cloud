@@ -12,19 +12,31 @@ import (
 
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/inbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
+	"github.com/morphy76/vuhive-cloud/internal/domain/event"
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 	domainservice "github.com/morphy76/vuhive-cloud/internal/domain/service"
 )
 
 // RunService implements inbound.RunsUseCase to orchestrate test run creation, execution dispatch, and lifecycle control.
 type RunService struct {
-	suiteRepo    outbound.TestSuiteRepository
-	artifactRepo outbound.ArtifactRepository
-	configRepo   outbound.ConfigurationRepository
-	profileRepo  outbound.RunnerProfileRepository
-	runRepo      outbound.TestRunRepository
-	orchestrator outbound.RunnerOrchestratorPort
-	storage      outbound.StoragePort
+	suiteRepo      outbound.TestSuiteRepository
+	artifactRepo   outbound.ArtifactRepository
+	configRepo     outbound.ConfigurationRepository
+	profileRepo    outbound.RunnerProfileRepository
+	runRepo        outbound.TestRunRepository
+	orchestrator   outbound.RunnerOrchestratorPort
+	storage        outbound.StoragePort
+	eventPublisher outbound.EventPublisher
+}
+
+// RunServiceOption defines functional options for configuring RunService.
+type RunServiceOption func(*RunService)
+
+// WithEventPublisher configures an optional domain event publisher.
+func WithEventPublisher(p outbound.EventPublisher) RunServiceOption {
+	return func(s *RunService) {
+		s.eventPublisher = p
+	}
 }
 
 // NewRunService constructs a new RunService.
@@ -36,8 +48,9 @@ func NewRunService(
 	runRepo outbound.TestRunRepository,
 	orchestrator outbound.RunnerOrchestratorPort,
 	storage outbound.StoragePort,
+	opts ...RunServiceOption,
 ) *RunService {
-	return &RunService{
+	s := &RunService{
 		suiteRepo:    suiteRepo,
 		artifactRepo: artifactRepo,
 		configRepo:   configRepo,
@@ -46,6 +59,10 @@ func NewRunService(
 		orchestrator: orchestrator,
 		storage:      storage,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // TriggerRun validates inputs, creates a new TestRun aggregate, persists it in QUEUED status, and manifests a K8s Job.
@@ -408,30 +425,35 @@ func (s *RunService) GetRunLogsURL(ctx context.Context, id string, lifetime time
 }
 
 // AbortRun cancels an active or queued run, terminates its K8s Job, and marks it as ABORTED.
-func (s *RunService) AbortRun(ctx context.Context, id string, reason string) error {
+func (s *RunService) AbortRun(ctx context.Context, id string, reason string) (*model.TestRun, error) {
 	start := time.Now()
 	trimmedID := strings.TrimSpace(id)
 	if trimmedID == "" {
-		return fmt.Errorf("%w: run id cannot be empty", model.ErrValidation)
+		return nil, fmt.Errorf("%w: run id cannot be empty", model.ErrValidation)
+	}
+
+	trimmedReason := strings.TrimSpace(reason)
+	if trimmedReason == "" {
+		trimmedReason = "manual cancellation"
 	}
 
 	log := zerolog.Ctx(ctx).With().
 		Str("op", "RunService.AbortRun").
 		Str("run_id", trimmedID).
-		Str("reason", reason).
+		Str("reason", trimmedReason).
 		Logger()
 	log.Debug().Msg("starting test run abort")
 
 	run, err := s.runRepo.FindByID(ctx, trimmedID)
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run to abort")
-		return err
+		return nil, err
 	}
 
 	if run.Status().IsTerminal() {
 		err := fmt.Errorf("%w: run %s is already in terminal status %s", model.ErrTerminalState, trimmedID, run.Status())
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("cannot abort run in terminal state")
-		return err
+		return nil, err
 	}
 
 	// Terminate the Kubernetes Job if it was dispatched
@@ -443,21 +465,29 @@ func (s *RunService) AbortRun(ctx context.Context, id string, reason string) err
 	}
 
 	now := time.Now().UTC()
-	if err := run.Abort(reason, now); err != nil {
+	if err := run.Abort(trimmedReason, now); err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed transitioning run state to ABORTED")
-		return err
+		return nil, err
 	}
 
 	if err := s.runRepo.Save(ctx, run); err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed persisting aborted test run")
-		return err
+		return nil, err
+	}
+
+	// Emit RunAborted domain event
+	if s.eventPublisher != nil {
+		evt := event.NewRunAborted(run.ID(), run.SuiteID(), trimmedReason, now)
+		if err := s.eventPublisher.Publish(ctx, evt); err != nil {
+			log.Warn().Err(err).Msg("failed emitting RunAborted domain event")
+		}
 	}
 
 	log.Info().
 		Dur("duration_ms", time.Since(start)).
 		Msg("completed test run abort")
 
-	return nil
+	return run, nil
 }
 
 // CompleteRun processes a test run completion callback, ingesting summary.json,

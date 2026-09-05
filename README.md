@@ -4,8 +4,80 @@ This repository contains the implementation and architecture documentation for *
 
 Project roadmaps, epics, and implementation tasks are tracked directly via the [GitHub Issues Tracker](https://github.com/morphy76/vuhive-cloud/issues) and [GitHub Milestones](https://github.com/morphy76/vuhive-cloud/milestones).
 
-## Quick Install
+---
 
+## Key Features
+
+- 🛠 **Ephemeral Source-to-Binary Compilation**: Upload raw Go source archives (`go.mod` + scenario code); `vuhive-cloud` dynamically spins up isolated Kubernetes build jobs (`golang:1.26-alpine`) to cross-compile static binaries targeting `linux/amd64` or `linux/arm64`.
+- 🔒 **Hardened Execution Isolation**: Test runner pods comply with the Kubernetes **Restricted** Pod Security Standards (non-root UID `10001`, read-only root filesystems, all Linux capabilities dropped, zero host privilege).
+- 🧩 **Reusable Runner Profiles**: Decouple test scenario code from infrastructure scheduling. Define reusable profiles specifying CPU/memory requests and limits, node selectors, tolerations, and node affinities for targeted execution.
+- ⏰ **Native Kubernetes CronJob Scheduling**: Declarative scheduling mapped 1-to-1 to native Kubernetes `batch/v1` `CronJob`s with standard cron syntax (`0 2 * * *`), eliminating external scheduler dependencies.
+- 📊 **Automated KPI Indexing & SLA Verification**: Automatically parses deterministic execution reports (`summary.json`), extracting and indexing latency percentiles ($p_{50}$, $p_{90}$, $p_{95}$, $p_{99}$), throughput (TPS), error rates, and SLA pass/fail status into PostgreSQL.
+- 📈 **Execution Reports, Logs & Metrics Query API**: Query and filter historical runs by suite, schedule, status, and date range. Fetch indexed performance KPIs, full deterministic execution reports (`summary.json`), and runner stdout/stderr logs directly or as presigned S3 download URLs. Fully documented via [OpenAPI 3.0.3](./api/openapi.yaml).
+- 📦 **Pluggable Object Storage**: Integrates seamlessly with AWS S3 or MinIO for long-term retention of source packages, compiled binaries, full execution logs, and detailed performance summaries.
+- ⏱ **Distributed Start Barrier Synchronization**: Built-in rendezvous coordinator guarantees multi-pod distributed load generators synchronize and fire simultaneously without clock skew.
+- 🛑 **Execution Lifecycle Control & Graceful Abort**: Monitor active runs in real time and abort executions on demand (`POST /api/v1/runs/{id}/abort`), instantly tearing down Kubernetes workloads while propagating SIGTERM for partial log flush, updating state to `ABORTED` with audited cancellation metadata, and reclaiming cluster resources.
+
+---
+
+## Architecture at a Glance
+
+`vuhive-cloud` follows Hexagonal Architecture (Ports & Adapters) and Domain-Driven Design (DDD) principles:
+
+```text
+┌─────────────────────────────────┐   ┌─────────────────────────────────┐
+│   React 19 PWA Web Interface    │   │     API Client / CI/CD Pipeline │
+└────────────────┬────────────────┘   └────────────────┬────────────────┘
+                 │ HTTP REST / SSE                     │ HTTP REST (Gin)
+                 ▼                                     │
+┌─────────────────────────────────┐                    │
+│ Backend-For-Frontend (cmd/bff)  │                    │
+└────────────────┬────────────────┘                    │
+                 │ HTTP (Aggregation & Gateway)        │
+                 └─────────────────►┌──────────────────▼─────────────────────────────────────────────────────────────────────┐
+                                    │ vuhive-cloud Control Plane (cmd/server)                                                │
+                                    │                                                                                        │
+                                    │   ┌────────────────────────┐   ┌──────────────────────────┐   ┌────────────────────┐   │
+                                    │   │ Build Service          │   │ Profile & Run Service    │   │ Schedule Service   │   │
+                                    │   └───────────┬────────────┘   └────────────┬─────────────┘   └─────────┬──────────┘   │
+                                    │               │                             │                           │              │
+                                    │               │ (Ephemeral Builds)          │ (Runner Jobs / Abort)     │ (CronJobs)   │
+                                    │               ▼                             ▼                           ▼              │
+                                    │   ┌────────────────────────────────────────────────────────────────────────────────┐   │
+                                    │   │ Kubernetes Client Orchestrator (batch/v1 Jobs, CronJobs, Informer Watcher)     │   │
+                                    │   └────────────────────────────────────────────────────────────────────────────────┘   │
+                                    │               │                             │                           │              │
+                                    │               ▼                             ▼                           ▼              │
+                                    │      PostgreSQL (pgx)                 S3 / MinIO Storage          Barrier Coordinator  │
+                                    │      - Test Suites                    - Source Archives           - Worker Rendezvous  │
+                                    │      - Runner Profiles                - Compiled Binaries         - Sync Start Delay   │
+                                    │      - Cron Schedules                 - Run Logs                                       │
+                                    │      - Test Runs & KPIs               - summary.json Reports                           │
+                                    └────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+For complete architectural specifications, DDD aggregate boundaries, and database schemas, see **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)**.
+
+---
+
+## Documentation Navigation
+
+| Document | Purpose & Audience |
+|---|---|
+| **[`README.md`](./README.md)** | System overview, core capabilities, architecture, and quickstart. |
+| **[`api/openapi.yaml`](./api/openapi.yaml)** | **REST API Specification**: OpenAPI 3.0.3 contract covering test suites, builds, profiles, schedules, runs, performance metrics, reports, logs, and abort lifecycle control. |
+| **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & API Recipes**: Step-by-step `curl` walkthroughs for building suites, runner profiles, scheduling, triggering executions, aborting runs, querying runs/KPIs, retrieving reports and logs, and barrier coordination. |
+| **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Helm Chart**: Production deployment guide, comprehensive configuration values reference, external secrets, RBAC, and security hardening. |
+| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Helm Chart**: Quickstart backing services setup for local evaluation (PostgreSQL + MinIO). |
+| **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | Detailed engineering specification, domain models, database DDL, and multi-milestone roadmap. |
+
+---
+
+## Quickstart
+
+Get up and running locally on Rancher Desktop, Kind, or Minikube in three steps:
+
+### 1. Deploy Backing Infrastructure (PostgreSQL + MinIO)
 Deploy the full stack on any Kubernetes cluster (Rancher Desktop, EKS, GKE, AKS):
 
 ```bash
