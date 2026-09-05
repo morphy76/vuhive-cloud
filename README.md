@@ -99,6 +99,81 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --wait --timeout=120s
 ```
 
+> **MinIO Note**: Setting `s3.endpoint` automatically enables path-style S3 addressing in the control plane server, runner-init, and runner-wrapper — no extra flag needed. See [`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md) for full configuration reference.
+
+### 3. Verify Health & Explore API Recipes
+
+Port-forward the control plane service:
+
+```bash
+kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080
+```
+
+Verify service liveness:
+
+```bash
+curl -i http://localhost:8080/healthz
+```
+
+To create your first runner profile, upload test suites, and trigger runs, follow the **[Adoption Cookbook (`docs/cookbook.md`)](./docs/cookbook.md)**.
+
+---
+
+## Repository Structure & Development Guide
+
+```text
+.
+├── api/
+│   └── openapi.yaml            # OpenAPI 3.0.3 REST API specification
+├── cmd/
+│   ├── bff/                    # Backend-For-Frontend service (React 19 PWA aggregation & API gateway)
+│   ├── server/                 # Control plane REST server & migration entrypoint
+│   ├── runner-init/            # Runner pod init container (downloads binary & config from S3)
+│   └── runner-wrapper/         # Runner entrypoint wrapper (executes workload, captures KPIs)
+├── internal/
+│   ├── bff/                    # BFF service hexagonal hierarchy (domain models, ports, adapters)
+│   ├── domain/                 # Pure domain layer (models, value objects, events, errors)
+│   ├── application/            # Use case orchestration layer (inbound/outbound ports & services)
+│   ├── adapters/               # Infrastructure adapters (PostgreSQL pgx, S3 MinIO, K8s, REST)
+│   └── version/                # Compile-time version metadata
+├── deploy/
+│   ├── docker/                 # Production Dockerfiles (server.Dockerfile, runner-init.Dockerfile)
+│   └── helm/
+│       ├── vuhive-cloud/       # Control plane Helm chart
+│       └── vuhive-cloud-infra/ # Backing infrastructure Helm chart (PostgreSQL + MinIO)
+└── docs/
+    └── cookbook.md             # End-to-end adoption cookbook & API recipes
+```
+
+### Development & Make Targets
+
+Build and test commands are driven by the root `Makefile`:
+
+```bash
+# Build all local binaries (server, bff, runner-wrapper, runner-init)
+make build
+
+# Build standalone BFF service binary
+make build-bff
+
+# Run unit tests
+make test
+
+# Run tests with race detection
+make test-race
+
+# Run linter
+make lint
+
+# View all available targets
+make help
+```
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
 The control plane exposes its REST API at port `8080`. See [`docs/openapi.yaml`](./docs/openapi.yaml) for the full API reference.
 For detailed Helm configuration options, see the chart READMEs:
 - [`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md) — infrastructure (PostgreSQL + MinIO)

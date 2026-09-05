@@ -43,6 +43,13 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set s3.endpoint=http://vuhive-infra-minio:9000
 ```
 
+> [!NOTE]
+> When `s3.endpoint` is non-empty (as in the MinIO case above), `s3.usePathStyle` is automatically treated as `true` by the control plane server, runner-init, and runner-wrapper. Path-style addressing (`http://<endpoint>/<bucket>/`) is required for MinIO because virtual-hosted-style URLs (`http://<bucket>.<service>/`) depend on DNS wildcards unavailable for Kubernetes Service names.
+
+### 2. Production Deployment (with External PostgreSQL & S3)
+
+In production, backing services should be provisioned via managed cloud infrastructure (e.g., AWS Aurora PostgreSQL and AWS S3).
+
 ## Namespace Management
 
 When `rbac.clusterScoped` is `false` (the default), the chart creates scoped `Role` and `RoleBinding`
@@ -129,11 +136,13 @@ In this case no extra namespaces are created and no cross-namespace RBAC is need
 | `s3.bucket` | S3 bucket name | `vuhive-artifacts` |
 | `s3.accessKeyId` | S3 access key ID | `vuhive-dev` |
 | `s3.secretAccessKey` | S3 secret access key | `vuhive-dev-secret` |
-| `s3.usePathStyle` | S3 path style addressing | `true` |
-| `s3.existingSecret` | Existing Secret name for AWS credentials | `""` |
-| `runner.namespace` | Namespace where runner jobs are spawned | `vuhive-runners` |
+| `s3.usePathStyle` | Force S3 path-style addressing (`http://<endpoint>/<bucket>/`). Required for MinIO and any in-cluster S3-compatible endpoint. Automatically enabled when `s3.endpoint` is non-empty. | `true` |
+| `s3.existingSecret` | Name of Secret containing AWS credentials | `""` |
+| `s3.existingSecretAccessKey`| Key within `s3.existingSecret` for access key | `AWS_ACCESS_KEY_ID` |
+| `s3.existingSecretSecretKey`| Key within `s3.existingSecret` for secret key | `AWS_SECRET_ACCESS_KEY` |
+| `runner.namespace` | Target namespace where runner Jobs and CronJobs are spawned | `vuhive-runners` |
 | `runner.createNamespace` | Automatically create `runner.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release namespace) | `true` |
-| `runner.initImage` | Runner init container image | `ghcr.io/morphy76/vuhive-cloud/runner-init:latest` |
+| `runner.initImage` | Init container image fetching binaries from S3 | `ghcr.io/morphy76/vuhive-cloud/runner-init:latest` |
 | `runner.defaultImage` | Default runner base image | `alpine:3.20` |
 | `builder.namespace` | Namespace where test builder jobs run | `vuhive-system` |
 | `builder.createNamespace` | Automatically create `builder.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release/runner namespace) | `true` |

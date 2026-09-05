@@ -6,8 +6,12 @@ Helm chart to deploy backing infrastructure services (PostgreSQL and MinIO) for 
 
 This chart bundles the two external dependencies required by the `vuhive-cloud` control plane:
 
-- **PostgreSQL** — relational store for test suites, runner profiles, schedules, and run records.
-- **MinIO** — S3-compatible object store for compiled test binaries, execution logs, and reports.
+The `vuhive-cloud-infra` umbrella chart bundles community-proven Helm subcharts:
+- **`groundhog2k/postgres`**: Lightweight, secure PostgreSQL 16+ instance.
+- **`minio/minio`**: S3-compatible standalone object storage server with pre-created buckets.
+
+> [!WARNING]
+> This chart is intended for **local development and evaluation** only (e.g., Rancher Desktop, Kind, Minikube). For production deployments, provision PostgreSQL and S3/MinIO via managed cloud services and reference them from the [`vuhive-cloud`](../vuhive-cloud/README.md) chart using `existingSecret`.
 
 ## Prerequisites
 
