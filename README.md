@@ -30,31 +30,35 @@ It transforms Go-based load testing suites into compiled, self-contained Linux b
 `vuhive-cloud` follows Hexagonal Architecture (Ports & Adapters) and Domain-Driven Design (DDD) principles:
 
 ```text
-                                 ┌─────────────────────────────────┐
-                                 │     API Client / CI/CD Pipeline │
-                                 └────────────────┬────────────────┘
-                                                  │ HTTP REST (Gin)
-                                                  ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ vuhive-cloud Control Plane                                                             │
-│                                                                                        │
-│   ┌────────────────────────┐   ┌──────────────────────────┐   ┌────────────────────┐   │
-│   │ Build Service          │   │ Profile & Run Service    │   │ Schedule Service   │   │
-│   └───────────┬────────────┘   └────────────┬─────────────┘   └─────────┬──────────┘   │
-│               │                             │                           │              │
-│               │ (Ephemeral Builds)          │ (Runner Jobs / Abort)     │ (CronJobs)   │
-│               ▼                             ▼                           ▼              │
-│   ┌────────────────────────────────────────────────────────────────────────────────┐   │
-│   │ Kubernetes Client Orchestrator (batch/v1 Jobs, CronJobs, Informer Watcher)     │   │
-│   └────────────────────────────────────────────────────────────────────────────────┘   │
-│               │                             │                           │              │
-│               ▼                             ▼                           ▼              │
-│      PostgreSQL (pgx)                 S3 / MinIO Storage          Barrier Coordinator  │
-│      - Test Suites                    - Source Archives           - Worker Rendezvous  │
-│      - Runner Profiles                - Compiled Binaries         - Sync Start Delay   │
-│      - Cron Schedules                 - Run Logs                                       │
-│      - Test Runs & KPIs               - summary.json Reports                           │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────┐   ┌─────────────────────────────────┐
+│   React 19 PWA Web Interface    │   │     API Client / CI/CD Pipeline │
+└────────────────┬────────────────┘   └────────────────┬────────────────┘
+                 │ HTTP REST / SSE                     │ HTTP REST (Gin)
+                 ▼                                     │
+┌─────────────────────────────────┐                    │
+│ Backend-For-Frontend (cmd/bff)  │                    │
+└────────────────┬────────────────┘                    │
+                 │ HTTP (Aggregation & Gateway)        │
+                 └─────────────────►┌──────────────────▼─────────────────────────────────────────────────────────────────────┐
+                                    │ vuhive-cloud Control Plane (cmd/server)                                                │
+                                    │                                                                                        │
+                                    │   ┌────────────────────────┐   ┌──────────────────────────┐   ┌────────────────────┐   │
+                                    │   │ Build Service          │   │ Profile & Run Service    │   │ Schedule Service   │   │
+                                    │   └───────────┬────────────┘   └────────────┬─────────────┘   └─────────┬──────────┘   │
+                                    │               │                             │                           │              │
+                                    │               │ (Ephemeral Builds)          │ (Runner Jobs / Abort)     │ (CronJobs)   │
+                                    │               ▼                             ▼                           ▼              │
+                                    │   ┌────────────────────────────────────────────────────────────────────────────────┐   │
+                                    │   │ Kubernetes Client Orchestrator (batch/v1 Jobs, CronJobs, Informer Watcher)     │   │
+                                    │   └────────────────────────────────────────────────────────────────────────────────┘   │
+                                    │               │                             │                           │              │
+                                    │               ▼                             ▼                           ▼              │
+                                    │      PostgreSQL (pgx)                 S3 / MinIO Storage          Barrier Coordinator  │
+                                    │      - Test Suites                    - Source Archives           - Worker Rendezvous  │
+                                    │      - Runner Profiles                - Compiled Binaries         - Sync Start Delay   │
+                                    │      - Cron Schedules                 - Run Logs                                       │
+                                    │      - Test Runs & KPIs               - summary.json Reports                           │
+                                    └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 For complete architectural specifications, DDD aggregate boundaries, and database schemas, see **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)**.
@@ -125,10 +129,12 @@ To create your first runner profile, upload test suites, and trigger runs, follo
 ```text
 .
 ├── cmd/
+│   ├── bff/                    # Backend-For-Frontend service (React 19 PWA aggregation & API gateway)
 │   ├── server/                 # Control plane REST server & migration entrypoint
 │   ├── runner-init/            # Runner pod init container (downloads binary & config from S3)
 │   └── runner-wrapper/         # Runner entrypoint wrapper (executes workload, captures KPIs)
 ├── internal/
+│   ├── bff/                    # BFF service hexagonal hierarchy (domain models, ports, adapters)
 │   ├── domain/                 # Pure domain layer (models, value objects, events, errors)
 │   ├── application/            # Use case orchestration layer (inbound/outbound ports & services)
 │   ├── adapters/               # Infrastructure adapters (PostgreSQL pgx, S3 MinIO, K8s, REST)
@@ -147,8 +153,11 @@ To create your first runner profile, upload test suites, and trigger runs, follo
 Build and test commands are driven by the root `Makefile`:
 
 ```bash
-# Build all local binaries
+# Build all local binaries (server, bff, runner-wrapper, runner-init)
 make build
+
+# Build standalone BFF service binary
+make build-bff
 
 # Run unit tests
 make test

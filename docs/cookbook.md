@@ -19,8 +19,9 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
   - [Recipe 5: Dispatching Ad-Hoc Test Executions & Job Lifecycle](#recipe-5-dispatching-ad-hoc-test-executions--job-lifecycle)
   - [Recipe 6: Reporting Run Completion & Ingesting Performance KPIs](#recipe-6-reporting-run-completion--ingesting-performance-kpis)
   - [Recipe 7: Synchronizing Distributed Multi-Pod Runs with Start Barrier](#recipe-7-synchronizing-distributed-multi-pod-runs-with-start-barrier)
-  - [Recipe 8: Aborting & Cancelling In-Flight Test Runs on Demand](#recipe-8-aborting--cancelling-in-flight-test-runs-on-demand)
-  - [Recipe 9: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-9-execution-diagnostics-log-inspection--troubleshooting)
+    - [Recipe 8: Aborting & Cancelling In-Flight Test Runs on Demand](#recipe-8-aborting--cancelling-in-flight-test-runs-on-demand)
+    - [Recipe 9: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-9-execution-diagnostics-log-inspection--troubleshooting)
+    - [Recipe 10: Inspecting BFF Gateway Status & Session Management](#recipe-10-inspecting-bff-gateway-status--session-management)
 
 ---
 
@@ -621,6 +622,65 @@ kubectl logs -n vuhive-runners pod/<pod-name> -c runner
 | `409 Conflict` | `build job already running` | A compilation job is already active for this suite/platform. | Await completion or check build job status in builder namespace. |
 | `424 Failed Dependency` | `barrier rendezvous aborted` | Start barrier rendezvous was cancelled by a worker failure. | Inspect worker initialization logs and restart run. |
 | `422 Unprocessable Entity` | `unsupported target platform` | Platform is not `linux/amd64` or `linux/arm64`. | Specify valid platform architecture. |
+
+---
+
+### Recipe 10: Inspecting BFF Gateway Status & Session Management
+
+The Backend-For-Frontend service (`cmd/bff`) acts as the aggregator and API gateway for the web interface, exposing health status and managing client session state.
+
+#### 1. Checking BFF Aggregated Health & Control Plane Connectivity:
+
+```bash
+curl -s -i http://localhost:8081/api/v1/bff/status
+```
+
+Expected response (`200 OK`):
+
+```json
+{
+  "bff_status": "UP",
+  "bff_version": "0.0.1",
+  "control_plane_status": "UP",
+  "control_plane_version": "0.0.1",
+  "timestamp": "2026-09-05T11:45:00Z"
+}
+```
+
+#### 2. Creating an Authenticated Client Session:
+
+```bash
+curl -s -i -X POST http://localhost:8081/api/v1/bff/sessions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "sess-usr-12345",
+    "user_id": "operator@vuhive.local",
+    "ttl_seconds": 3600,
+    "metadata": {
+      "role": "admin"
+    }
+  }'
+```
+
+Expected response (`201 Created`):
+
+```json
+{
+  "id": "sess-usr-12345",
+  "user_id": "operator@vuhive.local",
+  "created_at": "2026-09-05T11:45:00Z",
+  "expires_at": "2026-09-05T12:45:00Z",
+  "metadata": {
+    "role": "admin"
+  }
+}
+```
+
+#### 3. Retrieving Active Session Context:
+
+```bash
+curl -s -i http://localhost:8081/api/v1/bff/sessions/sess-usr-12345
+```
 
 ---
 
