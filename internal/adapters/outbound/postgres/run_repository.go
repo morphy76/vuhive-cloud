@@ -280,15 +280,69 @@ func (r *TestRunRepository) FindByK8sJobName(ctx context.Context, jobName string
 
 // List returns TestRun aggregates optionally filtered by suiteID and status.
 func (r *TestRunRepository) List(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error) {
+	runs, _, err := r.ListFiltered(ctx, model.RunFilter{
+		SuiteID: suiteID,
+		Status:  status,
+	})
+	return runs, err
+}
+
+// ListFiltered returns TestRun aggregates matching filter criteria along with total count.
+func (r *TestRunRepository) ListFiltered(ctx context.Context, filter model.RunFilter) ([]*model.TestRun, int64, error) {
 	start := time.Now()
 	log := zerolog.Ctx(ctx).With().
-		Str("op", "TestRunRepository.List").
-		Str("suite_id", suiteID).
-		Str("status", string(status)).
+		Str("op", "TestRunRepository.ListFiltered").
+		Str("suite_id", filter.SuiteID).
+		Str("status", string(filter.Status)).
+		Str("schedule_id", filter.ScheduleID).
 		Logger()
-	log.Debug().Msg("listing test runs")
+	log.Debug().Msg("listing filtered test runs")
 
-	baseQuery := `
+	var (
+		whereClauses []string
+		args         []interface{}
+	)
+
+	if strings.TrimSpace(filter.SuiteID) != "" {
+		args = append(args, strings.TrimSpace(filter.SuiteID))
+		whereClauses = append(whereClauses, fmt.Sprintf("suite_id = $%d", len(args)))
+	}
+
+	if filter.Status.IsValid() {
+		args = append(args, string(filter.Status))
+		whereClauses = append(whereClauses, fmt.Sprintf("status = $%d", len(args)))
+	}
+
+	if strings.TrimSpace(filter.ScheduleID) != "" {
+		args = append(args, strings.TrimSpace(filter.ScheduleID))
+		whereClauses = append(whereClauses, fmt.Sprintf("schedule_id = $%d", len(args)))
+	}
+
+	if filter.From != nil && !filter.From.IsZero() {
+		args = append(args, *filter.From)
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at >= $%d", len(args)))
+	}
+
+	if filter.To != nil && !filter.To.IsZero() {
+		args = append(args, *filter.To)
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at <= $%d", len(args)))
+	}
+
+	whereSQL := ""
+	if len(whereClauses) > 0 {
+		whereSQL = " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	// 1. Compute total matching count
+	countQuery := "SELECT COUNT(*) FROM test_runs" + whereSQL
+	var total int64
+	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed counting test runs")
+		return nil, 0, MapError(err)
+	}
+
+	// 2. Fetch paginated records
+	selectQuery := `
 		SELECT
 			id, suite_id, artifact_id, configuration_id, runner_profile_id, schedule_id,
 			status, k8s_job_name, k8s_namespace, started_at, finished_at, exit_code, sla_passed,
@@ -296,31 +350,24 @@ func (r *TestRunRepository) List(ctx context.Context, suiteID string, status mod
 			p50_duration_ms, p90_duration_ms, p95_duration_ms, p99_duration_ms,
 			error_rate_pct, s3_report_key, s3_logs_key, summary_json, abort_reason, created_at
 		FROM test_runs
-	`
-	var (
-		whereClauses []string
-		args         []interface{}
-	)
+	` + whereSQL + " ORDER BY created_at DESC"
 
-	if strings.TrimSpace(suiteID) != "" {
-		whereClauses = append(whereClauses, fmt.Sprintf("suite_id = $%d", len(args)+1))
-		args = append(args, strings.TrimSpace(suiteID))
+	queryArgs := make([]interface{}, len(args))
+	copy(queryArgs, args)
+
+	if filter.Limit > 0 {
+		queryArgs = append(queryArgs, filter.Limit)
+		selectQuery += fmt.Sprintf(" LIMIT $%d", len(queryArgs))
+	}
+	if filter.Offset > 0 {
+		queryArgs = append(queryArgs, filter.Offset)
+		selectQuery += fmt.Sprintf(" OFFSET $%d", len(queryArgs))
 	}
 
-	if status.IsValid() {
-		whereClauses = append(whereClauses, fmt.Sprintf("status = $%d", len(args)+1))
-		args = append(args, string(status))
-	}
-
-	if len(whereClauses) > 0 {
-		baseQuery += " WHERE " + strings.Join(whereClauses, " AND ")
-	}
-	baseQuery += " ORDER BY created_at DESC"
-
-	rows, err := r.pool.Query(ctx, baseQuery, args...)
+	rows, err := r.pool.Query(ctx, selectQuery, queryArgs...)
 	if err != nil {
-		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to query test runs")
-		return nil, MapError(err)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed querying test runs")
+		return nil, 0, MapError(err)
 	}
 	defer rows.Close()
 
@@ -362,7 +409,7 @@ func (r *TestRunRepository) List(ctx context.Context, suiteID string, status mod
 			&errorRatePct, &s3ReportKey, &s3LogsKey, &summaryJSON, &abortReason, &createdAt,
 		); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan test run row")
-			return nil, MapError(err)
+			return nil, 0, MapError(err)
 		}
 
 		metrics := model.RunMetrics{
@@ -384,18 +431,18 @@ func (r *TestRunRepository) List(ctx context.Context, suiteID string, status mod
 		)
 		if err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to reconstitute test run from row")
-			return nil, err
+			return nil, 0, err
 		}
 		runs = append(runs, run)
 	}
 
 	if err := rows.Err(); err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("error iterating test run rows")
-		return nil, MapError(err)
+		return nil, 0, MapError(err)
 	}
 
-	log.Info().Int("count", len(runs)).Dur("duration_ms", time.Since(start)).Msg("successfully listed test runs")
-	return runs, nil
+	log.Info().Int("count", len(runs)).Int64("total", total).Dur("duration_ms", time.Since(start)).Msg("successfully listed test runs")
+	return runs, total, nil
 }
 
 // Delete removes a TestRun by ID.

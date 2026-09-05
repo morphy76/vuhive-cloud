@@ -17,7 +17,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
   - [Recipe 3: Defining & Managing Reusable Runner Profiles](#recipe-3-defining--managing-reusable-runner-profiles)
   - [Recipe 4: Managing Scheduled Test Runs with Kubernetes CronJobs](#recipe-4-managing-scheduled-test-runs-with-kubernetes-cronjobs)
   - [Recipe 5: Dispatching Ad-Hoc Test Executions & Job Lifecycle](#recipe-5-dispatching-ad-hoc-test-executions--job-lifecycle)
-  - [Recipe 6: Reporting Run Completion & Ingesting Performance KPIs](#recipe-6-reporting-run-completion--ingesting-performance-kpis)
+  - [Recipe 6: Reporting Run Completion, Ingesting KPIs & Querying Historical Runs](#recipe-6-reporting-run-completion-ingesting-kpis--querying-historical-runs)
   - [Recipe 7: Synchronizing Distributed Multi-Pod Runs with Start Barrier](#recipe-7-synchronizing-distributed-multi-pod-runs-with-start-barrier)
   - [Recipe 8: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-8-execution-diagnostics-log-inspection--troubleshooting)
 
@@ -392,7 +392,7 @@ kubectl wait --namespace vuhive-runners \
 
 ---
 
-### Recipe 6: Reporting Run Completion & Ingesting Performance KPIs
+### Recipe 6: Reporting Run Completion, Ingesting KPIs & Querying Historical Runs
 
 Upon workload completion, the runner wrapper uploads execution artifacts to S3 and notifies the control plane callback endpoint. This endpoint can also be invoked directly by custom CI/CD pipelines:
 
@@ -448,6 +448,61 @@ curl -i -X POST http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff0124
 ```
 
 Performance KPIs (`p50`, `p90`, `p95`, `p99`, `avg_tps`, `error_rate_pct`) are automatically indexed in PostgreSQL for querying, SLA threshold assertions, and historical trend analysis.
+
+#### 2. Listing & Filtering Historical Test Runs:
+
+Query runs across suites, statuses, schedules, or time ranges with pagination:
+
+```bash
+curl -s "http://localhost:8080/api/v1/runs?suite_id=suite-auth-checkout&status=COMPLETED&limit=10" | jq .
+```
+
+##### Response (`200 OK`):
+
+```json
+{
+  "runs": [
+    {
+      "id": "98bc19d4-1a3b-4882-a982-ff012498beaa",
+      "suite_id": "suite-auth-checkout",
+      "artifact_id": "c7a6e118-20ab-48d6-953b-e01140026e61",
+      "runner_profile_id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+      "status": "COMPLETED",
+      "started_at": "2026-09-05T10:14:30Z",
+      "finished_at": "2026-09-05T10:15:30Z",
+      "duration_ms": 60000,
+      "exit_code": 0,
+      "sla_passed": true,
+      "metrics": {
+        "total_iterations": 25000,
+        "total_requests": 100000,
+        "avg_tps": 1666.67,
+        "p50_duration_ms": 12.4,
+        "p90_duration_ms": 28.1,
+        "p95_duration_ms": 45.2,
+        "p99_duration_ms": 89.6,
+        "error_rate_pct": 0.02
+      },
+      "s3_report_key": "runs/98bc19d4/summary.json",
+      "s3_logs_key": "runs/98bc19d4/run.log",
+      "created_at": "2026-09-05T10:14:25Z"
+    }
+  ],
+  "count": 1,
+  "total": 1,
+  "limit": 10,
+  "offset": 0
+}
+```
+
+#### 3. Inspecting Run Details & Indexed Performance KPIs:
+
+Retrieve a single test run by its UUID:
+
+```bash
+curl -s http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff012498beaa | jq .
+```
+
 
 ---
 
@@ -537,9 +592,37 @@ curl -i -X POST http://localhost:8080/api/v1/runs/dist-run-001/barrier/abort \
 
 ### Recipe 8: Execution Diagnostics, Log Inspection & Troubleshooting
 
-#### 1. Fetching Execution Logs & Reports from S3 / MinIO:
+#### 1. Fetching Execution Logs & Reports via REST API:
 
-Use the AWS CLI or MinIO client (`mc`) configured against the storage bucket:
+Developers and CI/CD pipelines can retrieve logs and summary reports directly from the control plane without configuring cloud storage credentials or CLI tools:
+
+##### Stream Raw Execution Logs:
+
+```bash
+curl -s http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff012498beaa/logs
+```
+
+Or generate a secure presigned S3 direct-download URL (valid for 15 minutes):
+
+```bash
+curl -s "http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff012498beaa/logs?presign=true" | jq .
+```
+
+##### Download Full Raw Summary Report (`summary.json`):
+
+```bash
+curl -s http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff012498beaa/report | jq .
+```
+
+Or obtain a presigned download URL:
+
+```bash
+curl -s "http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff012498beaa/report?presign=true" | jq .
+```
+
+#### 2. Alternative: Direct S3 / MinIO Object Storage Download:
+
+For cluster administrators with object storage credentials, tools like the AWS CLI or MinIO client (`mc`) can access artifacts directly:
 
 ```bash
 # Configure AWS CLI for local MinIO
@@ -556,7 +639,7 @@ aws --endpoint-url=http://localhost:9000 s3 cp \
   s3://vuhive-artifacts/runs/98bc19d4/summary.json ./summary.json
 ```
 
-#### 2. Inspecting Runner Pod Status via `kubectl`:
+#### 3. Inspecting Runner Pod Status via `kubectl`:
 
 ```bash
 # List runner pods
@@ -569,19 +652,22 @@ kubectl logs -n vuhive-runners pod/<pod-name> -c runner-init
 kubectl logs -n vuhive-runners pod/<pod-name> -c runner
 ```
 
-#### 3. Common Error Handling Reference:
+#### 4. Common Error Handling Reference:
 
 | HTTP Status | Error String | Cause | Resolution |
 |---|---|---|---|
 | `400 Bad Request` | `invalid request payload: ...` | Malformed JSON or missing required fields. | Validate request body against API schema. |
 | `404 Not Found` | `suite not found` or `artifact not found` | The requested UUID does not exist. | Verify IDs via `GET /api/v1/suites/{id}/artifacts`. |
+| `404 Not Found` | `test run not found`, `report not found`, `logs not found` | The run ID does not exist or artifacts have not been uploaded to S3. | Verify run ID and verify run status is `COMPLETED` or `FAILED`. |
 | `409 Conflict` | `build job already running` | A compilation job is already active for this suite/platform. | Await completion or check build job status in builder namespace. |
+| `409 Conflict` | `test run is still in progress` | Report or logs queried while the runner pod is still running. | Await run completion (`COMPLETED` or `FAILED`) before fetching reports/logs. |
 | `422 Unprocessable Entity` | `unsupported target platform` | Platform is not `linux/amd64` or `linux/arm64`. | Specify valid platform architecture. |
 
 ---
 
 ## 4. Next Steps
 
+- **[OpenAPI 3.0.3 Specification](../api/openapi.yaml)**: Complete REST API contract, interactive endpoints, and request/response schemas.
 - **[Main Project README](../README.md)**: System overview, architecture diagram, and repository roadmap.
 - **[vuhive-cloud Helm Chart](../deploy/helm/vuhive-cloud/README.md)**: Production deployment instructions and configuration parameter reference.
 - **[vuhive-cloud-infra Helm Chart](../deploy/helm/vuhive-cloud-infra/README.md)**: Local backing services guide (PostgreSQL + MinIO).

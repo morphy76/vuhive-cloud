@@ -19,6 +19,7 @@ It transforms Go-based load testing suites into compiled, self-contained Linux b
 - 🧩 **Reusable Runner Profiles**: Decouple test scenario code from infrastructure scheduling. Define reusable profiles specifying CPU/memory requests and limits, node selectors, tolerations, and node affinities for targeted execution.
 - ⏰ **Native Kubernetes CronJob Scheduling**: Declarative scheduling mapped 1-to-1 to native Kubernetes `batch/v1` `CronJob`s with standard cron syntax (`0 2 * * *`), eliminating external scheduler dependencies.
 - 📊 **Automated KPI Indexing & SLA Verification**: Automatically parses deterministic execution reports (`summary.json`), extracting and indexing latency percentiles ($p_{50}$, $p_{90}$, $p_{95}$, $p_{99}$), throughput (TPS), error rates, and SLA pass/fail status into PostgreSQL.
+- 📈 **Execution Reports, Logs & Metrics Query API**: Query and filter historical runs by suite, schedule, status, and date range. Fetch indexed performance KPIs, full deterministic execution reports (`summary.json`), and runner stdout/stderr logs directly or as presigned S3 download URLs. Fully documented via [OpenAPI 3.0.3](./api/openapi.yaml).
 - 📦 **Pluggable Object Storage**: Integrates seamlessly with AWS S3 or MinIO for long-term retention of source packages, compiled binaries, full execution logs, and detailed performance summaries.
 - ⏱ **Distributed Start Barrier Synchronization**: Built-in rendezvous coordinator guarantees multi-pod distributed load generators synchronize and fire simultaneously without clock skew.
 
@@ -65,7 +66,8 @@ For complete architectural specifications, DDD aggregate boundaries, and databas
 | Document | Purpose & Audience |
 |---|---|
 | **[`README.md`](./README.md)** | System overview, core capabilities, architecture, and quickstart. |
-| **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & API Recipes**: Step-by-step `curl` walkthroughs for building suites, runner profiles, scheduling, triggering executions, ingesting KPIs, and barrier coordination. |
+| **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & API Recipes**: Step-by-step `curl` walkthroughs for building suites, runner profiles, scheduling, triggering executions, querying runs/KPIs, retrieving reports and logs, and barrier coordination. |
+| **[`api/openapi.yaml`](./api/openapi.yaml)** | **REST API Specification**: OpenAPI 3.0.3 contract covering test suites, builds, profiles, schedules, runs, performance metrics, reports, and logs. |
 | **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Helm Chart**: Production deployment guide, comprehensive configuration values reference, external secrets, RBAC, and security hardening. |
 | **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Helm Chart**: Quickstart backing services setup for local evaluation (PostgreSQL + MinIO). |
 | **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | Detailed engineering specification, domain models, database DDL, and multi-milestone roadmap. |
@@ -122,6 +124,8 @@ To create your first runner profile, upload test suites, and trigger runs, follo
 
 ```text
 .
+├── api/
+│   └── openapi.yaml            # OpenAPI 3.0.3 REST API specification
 ├── cmd/
 │   ├── server/                 # Control plane REST server & migration entrypoint
 │   ├── runner-init/            # Runner pod init container (downloads binary & config from S3)
@@ -174,6 +178,7 @@ Development is tracked via GitHub Milestones and Issues:
   - Runner profiles & init-container wrapper orchestration (#6, #7, #8)
   - Native Kubernetes CronJob scheduling (#9)
   - Performance KPI indexing & report ingestion (#20)
+  - Execution reports, logs & performance metrics query API (#24)
   - Helm packaging & CI/CD automation (#21, #27, #28, #53)
 - **[Milestone 2: Distributed Multi-Pod Coordination & Live Streaming](https://github.com/morphy76/vuhive-cloud/milestone/2)** (In Progress)
   - Workload partitioning engine (#11)

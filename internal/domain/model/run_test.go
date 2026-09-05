@@ -278,3 +278,26 @@ func TestTestRun_FailWithMetrics(t *testing.T) {
 	// Cannot fail already failed run
 	assert.ErrorIs(t, run.FailWithMetrics(1, metrics, "s3://rep", "s3://log", summary, finishTime), model.ErrTerminalState)
 }
+
+func TestTestRun_DurationMs(t *testing.T) {
+	now := time.Now().UTC()
+
+	t.Run("queued run has nil duration", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+		assert.Nil(t, run.DurationMs())
+	})
+
+	t.Run("completed run returns exact duration in ms", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-1", now))
+		finish := now.Add(1250 * time.Millisecond)
+		require.NoError(t, run.Complete(model.RunMetrics{}, "s3://rep", "s3://log", []byte(`{}`), true, finish))
+
+		dur := run.DurationMs()
+		require.NotNil(t, dur)
+		assert.Equal(t, int64(1250), *dur)
+	})
+}
+

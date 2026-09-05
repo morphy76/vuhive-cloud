@@ -46,6 +46,7 @@ type TestRunRepository interface {
 	FindByID(ctx context.Context, id string) (*model.TestRun, error)
 	FindByK8sJobName(ctx context.Context, jobName string) (*model.TestRun, error)
 	List(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error)
+	ListFiltered(ctx context.Context, filter model.RunFilter) ([]*model.TestRun, int64, error)
 	Delete(ctx context.Context, id string) error
 }
 
