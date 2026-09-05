@@ -49,7 +49,7 @@ func MigrateUpURL(ctx context.Context, dbURL string) error {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to open database connection")
 		return fmt.Errorf("failed to open database connection: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.PingContext(ctx); err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to ping database")

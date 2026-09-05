@@ -37,7 +37,7 @@ func runMigrations(ctx context.Context, dbURL string) error {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed opening database connection for migration")
 		return fmt.Errorf("failed opening database connection for migration: %w", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	pingCtx, pingCancel := context.WithTimeout(ctx, 15*time.Second)
 	defer pingCancel()
