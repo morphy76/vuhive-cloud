@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -167,6 +168,44 @@ func (m *mockRunRepo) List(_ context.Context, suiteID string, status model.RunSt
 		res = append(res, r)
 	}
 	return res, nil
+}
+func (m *mockRunRepo) ListFiltered(_ context.Context, filter model.RunFilter) ([]*model.TestRun, int64, error) {
+	var res []*model.TestRun
+	for _, r := range m.runs {
+		if filter.SuiteID != "" && r.SuiteID() != filter.SuiteID {
+			continue
+		}
+		if filter.Status.IsValid() && r.Status() != filter.Status {
+			continue
+		}
+		if filter.ScheduleID != "" && (r.ScheduleID() == nil || *r.ScheduleID() != filter.ScheduleID) {
+			continue
+		}
+		if filter.From != nil && r.CreatedAt().Before(*filter.From) {
+			continue
+		}
+		if filter.To != nil && r.CreatedAt().After(*filter.To) {
+			continue
+		}
+		res = append(res, r)
+	}
+	sort.Slice(res, func(i, j int) bool {
+		if res[i].CreatedAt().Equal(res[j].CreatedAt()) {
+			return res[i].ID() > res[j].ID()
+		}
+		return res[i].CreatedAt().After(res[j].CreatedAt())
+	})
+	total := int64(len(res))
+	if filter.Offset > 0 {
+		if filter.Offset >= len(res) {
+			return nil, total, nil
+		}
+		res = res[filter.Offset:]
+	}
+	if filter.Limit > 0 && len(res) > filter.Limit {
+		res = res[:filter.Limit]
+	}
+	return res, total, nil
 }
 func (m *mockRunRepo) Delete(_ context.Context, id string) error {
 	delete(m.runs, id)
@@ -473,9 +512,13 @@ func TestRunService_GetListAndAbort(t *testing.T) {
 	})
 
 	t.Run("list runs", func(t *testing.T) {
-		runs, err := svc.ListRuns(ctx, suite.ID(), model.RunStatusQueued)
+		runs, total, err := svc.ListRuns(ctx, model.RunFilter{
+			SuiteID: suite.ID(),
+			Status:  model.RunStatusQueued,
+		})
 		require.NoError(t, err)
 		assert.Len(t, runs, 1)
+		assert.Equal(t, int64(1), total)
 	})
 
 	t.Run("abort run successfully", func(t *testing.T) {
@@ -773,3 +816,207 @@ func TestRunService_CompleteRun(t *testing.T) {
 		assert.ErrorIs(t, err, model.ErrTerminalState)
 	})
 }
+
+
+
+func TestRunService_ListRunsFiltered(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, _, _, runRepo, _, suite, artifact, profile := setupTestRunService(t)
+
+	// Create two runs with different schedules and statuses
+	run1, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+	require.NoError(t, err)
+	require.NoError(t, runRepo.Save(ctx, run1))
+
+	schedID := "sched-alpha"
+	run2, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), &schedID)
+	require.NoError(t, err)
+	require.NoError(t, run2.Start("job-2", time.Now().UTC()))
+	require.NoError(t, runRepo.Save(ctx, run2))
+
+	t.Run("filter by status", func(t *testing.T) {
+		runs, total, err := svc.ListRuns(ctx, model.RunFilter{
+			Status: model.RunStatusRunning,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), total)
+		require.Len(t, runs, 1)
+		assert.Equal(t, run2.ID(), runs[0].ID())
+	})
+
+	t.Run("filter by schedule_id", func(t *testing.T) {
+		runs, total, err := svc.ListRuns(ctx, model.RunFilter{
+			ScheduleID: "sched-alpha",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), total)
+		require.Len(t, runs, 1)
+		assert.Equal(t, run2.ID(), runs[0].ID())
+	})
+
+	t.Run("pagination with limit and offset", func(t *testing.T) {
+		runs, total, err := svc.ListRuns(ctx, model.RunFilter{
+			Limit:  1,
+			Offset: 0,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), total)
+		assert.Len(t, runs, 1)
+
+		runsOffset, totalOffset, err := svc.ListRuns(ctx, model.RunFilter{
+			Limit:  1,
+			Offset: 1,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int64(2), totalOffset)
+		assert.Len(t, runsOffset, 1)
+		assert.NotEqual(t, runs[0].ID(), runsOffset[0].ID())
+	})
+}
+
+func TestRunService_GetRunReport(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, _, _, runRepo, _, storage, suite, artifact, profile := setupTestRunServiceWithStorage(t)
+
+	run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+	require.NoError(t, err)
+	require.NoError(t, runRepo.Save(ctx, run))
+
+	t.Run("fails when run is in-flight (QUEUED)", func(t *testing.T) {
+		_, err := svc.GetRunReport(ctx, run.ID())
+		assert.ErrorIs(t, err, model.ErrRunInFlight)
+	})
+
+	t.Run("fails when run is in-flight (RUNNING)", func(t *testing.T) {
+		require.NoError(t, run.Start("job-1", time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		_, err := svc.GetRunReport(ctx, run.ID())
+		assert.ErrorIs(t, err, model.ErrRunInFlight)
+	})
+
+	t.Run("success downloading from storage", func(t *testing.T) {
+		finish := time.Now().UTC()
+		summaryData := []byte(`{"status":"PASS","iterations":100}`)
+		reportKey := "runs/" + run.ID() + "/summary.json"
+		storage.files[reportKey] = summaryData
+
+		require.NoError(t, run.Complete(model.RunMetrics{}, reportKey, "runs/logs.log", summaryData, true, finish))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		rc, err := svc.GetRunReport(ctx, run.ID())
+		require.NoError(t, err)
+		defer func() { _ = rc.Close() }()
+
+		data, err := io.ReadAll(rc)
+		require.NoError(t, err)
+		assert.Equal(t, summaryData, data)
+	})
+
+	t.Run("fallback to database summary_json if storage does not have key", func(t *testing.T) {
+		runDB, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, runDB.Start("job-db", time.Now().UTC()))
+		summaryData := []byte(`{"source":"postgres"}`)
+		require.NoError(t, runDB.Complete(model.RunMetrics{}, "non-existent-key", "", summaryData, true, time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, runDB))
+
+		rc, err := svc.GetRunReport(ctx, runDB.ID())
+		require.NoError(t, err)
+		defer func() { _ = rc.Close() }()
+
+		data, err := io.ReadAll(rc)
+		require.NoError(t, err)
+		assert.Equal(t, summaryData, data)
+	})
+
+	t.Run("fails when report not found", func(t *testing.T) {
+		runNoReport, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, runNoReport.Fail(1, "", time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, runNoReport))
+
+		_, err = svc.GetRunReport(ctx, runNoReport.ID())
+		assert.ErrorIs(t, err, model.ErrReportNotFound)
+	})
+
+	t.Run("fails when run does not exist", func(t *testing.T) {
+		_, err := svc.GetRunReport(ctx, "unknown-id")
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+}
+
+func TestRunService_GetRunReportURL(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, _, _, runRepo, _, suite, artifact, profile := setupTestRunService(t)
+
+	run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+	require.NoError(t, err)
+	require.NoError(t, run.Start("job-1", time.Now().UTC()))
+	reportKey := "runs/" + run.ID() + "/summary.json"
+	require.NoError(t, run.Complete(model.RunMetrics{}, reportKey, "runs/logs.log", []byte(`{}`), true, time.Now().UTC()))
+	require.NoError(t, runRepo.Save(ctx, run))
+
+	url, err := svc.GetRunReportURL(ctx, run.ID(), 15*time.Minute)
+	require.NoError(t, err)
+	assert.Contains(t, url, reportKey)
+}
+
+func TestRunService_GetRunLogs(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, _, _, runRepo, _, storage, suite, artifact, profile := setupTestRunServiceWithStorage(t)
+
+	run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+	require.NoError(t, err)
+	require.NoError(t, runRepo.Save(ctx, run))
+
+	t.Run("fails when in flight", func(t *testing.T) {
+		_, err := svc.GetRunLogs(ctx, run.ID())
+		assert.ErrorIs(t, err, model.ErrRunInFlight)
+	})
+
+	t.Run("success reading logs from storage", func(t *testing.T) {
+		logsKey := "runs/" + run.ID() + "/run.log"
+		logData := []byte("2026-09-05 Starting benchmark...\nFinished successfully.\n")
+		storage.files[logsKey] = logData
+
+		require.NoError(t, run.Start("job-1", time.Now().UTC()))
+		require.NoError(t, run.Complete(model.RunMetrics{}, "", logsKey, []byte(`{}`), true, time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		rc, err := svc.GetRunLogs(ctx, run.ID())
+		require.NoError(t, err)
+		defer func() { _ = rc.Close() }()
+
+		data, err := io.ReadAll(rc)
+		require.NoError(t, err)
+		assert.Equal(t, logData, data)
+	})
+
+	t.Run("fails when logs key is empty", func(t *testing.T) {
+		runNoLogs, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, runNoLogs.Fail(1, "", time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, runNoLogs))
+
+		_, err = svc.GetRunLogs(ctx, runNoLogs.ID())
+		assert.ErrorIs(t, err, model.ErrLogsNotFound)
+	})
+}
+
+func TestRunService_GetRunLogsURL(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, _, _, runRepo, _, suite, artifact, profile := setupTestRunService(t)
+
+	run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+	require.NoError(t, err)
+	require.NoError(t, run.Start("job-1", time.Now().UTC()))
+	logsKey := "runs/" + run.ID() + "/run.log"
+	require.NoError(t, run.Complete(model.RunMetrics{}, "", logsKey, []byte(`{}`), true, time.Now().UTC()))
+	require.NoError(t, runRepo.Save(ctx, run))
+
+	url, err := svc.GetRunLogsURL(ctx, run.ID(), 15*time.Minute)
+	require.NoError(t, err)
+	assert.Contains(t, url, logsKey)
+}
+

@@ -211,30 +211,217 @@ func (s *RunService) GetRun(ctx context.Context, id string) (*model.TestRun, err
 	return run, nil
 }
 
-// ListRuns returns all runs for a given suite, optionally filtered by status.
-func (s *RunService) ListRuns(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error) {
+// ListRuns returns runs matching the given filter criteria along with the total count.
+func (s *RunService) ListRuns(ctx context.Context, filter model.RunFilter) ([]*model.TestRun, int64, error) {
 	start := time.Now()
-	trimmedSuiteID := strings.TrimSpace(suiteID)
+	filter.SuiteID = strings.TrimSpace(filter.SuiteID)
+	filter.ScheduleID = strings.TrimSpace(filter.ScheduleID)
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
 
 	log := zerolog.Ctx(ctx).With().
 		Str("op", "RunService.ListRuns").
-		Str("suite_id", trimmedSuiteID).
-		Str("status", string(status)).
+		Str("suite_id", filter.SuiteID).
+		Str("status", string(filter.Status)).
+		Str("schedule_id", filter.ScheduleID).
+		Int("limit", filter.Limit).
+		Int("offset", filter.Offset).
 		Logger()
 	log.Debug().Msg("listing test runs")
 
-	runs, err := s.runRepo.List(ctx, trimmedSuiteID, status)
+	runs, total, err := s.runRepo.ListFiltered(ctx, filter)
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed listing test runs")
-		return nil, err
+		return nil, 0, err
 	}
 
 	log.Info().
 		Int("count", len(runs)).
+		Int64("total", total).
 		Dur("duration_ms", time.Since(start)).
 		Msg("completed test runs listing")
 
-	return runs, nil
+	return runs, total, nil
+}
+
+// GetRunReport retrieves the full summary.json report for a completed or failed test run.
+func (s *RunService) GetRunReport(ctx context.Context, id string) (io.ReadCloser, error) {
+	start := time.Now()
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" {
+		return nil, fmt.Errorf("%w: run id cannot be empty", model.ErrValidation)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunService.GetRunReport").
+		Str("run_id", trimmedID).
+		Logger()
+	log.Debug().Msg("fetching test run report")
+
+	run, err := s.runRepo.FindByID(ctx, trimmedID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run for report")
+		return nil, err
+	}
+
+	if run.Status() == model.RunStatusQueued || run.Status() == model.RunStatusRunning {
+		err := fmt.Errorf("%w: run %s is in %s state", model.ErrRunInFlight, trimmedID, run.Status())
+		log.Warn().Err(err).Dur("duration_ms", time.Since(start)).Msg("cannot retrieve report for in-flight test run")
+		return nil, err
+	}
+
+	// 1. Attempt download from object storage if key exists
+	if s.storage != nil && strings.TrimSpace(run.S3ReportKey()) != "" {
+		rc, err := s.storage.Download(ctx, run.S3ReportKey())
+		if err == nil && rc != nil {
+			log.Info().Str("report_key", run.S3ReportKey()).Dur("duration_ms", time.Since(start)).Msg("completed test run report retrieval from storage")
+			return rc, nil
+		}
+		log.Debug().Err(err).Str("report_key", run.S3ReportKey()).Msg("storage download failed; checking database fallback")
+	}
+
+	// 2. Fallback: Reconstruct from summary JSON in database
+	if len(run.SummaryJSON()) > 0 {
+		log.Info().Dur("duration_ms", time.Since(start)).Msg("completed test run report retrieval from database summary JSON")
+		return io.NopCloser(bytes.NewReader(run.SummaryJSON())), nil
+	}
+
+	err = fmt.Errorf("%w: report not found for run %s", model.ErrReportNotFound, trimmedID)
+	log.Warn().Err(err).Dur("duration_ms", time.Since(start)).Msg("test run summary report not found")
+	return nil, err
+}
+
+// GetRunReportURL generates a secure presigned S3 download URL for summary.json.
+func (s *RunService) GetRunReportURL(ctx context.Context, id string, lifetime time.Duration) (string, error) {
+	start := time.Now()
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" {
+		return "", fmt.Errorf("%w: run id cannot be empty", model.ErrValidation)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunService.GetRunReportURL").
+		Str("run_id", trimmedID).
+		Logger()
+	log.Debug().Msg("generating test run report presigned URL")
+
+	run, err := s.runRepo.FindByID(ctx, trimmedID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run for report URL")
+		return "", err
+	}
+
+	if run.Status() == model.RunStatusQueued || run.Status() == model.RunStatusRunning {
+		err := fmt.Errorf("%w: run %s is in %s state", model.ErrRunInFlight, trimmedID, run.Status())
+		log.Warn().Err(err).Dur("duration_ms", time.Since(start)).Msg("cannot generate presigned URL for in-flight test run")
+		return "", err
+	}
+
+	if strings.TrimSpace(run.S3ReportKey()) == "" || s.storage == nil {
+		err := fmt.Errorf("%w: report key not set or storage unavailable for run %s", model.ErrReportNotFound, trimmedID)
+		log.Warn().Err(err).Dur("duration_ms", time.Since(start)).Msg("report storage key not found")
+		return "", err
+	}
+
+	url, err := s.storage.PresignDownload(ctx, run.S3ReportKey(), lifetime)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed generating presigned report URL")
+		return "", err
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed test run report presigned URL generation")
+	return url, nil
+}
+
+// GetRunLogs streams raw container execution logs (run.log) for a test run.
+func (s *RunService) GetRunLogs(ctx context.Context, id string) (io.ReadCloser, error) {
+	start := time.Now()
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" {
+		return nil, fmt.Errorf("%w: run id cannot be empty", model.ErrValidation)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunService.GetRunLogs").
+		Str("run_id", trimmedID).
+		Logger()
+	log.Debug().Msg("fetching test run execution logs")
+
+	run, err := s.runRepo.FindByID(ctx, trimmedID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run for logs")
+		return nil, err
+	}
+
+	if run.Status() == model.RunStatusQueued || run.Status() == model.RunStatusRunning {
+		err := fmt.Errorf("%w: run %s is in %s state", model.ErrRunInFlight, trimmedID, run.Status())
+		log.Warn().Err(err).Dur("duration_ms", time.Since(start)).Msg("cannot retrieve logs for in-flight test run")
+		return nil, err
+	}
+
+	if strings.TrimSpace(run.S3LogsKey()) == "" || s.storage == nil {
+		err := fmt.Errorf("%w: logs key not set or storage unavailable for run %s", model.ErrLogsNotFound, trimmedID)
+		log.Warn().Err(err).Dur("duration_ms", time.Since(start)).Msg("execution logs not found")
+		return nil, err
+	}
+
+	rc, err := s.storage.Download(ctx, run.S3LogsKey())
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed downloading execution logs from storage")
+		return nil, fmt.Errorf("%w: %v", model.ErrLogsNotFound, err)
+	}
+
+	log.Info().Str("logs_key", run.S3LogsKey()).Dur("duration_ms", time.Since(start)).Msg("completed test run execution logs retrieval")
+	return rc, nil
+}
+
+// GetRunLogsURL generates a secure presigned S3 download URL for run.log.
+func (s *RunService) GetRunLogsURL(ctx context.Context, id string, lifetime time.Duration) (string, error) {
+	start := time.Now()
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" {
+		return "", fmt.Errorf("%w: run id cannot be empty", model.ErrValidation)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunService.GetRunLogsURL").
+		Str("run_id", trimmedID).
+		Logger()
+	log.Debug().Msg("generating test run logs presigned URL")
+
+	run, err := s.runRepo.FindByID(ctx, trimmedID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run for logs URL")
+		return "", err
+	}
+
+	if run.Status() == model.RunStatusQueued || run.Status() == model.RunStatusRunning {
+		err := fmt.Errorf("%w: run %s is in %s state", model.ErrRunInFlight, trimmedID, run.Status())
+		log.Warn().Err(err).Dur("duration_ms", time.Since(start)).Msg("cannot generate presigned logs URL for in-flight test run")
+		return "", err
+	}
+
+	if strings.TrimSpace(run.S3LogsKey()) == "" || s.storage == nil {
+		err := fmt.Errorf("%w: logs key not set or storage unavailable for run %s", model.ErrLogsNotFound, trimmedID)
+		log.Warn().Err(err).Dur("duration_ms", time.Since(start)).Msg("execution logs storage key not found")
+		return "", err
+	}
+
+	url, err := s.storage.PresignDownload(ctx, run.S3LogsKey(), lifetime)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed generating presigned logs URL")
+		return "", err
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed test run logs presigned URL generation")
+	return url, nil
 }
 
 // AbortRun cancels an active or queued run, terminates its K8s Job, and marks it as ABORTED.

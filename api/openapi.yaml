@@ -1,34 +1,26 @@
 openapi: 3.0.3
 info:
-  title: vuhive-cloud Control Plane API
+  title: vuhive-cloud Control Plane REST API
   description: |
-    Cloud-native orchestration engine for distributed load testing workloads on Kubernetes.
-    Manages test suites, dynamic container compilation, runner profiles, CronJob schedules,
-    real-time execution lifecycles (including on-demand abort), start barrier synchronization,
-    and performance KPI indexing.
-  version: 0.1.0
-  contact:
-    name: vuhive-cloud maintainers
-    url: https://github.com/morphy76/vuhive-cloud
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
-
+    Cloud-native orchestration engine for distributed high-throughput load testing workloads on Kubernetes.
+    Provides APIs for test suite compilation, runner profiles, scheduled execution (CronJobs),
+    ad-hoc execution, start barrier synchronization, and historical telemetry / report query.
+  version: 0.0.1
 servers:
   - url: http://localhost:8080
-    description: Local development / port-forwarded instance
-  - url: http://vuhive-vuhive-cloud:8080
-    description: In-cluster Kubernetes Service
+    description: Local port-forwarded control plane
+  - url: http://vuhive-cloud.vuhive-system.svc.cluster.local:8080
+    description: In-cluster Kubernetes service
 
 paths:
   /healthz:
     get:
-      summary: Health check
-      description: Returns liveness/readiness probe status of the control plane.
-      operationId: getHealth
+      summary: Liveness / Readiness probe
+      description: Returns service health status for Kubernetes probes.
+      operationId: healthz
       responses:
         '200':
-          description: Control plane is healthy and responsive.
+          description: Service is healthy and ready to accept requests
           content:
             application/json:
               schema:
@@ -51,324 +43,216 @@ paths:
               schema:
                 $ref: '#/components/schemas/VersionResponse'
 
-  /api/v1/suites:
-    post:
-      summary: Register test suite
-      description: Creates a new logical test suite entity.
-      operationId: createTestSuite
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateTestSuiteRequest'
-      responses:
-        '201':
-          description: Test suite successfully created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TestSuiteResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '409':
-          $ref: '#/components/responses/Conflict'
 
+  /api/v1/health:
     get:
-      summary: List test suites
-      description: Retrieves all active and registered test suites.
-      operationId: listTestSuites
+      summary: API health status
+      description: Returns API health status.
+      operationId: apiHealth
       responses:
         '200':
-          description: List of test suites.
+          description: API is operational
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/TestSuiteResponse'
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
 
-  /api/v1/suites/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Unique UUID of the test suite
-        schema:
-          type: string
-          format: uuid
+  /api/v1/runs:
     get:
-      summary: Get test suite details
-      operationId: getTestSuite
-      responses:
-        '200':
-          description: Test suite details.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TestSuiteResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    delete:
-      summary: Archive test suite
-      description: Soft-deletes / archives a test suite aggregate.
-      operationId: deleteTestSuite
-      responses:
-        '204':
-          description: Test suite archived successfully.
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/suites/{id}/builds:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Target TestSuite UUID
-        schema:
-          type: string
-          format: uuid
-    post:
-      summary: Trigger build job
-      description: Uploads Go test source code (.tar.gz) and triggers ephemeral Kubernetes compilation.
-      operationId: triggerBuild
+      summary: List and filter test runs
+      description: |
+        Queries historical test executions with filtering by test suite, execution status,
+        originating schedule, and timestamp range. Supports limit/offset pagination and sorts
+        results by creation timestamp descending.
+      operationId: listRuns
+      tags:
+        - Runs
       parameters:
-        - name: platform
+        - name: suite_id
           in: query
+          description: Filter by parent Test Suite ID
           required: false
-          description: Target compilation architecture (e.g. linux/amd64, linux/arm64)
           schema:
             type: string
-            enum: [linux/amd64, linux/arm64]
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                source:
-                  type: string
-                  format: binary
-                  description: Tarball containing go.mod and scenario code
-          application/gzip:
-            schema:
-              type: string
-              format: binary
-      responses:
-        '202':
-          description: Build job dispatched to Kubernetes.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ArtifactResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/artifacts/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Unique Artifact UUID
-        schema:
-          type: string
-          format: uuid
-    get:
-      summary: Get artifact details
-      operationId: getArtifact
+        - name: status
+          in: query
+          description: Filter by execution status
+          required: false
+          schema:
+            type: string
+            enum: [QUEUED, RUNNING, COMPLETED, FAILED, ABORTED]
+        - name: schedule_id
+          in: query
+          description: Filter by recurring Schedule ID
+          required: false
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Filter test runs created at or after timestamp (RFC 3339)
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: "2026-09-01T00:00:00Z"
+        - name: to
+          in: query
+          description: Filter test runs created at or before timestamp (RFC 3339)
+          required: false
+          schema:
+            type: string
+            format: date-time
+            example: "2026-09-05T23:59:59Z"
+        - name: limit
+          in: query
+          description: Maximum number of runs to return (default 20, max 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of records to skip for pagination
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
       responses:
         '200':
-          description: Compiled binary artifact details and S3 storage keys.
+          description: Paginated list of test executions
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ArtifactResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: '#/components/schemas/RunListResponse'
 
-  /api/v1/profiles:
-    post:
-      summary: Create runner profile
-      description: Registers a reusable Kubernetes scheduling profile declaring resources, tolerations, and affinities.
-      operationId: createRunnerProfile
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateRunnerProfileRequest'
+  /api/v1/runs/{id}:
+    get:
+      summary: Retrieve test run details and performance KPIs
+      description: |
+        Returns complete metadata, execution timestamps, duration in milliseconds, exit code,
+        SLA compliance, and indexed summary metrics directly from PostgreSQL without reading S3.
+      operationId: getRun
+      tags:
+        - Runs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the test run
+          schema:
+            type: string
       responses:
-        '201':
-          description: Runner profile created.
+        '200':
+          description: Test execution details and performance KPIs
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerProfileResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/RunResponse'
+        '404':
+          description: Test run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/runs/{id}/report:
+    get:
+      summary: Download full summary.json report
+      description: |
+        Fetches and returns the full raw summary.json artifact stored in object storage (or indexed in PostgreSQL).
+        If presign=true, returns a secure presigned S3 download URL.
+      operationId: getRunReport
+      tags:
+        - Runs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the test run
+          schema:
+            type: string
+        - name: presign
+          in: query
+          description: When true, returns a presigned S3 download URL instead of streaming content
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Raw summary.json content or presigned URL response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    description: Raw summary JSON report
+                  - $ref: '#/components/schemas/PresignedURLResponse'
+        '404':
+          description: Test run or report artifact not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: Test run is still in-flight (QUEUED or RUNNING); report not yet generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/runs/{id}/logs:
     get:
-      summary: List runner profiles
-      description: Retrieves all available runner profiles.
-      operationId: listRunnerProfiles
+      summary: Retrieve execution logs (run.log)
+      description: |
+        Streams or returns the raw container execution log output (run.log) stored in object storage.
+        If presign=true, returns a secure presigned S3 download URL.
+      operationId: getRunLogs
+      tags:
+        - Runs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the test run
+          schema:
+            type: string
+        - name: presign
+          in: query
+          description: When true, returns a presigned S3 download URL instead of streaming content
+          required: false
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
-          description: List of runner profiles.
+          description: Raw text log stream or presigned URL response
+          content:
+            text/plain:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignedURLResponse'
+        '404':
+          description: Test run or execution log not found
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/RunnerProfileResponse'
-
-  /api/v1/profiles/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Runner profile UUID
-        schema:
-          type: string
-          format: uuid
-    get:
-      summary: Get runner profile
-      operationId: getRunnerProfile
-      responses:
-        '200':
-          description: Runner profile details.
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Test run is still in-flight; logs not yet finalized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerProfileResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    put:
-      summary: Update runner profile
-      operationId: updateRunnerProfile
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateRunnerProfileRequest'
-      responses:
-        '200':
-          description: Runner profile updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RunnerProfileResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    delete:
-      summary: Delete runner profile
-      operationId: deleteRunnerProfile
-      responses:
-        '204':
-          description: Runner profile deleted.
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/schedules:
-    post:
-      summary: Create execution schedule
-      description: Creates a recurring test schedule and instantiates a native Kubernetes batch/v1 CronJob.
-      operationId: createSchedule
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateScheduleRequest'
-      responses:
-        '201':
-          description: Schedule created and CronJob materialized.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ScheduleResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    get:
-      summary: List execution schedules
-      description: Retrieves all active recurring schedules.
-      operationId: listSchedules
-      responses:
-        '200':
-          description: List of schedules.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ScheduleResponse'
-
-  /api/v1/schedules/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Schedule UUID
-        schema:
-          type: string
-          format: uuid
-    get:
-      summary: Get schedule
-      operationId: getSchedule
-      responses:
-        '200':
-          description: Schedule details.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ScheduleResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    put:
-      summary: Update schedule cadence
-      operationId: updateSchedule
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateScheduleRequest'
-      responses:
-        '200':
-          description: Schedule and native CronJob updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ScheduleResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    delete:
-      summary: Delete schedule
-      operationId: deleteSchedule
-      responses:
-        '204':
-          description: Schedule and Kubernetes CronJob deleted.
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/runs/{id}/abort:
     parameters:
@@ -378,7 +262,6 @@ paths:
         description: Unique TestRun UUID to abort
         schema:
           type: string
-          format: uuid
     post:
       summary: Abort in-flight test run
       description: |
@@ -388,6 +271,8 @@ paths:
         logs before pod eviction. Transitions the aggregate state to ABORTED and records audit metadata.
         Rejects abort requests on already finalized runs with 409 Conflict.
       operationId: abortRun
+      tags:
+        - Runs
       requestBody:
         required: false
         content:
@@ -402,53 +287,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/RunResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Malformed or invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: Test run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: Run is already in a terminal status (COMPLETED, FAILED, or ABORTED).
+          description: Run is already in a terminal status (COMPLETED, FAILED, or ABORTED)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/runs/{id}/complete:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: TestRun UUID
-        schema:
-          type: string
-          format: uuid
     post:
-      summary: Report test run completion
-      description: Ingests runner summary report, extracts KPI telemetry into PostgreSQL, and finalizes run state.
-      operationId: completeRunWithID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CompleteRunRequest'
-      responses:
-        '200':
-          description: Test run finalized and KPIs indexed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RunResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-
-  /api/v1/runs/complete:
-    post:
-      summary: Report test run completion (legacy body-based ID)
+      summary: Finalize test run execution and ingest summary report
+      description: |
+        Internal runner callback endpoint invoked upon test completion to upload summary metrics,
+        record exit status, SLA evaluation, and transition the test run lifecycle state.
       operationId: completeRun
+      tags:
+        - Runs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the test run
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -457,31 +329,44 @@ paths:
               $ref: '#/components/schemas/CompleteRunRequest'
       responses:
         '200':
-          description: Test run finalized and KPIs indexed.
+          description: Test run successfully finalized
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RunResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Malformed payload or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: Test run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
-          $ref: '#/components/responses/Conflict'
+          description: Test run already in terminal state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/runs/{id}/barrier/await:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: TestRun UUID
-        schema:
-          type: string
-          format: uuid
     post:
-      summary: Await start barrier
-      description: Distributed rendezvous barrier. Blocks until all expected worker pods register ready, then returns coordinated target start timestamp.
+      summary: Await start barrier rendezvous
+      description: Participates in a distributed start barrier synchronization for multi-pod load tests.
       operationId: awaitBarrier
+      tags:
+        - Barrier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the test run
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -490,37 +375,38 @@ paths:
               $ref: '#/components/schemas/BarrierAwaitRequest'
       responses:
         '200':
-          description: All workers arrived; rendezvous released.
+          description: Barrier rendezvous released
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BarrierReleaseResponse'
+                $ref: '#/components/schemas/BarrierResponse'
         '408':
-          description: Barrier rendezvous timed out waiting for all workers.
+          description: Barrier rendezvous timed out waiting for all participants
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '424':
-          description: Barrier aborted due to an early worker failure.
+          description: Barrier rendezvous was aborted by another participant
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/runs/{id}/barrier/abort:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: TestRun UUID
-        schema:
-          type: string
-          format: uuid
     post:
-      summary: Signal start barrier abort
-      description: Worker signals initialization failure or abort to unblock waiting peers with status 424.
+      summary: Abort start barrier rendezvous
+      description: Signals an abort to release all waiting workers due to initialization failure.
       operationId: abortBarrier
+      tags:
+        - Barrier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the test run
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -529,59 +415,285 @@ paths:
               $ref: '#/components/schemas/BarrierAbortRequest'
       responses:
         '200':
-          description: Barrier aborted successfully.
+          description: Barrier rendezvous successfully aborted
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ABORTED
+                $ref: '#/components/schemas/BarrierResponse'
 
   /api/v1/runs/{id}/barrier:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: TestRun UUID
-        schema:
-          type: string
-          format: uuid
     get:
-      summary: Get barrier status
-      operationId: getBarrierStatus
+      summary: Query barrier status
+      description: Inspects current participant readiness and target start time for a distributed test run.
+      operationId: getBarrier
+      tags:
+        - Barrier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the test run
+          schema:
+            type: string
       responses:
         '200':
-          description: Status of barrier rendezvous session.
+          description: Barrier session status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BarrierStatusResponse'
+                $ref: '#/components/schemas/BarrierResponse'
+
+  /api/v1/suites/{id}/builds:
+    post:
+      summary: Upload Go test source and trigger build Job
+      description: Ephemeral build job compiling Go source archive into static Linux binaries.
+      operationId: uploadAndBuild
+      tags:
+        - Builds
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - source
+              properties:
+                source:
+                  type: string
+                  format: binary
+                  description: Test scenario archive (.tar.gz or .zip)
+                platform:
+                  type: string
+                  description: Target architecture (linux/amd64, linux/arm64, or all)
+                  default: linux/amd64
+      responses:
+        '202':
+          description: Compilation build job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildTriggerResponse'
+
+  /api/v1/suites/{id}/artifacts:
+    get:
+      summary: List compiled artifacts
+      description: Returns all compiled binary artifacts associated with a test suite.
+      operationId: listArtifacts
+      tags:
+        - Builds
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of compiled artifacts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactListResponse'
+
+  /api/v1/profiles:
+    get:
+      summary: List runner profiles
+      description: Retrieves all registered runner scheduling and resource profiles.
+      operationId: listProfiles
+      tags:
+        - Profiles
+      responses:
+        '200':
+          description: List of runner profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileListResponse'
+    post:
+      summary: Create runner profile
+      description: Registers a new runner resource, affinity, and toleration profile.
+      operationId: createProfile
+      tags:
+        - Profiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProfileRequest'
+      responses:
+        '201':
+          description: Profile successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+
+  /api/v1/profiles/{id}:
+    get:
+      summary: Get runner profile
+      description: Retrieves details of a specific runner profile.
+      operationId: getProfile
+      tags:
+        - Profiles
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Runner profile details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: Profile not found
+    put:
+      summary: Update runner profile
+      description: Updates resource constraints and affinity rules of an existing profile.
+      operationId: updateProfile
+      tags:
+        - Profiles
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+    delete:
+      summary: Delete runner profile
+      operationId: deleteProfile
+      tags:
+        - Profiles
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Profile deleted
+
+  /api/v1/schedules:
+    get:
+      summary: List active test schedules
+      description: Returns all active schedules and their associated Kubernetes CronJobs.
+      operationId: listSchedules
+      tags:
+        - Schedules
+      responses:
+        '200':
+          description: List of active schedules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleListResponse'
+    post:
+      summary: Create scheduled test execution
+      description: Registers a recurring schedule and manifests a native batch/v1 CronJob in Kubernetes.
+      operationId: createSchedule
+      tags:
+        - Schedules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScheduleRequest'
+      responses:
+        '201':
+          description: Schedule created and CronJob manifested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleResponse'
+
+  /api/v1/schedules/{id}:
+    get:
+      summary: Get test schedule
+      operationId: getSchedule
+      tags:
+        - Schedules
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schedule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleResponse'
+    put:
+      summary: Update schedule cadence
+      operationId: updateSchedule
+      tags:
+        - Schedules
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateScheduleRequest'
+      responses:
+        '200':
+          description: Schedule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleResponse'
+    delete:
+      summary: Delete schedule
+      description: Deletes schedule record and terminates underlying Kubernetes CronJob.
+      operationId: deleteSchedule
+      tags:
+        - Schedules
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Schedule deleted
 
 components:
-  responses:
-    BadRequest:
-      description: Invalid request payload, missing parameters, or validation failure.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    NotFound:
-      description: Target entity or resource was not found.
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-    Conflict:
-      description: Resource conflict or invalid state machine transition (e.g. terminal state).
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorResponse'
-
   schemas:
     ErrorResponse:
       type: object
@@ -590,7 +702,7 @@ components:
       properties:
         error:
           type: string
-          example: cannot transition from a terminal state
+          example: "resource not found"
 
     VersionResponse:
       type: object
@@ -605,134 +717,382 @@ components:
           type: string
           example: "2026-09-05T11:00:00Z"
 
-    CreateTestSuiteRequest:
+    PresignedURLResponse:
       type: object
       required:
-        - name
+        - download_url
+        - expires_in_seconds
       properties:
-        name:
+        download_url:
           type: string
-          example: auth-checkout-benchmarks
-        description:
-          type: string
-          example: Microservices authentication and checkout load tests
+          example: "https://minio.vuhive.local/artifacts/runs/run-123/summary.json?X-Amz-Algorithm=..."
+        expires_in_seconds:
+          type: integer
+          example: 900
 
-    TestSuiteResponse:
+    RunMetricsDTO:
       type: object
+      required:
+        - total_iterations
+        - total_requests
+        - avg_tps
+        - p50_duration_ms
+        - p90_duration_ms
+        - p95_duration_ms
+        - p99_duration_ms
+        - error_rate_pct
+      properties:
+        total_iterations:
+          type: integer
+          format: int64
+          example: 50000
+        total_requests:
+          type: integer
+          format: int64
+          example: 200000
+        avg_tps:
+          type: number
+          format: double
+          example: 1666.67
+        p50_duration_ms:
+          type: number
+          format: double
+          example: 12.40
+        p90_duration_ms:
+          type: number
+          format: double
+          example: 28.10
+        p95_duration_ms:
+          type: number
+          format: double
+          example: 45.20
+        p99_duration_ms:
+          type: number
+          format: double
+          example: 89.60
+        error_rate_pct:
+          type: number
+          format: double
+          example: 0.02
+
+    RunResponse:
+      type: object
+      required:
+        - id
+        - suite_id
+        - artifact_id
+        - runner_profile_id
+        - status
+        - metrics
+        - created_at
       properties:
         id:
           type: string
           format: uuid
-        name:
+          example: "a1b2c3d4-e5f6-7890-abcd-ef0123456789"
+        suite_id:
           type: string
-        description:
+          example: "suite-checkout-service"
+        artifact_id:
           type: string
+          format: uuid
+          example: "c7a6e118-20ab-48d6-953b-e01140026e61"
+        configuration_id:
+          type: string
+          nullable: true
+          example: "cfg-ramp-up-stage"
+        runner_profile_id:
+          type: string
+          format: uuid
+          example: "e8d665b1-2e67-4228-8ab6-79c5b248a31e"
+        schedule_id:
+          type: string
+          nullable: true
+          example: "7fa1205c-d38e-4f51-b924-11883395bcf8"
         status:
           type: string
-          enum: [DRAFT, ACTIVE, ARCHIVED]
+          enum: [QUEUED, RUNNING, COMPLETED, FAILED, ABORTED]
+          example: "COMPLETED"
+        k8s_job_name:
+          type: string
+          example: "vuhive-run-a1b2c3d4"
+        k8s_namespace:
+          type: string
+          example: "vuhive-runners"
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-09-05T10:14:30Z"
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-09-05T10:15:30Z"
+        duration_ms:
+          type: integer
+          format: int64
+          nullable: true
+          example: 60000
+        exit_code:
+          type: integer
+          nullable: true
+          example: 0
+        sla_passed:
+          type: boolean
+          nullable: true
+          example: true
+        metrics:
+          $ref: '#/components/schemas/RunMetricsDTO'
+        s3_report_key:
+          type: string
+          example: "runs/a1b2c3d4/summary.json"
+        s3_logs_key:
+          type: string
+          example: "runs/a1b2c3d4/run.log"
+        abort_reason:
+          type: string
+          example: ""
         created_at:
           type: string
           format: date-time
-        updated_at:
+          example: "2026-09-05T10:14:25Z"
+
+    RunListResponse:
+      type: object
+      required:
+        - runs
+        - count
+        - total
+        - limit
+        - offset
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunResponse'
+        count:
+          type: integer
+          example: 10
+        total:
+          type: integer
+          format: int64
+          example: 45
+        limit:
+          type: integer
+          example: 10
+        offset:
+          type: integer
+          example: 0
+
+    AbortRunRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          example: "high error rate detected"
+        requested_by:
+          type: string
+          example: "operator-alice"
+
+    CompleteRunRequest:
+      type: object
+      properties:
+        run_id:
+          type: string
+          example: "a1b2c3d4-e5f6-7890-abcd-ef0123456789"
+        exit_code:
+          type: integer
+          example: 0
+        report_key:
+          type: string
+          example: "runs/a1b2c3d4/summary.json"
+        logs_key:
+          type: string
+          example: "runs/a1b2c3d4/run.log"
+        finished_at:
           type: string
           format: date-time
+          example: "2026-09-05T10:15:30Z"
+        summary:
+          type: object
+          description: Parsed summary metrics payload
+        summary_json:
+          type: object
+          description: Raw summary JSON report
 
     ArtifactResponse:
       type: object
+      required:
+        - id
+        - suite_id
+        - platform
+        - status
+        - created_at
       properties:
         id:
           type: string
-          format: uuid
         suite_id:
           type: string
-          format: uuid
         platform:
           type: string
-          example: linux/amd64
-        status:
-          type: string
-          enum: [QUEUED, BUILDING, READY, FAILED]
         s3_binary_key:
           type: string
-        checksum:
+        sha256_checksum:
+          type: string
+        build_logs_s3_key:
+          type: string
+        status:
+          type: string
+        error_message:
           type: string
         created_at:
           type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
 
-    CreateRunnerProfileRequest:
+    ArtifactListResponse:
+      type: object
+      required:
+        - artifacts
+        - count
+      properties:
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArtifactResponse'
+        count:
+          type: integer
+
+    BuildTriggerResponse:
+      type: object
+      required:
+        - message
+        - artifacts
+      properties:
+        message:
+          type: string
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArtifactResponse'
+
+    TolerationDTO:
+      type: object
+      properties:
+        key:
+          type: string
+        operator:
+          type: string
+        value:
+          type: string
+        effect:
+          type: string
+        toleration_seconds:
+          type: integer
+          format: int64
+
+    NodeAffinityTermDTO:
+      type: object
+      required:
+        - key
+        - operator
+      properties:
+        key:
+          type: string
+        operator:
+          type: string
+        values:
+          type: array
+          items:
+            type: string
+
+    AffinityDTO:
+      type: object
+      properties:
+        node_selector_terms:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeAffinityTermDTO'
+
+    CreateProfileRequest:
       type: object
       required:
         - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        runner_image:
+          type: string
+        cpu_request:
+          type: string
+        cpu_limit:
+          type: string
+        memory_request:
+          type: string
+        memory_limit:
+          type: string
+        node_selector:
+          type: object
+          additionalProperties:
+            type: string
+        affinity:
+          $ref: '#/components/schemas/AffinityDTO'
+        tolerations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TolerationDTO'
+
+    UpdateProfileRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        runner_image:
+          type: string
+        cpu_request:
+          type: string
+        cpu_limit:
+          type: string
+        memory_request:
+          type: string
+        memory_limit:
+          type: string
+        node_selector:
+          type: object
+          additionalProperties:
+            type: string
+        affinity:
+          $ref: '#/components/schemas/AffinityDTO'
+        tolerations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TolerationDTO'
+
+    ProfileResponse:
+      type: object
+      required:
+        - id
+        - name
+        - runner_image
         - cpu_request
         - cpu_limit
         - memory_request
         - memory_limit
-      properties:
-        name:
-          type: string
-          example: high-concurrency-workers
-        description:
-          type: string
-        cpu_request:
-          type: string
-          example: "1000m"
-        cpu_limit:
-          type: string
-          example: "2000m"
-        memory_request:
-          type: string
-          example: "1Gi"
-        memory_limit:
-          type: string
-          example: "2Gi"
-        node_selector:
-          type: object
-          additionalProperties:
-            type: string
-        tolerations:
-          type: array
-          items:
-            type: object
-        affinity:
-          type: object
-
-    UpdateRunnerProfileRequest:
-      type: object
-      properties:
-        description:
-          type: string
-        cpu_request:
-          type: string
-        cpu_limit:
-          type: string
-        memory_request:
-          type: string
-        memory_limit:
-          type: string
-        node_selector:
-          type: object
-          additionalProperties:
-            type: string
-        tolerations:
-          type: array
-          items:
-            type: object
-        affinity:
-          type: object
-
-    RunnerProfileResponse:
-      type: object
+        - created_at
+        - updated_at
       properties:
         id:
           type: string
-          format: uuid
         name:
           type: string
         description:
+          type: string
+        runner_image:
           type: string
         cpu_request:
           type: string
@@ -746,12 +1106,29 @@ components:
           type: object
           additionalProperties:
             type: string
+        affinity:
+          $ref: '#/components/schemas/AffinityDTO'
+        tolerations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TolerationDTO'
         created_at:
           type: string
-          format: date-time
         updated_at:
           type: string
-          format: date-time
+
+    ProfileListResponse:
+      type: object
+      required:
+        - profiles
+        - count
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileResponse'
+        count:
+          type: integer
 
     CreateScheduleRequest:
       type: object
@@ -764,22 +1141,17 @@ components:
       properties:
         suite_id:
           type: string
-          format: uuid
         artifact_id:
           type: string
-          format: uuid
         configuration_id:
           type: string
-          format: uuid
+          nullable: true
         runner_profile_id:
           type: string
-          format: uuid
         name:
           type: string
-          example: nightly-benchmark
         cron_expression:
           type: string
-          example: "0 2 * * *"
 
     UpdateScheduleRequest:
       type: object
@@ -788,26 +1160,32 @@ components:
       properties:
         cron_expression:
           type: string
-          example: "*/30 * * * *"
 
     ScheduleResponse:
       type: object
+      required:
+        - id
+        - suite_id
+        - artifact_id
+        - runner_profile_id
+        - name
+        - cron_expression
+        - k8s_cronjob_name
+        - is_active
+        - created_at
+        - updated_at
       properties:
         id:
           type: string
-          format: uuid
         suite_id:
           type: string
-          format: uuid
         artifact_id:
           type: string
-          format: uuid
         configuration_id:
           type: string
-          format: uuid
+          nullable: true
         runner_profile_id:
           type: string
-          format: uuid
         name:
           type: string
         cron_expression:
@@ -818,132 +1196,21 @@ components:
           type: boolean
         created_at:
           type: string
-          format: date-time
         updated_at:
           type: string
-          format: date-time
 
-    AbortRunRequest:
+    ScheduleListResponse:
       type: object
+      required:
+        - schedules
+        - count
       properties:
-        reason:
-          type: string
-          description: Optional operator cancellation or abort rationale
-          example: Undesirable target service degradation observed
-        requested_by:
-          type: string
-          description: Identity of user or CI pipeline requesting cancellation
-          example: operator@vuhive.io
-
-    CompleteRunRequest:
-      type: object
-      properties:
-        run_id:
-          type: string
-          format: uuid
-        exit_code:
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleResponse'
+        count:
           type: integer
-          example: 0
-        report_key:
-          type: string
-          example: runs/98bc19d4/summary.json
-        logs_key:
-          type: string
-          example: runs/98bc19d4/run.log
-        finished_at:
-          type: string
-          format: date-time
-        summary:
-          type: object
-          properties:
-            total_iterations:
-              type: integer
-            total_requests:
-              type: integer
-            avg_tps:
-              type: number
-            p50_duration_ms:
-              type: number
-            p90_duration_ms:
-              type: number
-            p95_duration_ms:
-              type: number
-            p99_duration_ms:
-              type: number
-            error_rate_pct:
-              type: number
-            status:
-              type: string
-
-    RunMetricsDTO:
-      type: object
-      properties:
-        total_iterations:
-          type: integer
-        total_requests:
-          type: integer
-        avg_tps:
-          type: number
-        p50_duration_ms:
-          type: number
-        p90_duration_ms:
-          type: number
-        p95_duration_ms:
-          type: number
-        p99_duration_ms:
-          type: number
-        error_rate_pct:
-          type: number
-
-    RunResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        suite_id:
-          type: string
-          format: uuid
-        artifact_id:
-          type: string
-          format: uuid
-        configuration_id:
-          type: string
-          format: uuid
-        runner_profile_id:
-          type: string
-          format: uuid
-        schedule_id:
-          type: string
-          format: uuid
-        status:
-          type: string
-          enum: [QUEUED, RUNNING, COMPLETED, FAILED, ABORTED]
-        k8s_job_name:
-          type: string
-        k8s_namespace:
-          type: string
-        started_at:
-          type: string
-          format: date-time
-        finished_at:
-          type: string
-          format: date-time
-        exit_code:
-          type: integer
-        sla_passed:
-          type: boolean
-        metrics:
-          $ref: '#/components/schemas/RunMetricsDTO'
-        s3_report_key:
-          type: string
-        s3_logs_key:
-          type: string
-        abort_reason:
-          type: string
-        created_at:
-          type: string
-          format: date-time
 
     BarrierAwaitRequest:
       type: object
@@ -955,10 +1222,13 @@ components:
           type: string
         total_workers:
           type: integer
+          minimum: 1
         timeout_ms:
           type: integer
+          nullable: true
         release_delay_ms:
           type: integer
+          nullable: true
 
     BarrierAbortRequest:
       type: object
@@ -971,45 +1241,49 @@ components:
         reason:
           type: string
 
-    BarrierReleaseResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          example: RELEASED
-        target_start_time:
-          type: string
-          format: date-time
-        start_in_ms:
-          type: integer
-
     BarrierParticipantResponse:
       type: object
+      required:
+        - worker_id
+        - status
+        - joined_at
       properties:
         worker_id:
           type: string
         status:
           type: string
-        arrived_at:
+        joined_at:
           type: string
-          format: date-time
+        ready_at:
+          type: string
+          nullable: true
+        error_reason:
+          type: string
 
-    BarrierStatusResponse:
+    BarrierResponse:
       type: object
+      required:
+        - run_id
+        - status
+        - total_workers
+        - ready_workers
       properties:
         run_id:
           type: string
-          format: uuid
+        worker_id:
+          type: string
         status:
           type: string
-          enum: [PENDING, RELEASED, TIMED_OUT, ABORTED]
         total_workers:
           type: integer
         ready_workers:
           type: integer
         target_start_time:
           type: string
-          format: date-time
+          nullable: true
+        start_in_ms:
+          type: integer
+          format: int64
         abort_reason:
           type: string
         participants:

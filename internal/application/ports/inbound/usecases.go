@@ -34,13 +34,17 @@ type CompleteRunCommand struct {
 	SummaryJSON []byte
 }
 
-// RunsUseCase defines driving use cases for triggering, tracking, and aborting TestRun aggregates.
+// RunsUseCase defines driving use cases for triggering, tracking, querying, and aborting TestRun aggregates.
 type RunsUseCase interface {
 	TriggerRun(ctx context.Context, cmd TriggerRunCommand) (*model.TestRun, error)
 	GetRun(ctx context.Context, id string) (*model.TestRun, error)
-	ListRuns(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error)
+	ListRuns(ctx context.Context, filter model.RunFilter) ([]*model.TestRun, int64, error)
 	AbortRun(ctx context.Context, id string, reason string) (*model.TestRun, error)
 	CompleteRun(ctx context.Context, cmd CompleteRunCommand) (*model.TestRun, error)
+	GetRunReport(ctx context.Context, id string) (io.ReadCloser, error)
+	GetRunReportURL(ctx context.Context, id string, lifetime time.Duration) (string, error)
+	GetRunLogs(ctx context.Context, id string) (io.ReadCloser, error)
+	GetRunLogsURL(ctx context.Context, id string, lifetime time.Duration) (string, error)
 }
 
 // SchedulesUseCase defines driving use cases for managing recurring TestSchedule aggregates.

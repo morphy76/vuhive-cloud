@@ -50,6 +50,17 @@ type RunMetrics struct {
 	ErrorRatePct    float64
 }
 
+// RunFilter encapsulates criteria for listing, searching, and paginating TestRun aggregates.
+type RunFilter struct {
+	SuiteID    string
+	Status     RunStatus
+	ScheduleID string
+	From       *time.Time
+	To         *time.Time
+	Limit      int
+	Offset     int
+}
+
 // TestRun represents an execution instance of a compiled test suite on Kubernetes.
 type TestRun struct {
 	id              string
@@ -228,6 +239,19 @@ func (r *TestRun) StartedAt() *time.Time {
 // FinishedAt returns the timestamp when the run completed, failed, or aborted.
 func (r *TestRun) FinishedAt() *time.Time {
 	return r.finishedAt
+}
+
+// DurationMs returns the run execution duration in milliseconds, or nil if not yet started.
+func (r *TestRun) DurationMs() *int64 {
+	if r.startedAt == nil {
+		return nil
+	}
+	end := time.Now().UTC()
+	if r.finishedAt != nil {
+		end = *r.finishedAt
+	}
+	ms := end.Sub(*r.startedAt).Milliseconds()
+	return &ms
 }
 
 // ExitCode returns the process exit code.

@@ -78,6 +78,10 @@ func SetupRouterWithBarrier(
 			runHandler := NewRunHandler(runsUC)
 			runs := v1.Group("/runs")
 			{
+				runs.GET("", runHandler.ListRuns)
+				runs.GET("/:id", runHandler.GetRun)
+				runs.GET("/:id/report", runHandler.GetRunReport)
+				runs.GET("/:id/logs", runHandler.GetRunLogs)
 				runs.POST("/:id/abort", runHandler.AbortRun)
 				runs.POST("/:id/complete", runHandler.CompleteRun)
 				runs.POST("/complete", runHandler.CompleteRun)

@@ -22,6 +22,7 @@ Official Helm chart for deploying the **`vuhive-cloud`** control plane on Kubern
   - [Pod Security Standards (PSS) & Hardening](#pod-security-standards-pss--hardening)
 - [Operations & Troubleshooting](#operations--troubleshooting)
   - [Verifying Health & Status](#verifying-health--status)
+  - [Accessing the Control Plane API & Querying Runs](#accessing-the-control-plane-api--querying-runs)
   - [Upgrading the Chart](#upgrading-the-chart)
   - [Uninstalling the Chart](#uninstalling-the-chart)
 
@@ -334,6 +335,29 @@ kubectl get pods -n vuhive-system -l app.kubernetes.io/name=vuhive-cloud
 kubectl exec -n vuhive-system deploy/vuhive-vuhive-cloud -- \
   wget -qO- http://localhost:8080/healthz
 ```
+
+### Accessing the Control Plane API & Querying Runs
+
+Port-forward the control plane service to query runs, reports, and logs:
+
+```bash
+# Port-forward API service locally
+kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080
+
+# Query test runs (supports ?suite_id=, ?status=, ?limit=, ?offset=, etc.)
+curl -s http://localhost:8080/api/v1/runs?status=COMPLETED | jq .
+
+# Inspect run metadata, duration, exit code and SLA status
+curl -s http://localhost:8080/api/v1/runs/<run-id> | jq .
+
+# Retrieve full execution report summary.json (direct JSON or ?presign=true URL)
+curl -s http://localhost:8080/api/v1/runs/<run-id>/report | jq .
+
+# Retrieve full execution logs (direct text or ?presign=true URL)
+curl -s http://localhost:8080/api/v1/runs/<run-id>/logs
+```
+
+For complete curl workflows and API examples, see the **[Adoption Cookbook (`docs/cookbook.md`)](../../docs/cookbook.md)** and the **[OpenAPI 3.0.3 Specification (`api/openapi.yaml`)](../../api/openapi.yaml)**.
 
 ### Upgrading the Chart
 
