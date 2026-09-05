@@ -102,6 +102,8 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --wait --timeout=120s
 ```
 
+> **MinIO Note**: Setting `s3.endpoint` automatically enables path-style S3 addressing in the control plane server, runner-init, and runner-wrapper — no extra flag needed. See [`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md) for full configuration reference.
+
 ### 3. Verify Health & Explore API Recipes
 
 Port-forward the control plane service:

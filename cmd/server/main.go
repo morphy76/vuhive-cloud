@@ -172,12 +172,15 @@ func main() {
 		if secretKey == "" {
 			secretKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 		}
+		s3Endpoint := os.Getenv("S3_ENDPOINT")
+		s3UsePathStyle := os.Getenv("S3_USE_PATH_STYLE") == "true" || s3Endpoint != ""
 		s3Cfg := s3adapter.Config{
-			Endpoint:        os.Getenv("S3_ENDPOINT"),
+			Endpoint:        s3Endpoint,
 			Region:          os.Getenv("S3_REGION"),
 			Bucket:          s3Bucket,
 			AccessKeyID:     accessKey,
 			SecretAccessKey: secretKey,
+			UsePathStyle:    s3UsePathStyle,
 		}
 		s3Client, err := s3adapter.NewAdapter(ctx, s3Cfg)
 		if err != nil {

@@ -102,6 +102,9 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --wait --timeout=120s
 ```
 
+> [!NOTE]
+> When `s3.endpoint` is non-empty (as in the MinIO case above), `s3.usePathStyle` is automatically treated as `true` by the control plane server, runner-init, and runner-wrapper. Path-style addressing (`http://<endpoint>/<bucket>/`) is required for MinIO because virtual-hosted-style URLs (`http://<bucket>.<service>/`) depend on DNS wildcards unavailable for Kubernetes Service names.
+
 ### 2. Production Deployment (with External PostgreSQL & S3)
 
 In production, backing services should be provisioned via managed cloud infrastructure (e.g., AWS Aurora PostgreSQL and AWS S3).
@@ -249,7 +252,7 @@ The following table lists the configurable parameters of the `vuhive-cloud` char
 | `s3.bucket` | S3 bucket name for artifacts, binaries, and logs | `vuhive-artifacts` |
 | `s3.accessKeyId` | S3 access key ID | `vuhive-dev` |
 | `s3.secretAccessKey` | S3 secret access key | `vuhive-dev-secret` |
-| `s3.usePathStyle` | Use path-style addressing (`true` for MinIO, `false` for AWS S3) | `true` |
+| `s3.usePathStyle` | Force S3 path-style addressing (`http://<endpoint>/<bucket>/`). Required for MinIO and any in-cluster S3-compatible endpoint. Automatically enabled when `s3.endpoint` is non-empty. | `true` |
 | `s3.existingSecret` | Name of Secret containing AWS credentials | `""` |
 | `s3.existingSecretAccessKey`| Key within `s3.existingSecret` for access key | `AWS_ACCESS_KEY_ID` |
 | `s3.existingSecretSecretKey`| Key within `s3.existingSecret` for secret key | `AWS_SECRET_ACCESS_KEY` |
