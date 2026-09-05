@@ -16,12 +16,17 @@ help: ## Display this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: build
-build: build-server build-runner-wrapper build-runner-init ## Build all binaries
+build: build-server build-runner-wrapper build-runner-init build-bff ## Build all binaries
 
 .PHONY: build-server
 build-server: ## Build control plane server binary
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/server ./cmd/server
+
+.PHONY: build-bff
+build-bff: ## Build Backend-For-Frontend (BFF) service binary
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/bff ./cmd/bff
 
 .PHONY: build-runner-wrapper
 build-runner-wrapper: ## Build runner wrapper binary
