@@ -44,7 +44,7 @@ func LoggingMiddleware() gin.HandlerFunc {
 		}
 
 		if raw != "" {
-			path = path + "?" + raw
+			evt = evt.Str("query", raw)
 		}
 
 		evt.
