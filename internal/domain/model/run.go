@@ -320,6 +320,11 @@ func (r *TestRun) Complete(
 	return nil
 }
 
+// SetExitCode explicitly records the exit code of the runner process.
+func (r *TestRun) SetExitCode(code int) {
+	r.exitCode = &code
+}
+
 // Fail transitions the run to FAILED.
 func (r *TestRun) Fail(exitCode int, s3LogsKey string, finishTime time.Time) error {
 	if r.status.IsTerminal() {
@@ -330,6 +335,30 @@ func (r *TestRun) Fail(exitCode int, s3LogsKey string, finishTime time.Time) err
 	r.exitCode = &exitCode
 	r.slaPassed = &sla
 	r.s3LogsKey = strings.TrimSpace(s3LogsKey)
+	r.finishedAt = &finishTime
+	r.status = RunStatusFailed
+	return nil
+}
+
+// FailWithMetrics transitions the run to FAILED while recording partial or failure metrics and summary report.
+func (r *TestRun) FailWithMetrics(
+	exitCode int,
+	metrics RunMetrics,
+	s3ReportKey, s3LogsKey string,
+	summaryJSON []byte,
+	finishTime time.Time,
+) error {
+	if r.status.IsTerminal() {
+		return ErrTerminalState
+	}
+
+	sla := false
+	r.exitCode = &exitCode
+	r.slaPassed = &sla
+	r.metrics = metrics
+	r.s3ReportKey = strings.TrimSpace(s3ReportKey)
+	r.s3LogsKey = strings.TrimSpace(s3LogsKey)
+	r.summaryJSON = summaryJSON
 	r.finishedAt = &finishTime
 	r.status = RunStatusFailed
 	return nil

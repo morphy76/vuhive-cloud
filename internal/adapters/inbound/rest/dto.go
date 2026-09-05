@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
@@ -298,6 +299,101 @@ func ToScheduleListResponse(schedules []*model.Schedule) ScheduleListResponse {
 	return ScheduleListResponse{
 		Schedules: items,
 		Count:     len(items),
+	}
+}
+
+// CompleteRunRequest encapsulates the request body for POST /api/v1/runs/{id}/complete.
+type CompleteRunRequest struct {
+	RunID       string                 `json:"run_id,omitempty"`
+	ExitCode    *int                   `json:"exit_code,omitempty"`
+	ReportKey   string                 `json:"report_key,omitempty"`
+	LogsKey     string                 `json:"logs_key,omitempty"`
+	FinishedAt  *string                `json:"finished_at,omitempty"`
+	Summary     map[string]interface{} `json:"summary,omitempty"`
+	SummaryJSON json.RawMessage        `json:"summary_json,omitempty"`
+}
+
+// RunMetricsDTO represents indexed performance KPIs in REST responses.
+type RunMetricsDTO struct {
+	TotalIterations int64   `json:"total_iterations"`
+	TotalRequests   int64   `json:"total_requests"`
+	AvgTPS          float64 `json:"avg_tps"`
+	P50DurationMs   float64 `json:"p50_duration_ms"`
+	P90DurationMs   float64 `json:"p90_duration_ms"`
+	P95DurationMs   float64 `json:"p95_duration_ms"`
+	P99DurationMs   float64 `json:"p99_duration_ms"`
+	ErrorRatePct    float64 `json:"error_rate_pct"`
+}
+
+// RunResponse represents the JSON response for a TestRun aggregate.
+type RunResponse struct {
+	ID              string        `json:"id"`
+	SuiteID         string        `json:"suite_id"`
+	ArtifactID      string        `json:"artifact_id"`
+	ConfigurationID *string       `json:"configuration_id,omitempty"`
+	RunnerProfileID string        `json:"runner_profile_id"`
+	ScheduleID      *string       `json:"schedule_id,omitempty"`
+	Status          string        `json:"status"`
+	K8sJobName      string        `json:"k8s_job_name,omitempty"`
+	K8sNamespace    string        `json:"k8s_namespace,omitempty"`
+	StartedAt       *string       `json:"started_at,omitempty"`
+	FinishedAt      *string       `json:"finished_at,omitempty"`
+	ExitCode        *int          `json:"exit_code,omitempty"`
+	SLAPassed       *bool         `json:"sla_passed,omitempty"`
+	Metrics         RunMetricsDTO `json:"metrics"`
+	S3ReportKey     string        `json:"s3_report_key,omitempty"`
+	S3LogsKey       string        `json:"s3_logs_key,omitempty"`
+	AbortReason     string        `json:"abort_reason,omitempty"`
+	CreatedAt       string        `json:"created_at"`
+}
+
+// ToRunMetricsDTO maps domain model.RunMetrics to a RunMetricsDTO.
+func ToRunMetricsDTO(m model.RunMetrics) RunMetricsDTO {
+	return RunMetricsDTO{
+		TotalIterations: m.TotalIterations,
+		TotalRequests:   m.TotalRequests,
+		AvgTPS:          m.AvgTPS,
+		P50DurationMs:   m.P50DurationMs,
+		P90DurationMs:   m.P90DurationMs,
+		P95DurationMs:   m.P95DurationMs,
+		P99DurationMs:   m.P99DurationMs,
+		ErrorRatePct:    m.ErrorRatePct,
+	}
+}
+
+// ToRunResponse maps a domain TestRun aggregate to a RunResponse DTO.
+func ToRunResponse(r *model.TestRun) RunResponse {
+	var startedAtStr *string
+	if r.StartedAt() != nil {
+		s := r.StartedAt().Format(time.RFC3339)
+		startedAtStr = &s
+	}
+
+	var finishedAtStr *string
+	if r.FinishedAt() != nil {
+		s := r.FinishedAt().Format(time.RFC3339)
+		finishedAtStr = &s
+	}
+
+	return RunResponse{
+		ID:              r.ID(),
+		SuiteID:         r.SuiteID(),
+		ArtifactID:      r.ArtifactID(),
+		ConfigurationID: r.ConfigurationID(),
+		RunnerProfileID: r.RunnerProfileID(),
+		ScheduleID:      r.ScheduleID(),
+		Status:          string(r.Status()),
+		K8sJobName:      r.K8sJobName(),
+		K8sNamespace:    r.K8sNamespace(),
+		StartedAt:       startedAtStr,
+		FinishedAt:      finishedAtStr,
+		ExitCode:        r.ExitCode(),
+		SLAPassed:       r.SLAPassed(),
+		Metrics:         ToRunMetricsDTO(r.Metrics()),
+		S3ReportKey:     r.S3ReportKey(),
+		S3LogsKey:       r.S3LogsKey(),
+		AbortReason:     r.AbortReason(),
+		CreatedAt:       r.CreatedAt().Format(time.RFC3339),
 	}
 }
 
