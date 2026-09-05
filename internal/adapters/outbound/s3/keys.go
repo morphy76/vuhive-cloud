@@ -93,3 +93,43 @@ func KeySummaryReport(runID string) (string, error) {
 
 	return fmt.Sprintf("runs/%s/summary.json", trimmedRunID), nil
 }
+
+// KeyWorkerSummaryReport builds the S3 key for an individual worker pod's summary.json report.
+func KeyWorkerSummaryReport(runID string, workerIndex int) (string, error) {
+	trimmedRunID := strings.TrimSpace(runID)
+	if trimmedRunID == "" {
+		return "", fmt.Errorf("%w: runID cannot be empty", model.ErrValidation)
+	}
+	if workerIndex < 0 {
+		return "", fmt.Errorf("%w: workerIndex cannot be negative", model.ErrValidation)
+	}
+
+	return fmt.Sprintf("runs/%s/workers/%d/summary.json", trimmedRunID, workerIndex), nil
+}
+
+// KeyWorkerExecutionLogs builds the S3 key for an individual worker pod's execution logs.
+func KeyWorkerExecutionLogs(runID string, workerIndex int) (string, error) {
+	trimmedRunID := strings.TrimSpace(runID)
+	if trimmedRunID == "" {
+		return "", fmt.Errorf("%w: runID cannot be empty", model.ErrValidation)
+	}
+	if workerIndex < 0 {
+		return "", fmt.Errorf("%w: workerIndex cannot be negative", model.ErrValidation)
+	}
+
+	return fmt.Sprintf("runs/%s/workers/%d/run.log", trimmedRunID, workerIndex), nil
+}
+
+// KeyWorkerConfig builds the S3 key for an individual worker pod's partitioned vuhive.yaml configuration.
+func KeyWorkerConfig(runID string, workerIndex int) (string, error) {
+	trimmedRunID := strings.TrimSpace(runID)
+	if trimmedRunID == "" {
+		return "", fmt.Errorf("%w: runID cannot be empty", model.ErrValidation)
+	}
+	if workerIndex < 0 {
+		return "", fmt.Errorf("%w: workerIndex cannot be negative", model.ErrValidation)
+	}
+
+	return fmt.Sprintf("runs/%s/workers/%d/vuhive.yaml", trimmedRunID, workerIndex), nil
+}
+

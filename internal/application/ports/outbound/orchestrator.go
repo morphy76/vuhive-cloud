@@ -8,8 +8,12 @@ import (
 
 // RunnerJobOptions specifies the parameters needed to dispatch a runner Job.
 type RunnerJobOptions struct {
-	S3BinaryKey string
-	S3ConfigKey string
+	S3BinaryKey   string
+	S3ConfigKey   string
+	WorkerIndex   *int
+	WorkerCount   *int
+	EnvVars       map[string]string
+	JobNameSuffix string
 }
 
 // RunnerOrchestratorPort defines the driven port for dispatching and managing runner pods on Kubernetes.

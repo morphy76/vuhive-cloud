@@ -2,9 +2,12 @@ package k8s
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,7 +54,11 @@ func (g *RunnerJobGenerator) GenerateJob(
 		namespace = model.DefaultRunnerNamespace
 	}
 
-	jobName := formatRunnerJobName(run.ID())
+	suffix := strings.TrimSpace(opts.JobNameSuffix)
+	if suffix == "" && opts.WorkerIndex != nil {
+		suffix = fmt.Sprintf("worker-%d", *opts.WorkerIndex)
+	}
+	jobName := formatRunnerJobName(run.ID(), suffix)
 
 	runAsUser := int64(10001)
 	runAsGroup := int64(10001)
@@ -90,6 +97,13 @@ func (g *RunnerJobGenerator) GenerateJob(
 	if run.ScheduleID() != nil && *run.ScheduleID() != "" {
 		labels["vuhive.io/schedule-id"] = *run.ScheduleID()
 	}
+	if opts.WorkerIndex != nil {
+		labels["vuhive.io/worker-index"] = strconv.Itoa(*opts.WorkerIndex)
+	}
+	if opts.WorkerCount != nil {
+		labels["vuhive.io/worker-count"] = strconv.Itoa(*opts.WorkerCount)
+	}
+
 
 	// Affinity mapping
 	var k8sAffinity *corev1.Affinity
@@ -147,13 +161,25 @@ func (g *RunnerJobGenerator) GenerateJob(
 	}
 
 	// S3 keys
-	reportKey, err := s3.KeySummaryReport(run.ID())
-	if err != nil {
-		return nil, err
-	}
-	logsKey, err := s3.KeyExecutionLogs(run.ID())
-	if err != nil {
-		return nil, err
+	var reportKey, logsKey string
+	if opts.WorkerIndex != nil {
+		reportKey, err = s3.KeyWorkerSummaryReport(run.ID(), *opts.WorkerIndex)
+		if err != nil {
+			return nil, err
+		}
+		logsKey, err = s3.KeyWorkerExecutionLogs(run.ID(), *opts.WorkerIndex)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		reportKey, err = s3.KeySummaryReport(run.ID())
+		if err != nil {
+			return nil, err
+		}
+		logsKey, err = s3.KeyExecutionLogs(run.ID())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	s3EnvVars := g.buildS3EnvVars()
@@ -176,6 +202,17 @@ func (g *RunnerJobGenerator) GenerateJob(
 	if g.cfg.APICallbackURL != "" {
 		runnerEnvs = append(runnerEnvs, corev1.EnvVar{Name: "API_CALLBACK_URL", Value: g.cfg.APICallbackURL})
 	}
+	if len(opts.EnvVars) > 0 {
+		keys := make([]string, 0, len(opts.EnvVars))
+		for k := range opts.EnvVars {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			runnerEnvs = append(runnerEnvs, corev1.EnvVar{Name: k, Value: opts.EnvVars[k]})
+		}
+	}
+
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -297,9 +334,13 @@ func (g *RunnerJobGenerator) buildS3EnvVars() []corev1.EnvVar {
 	return envs
 }
 
-func formatRunnerJobName(runID string) string {
+func formatRunnerJobName(runID string, suffix string) string {
 	cleaned := strings.ToLower(strings.TrimSpace(runID))
 	name := fmt.Sprintf("vuhive-run-%s", cleaned)
+	trimmedSuffix := strings.ToLower(strings.TrimSpace(suffix))
+	if trimmedSuffix != "" {
+		name = fmt.Sprintf("%s-%s", name, trimmedSuffix)
+	}
 	if len(name) > 63 {
 		name = name[:63]
 	}
