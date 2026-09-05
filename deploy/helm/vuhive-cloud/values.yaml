@@ -124,11 +124,19 @@ s3:
 # ── Runner & Builder Workload Orchestration ────────────────────────────
 runner:
   namespace: "vuhive-runners"
+  # When rbac.clusterScoped is false and runner.namespace differs from the release namespace,
+  # set createNamespace: true to let Helm create the namespace automatically.
+  # The namespace is created with "helm.sh/resource-policy: keep" so it is NOT deleted on helm uninstall.
+  createNamespace: true
   initImage: "ghcr.io/morphy76/vuhive-cloud/runner-init:latest"
   defaultImage: "alpine:3.20"
 
 builder:
   namespace: "vuhive-system"
+  # When rbac.clusterScoped is false and builder.namespace differs from the release namespace,
+  # set createNamespace: true to let Helm create the namespace automatically.
+  # The namespace is created with "helm.sh/resource-policy: keep" so it is NOT deleted on helm uninstall.
+  createNamespace: true
   image: "golang:1.26-alpine"
 
 # API Callback URL used by runner jobs to report completion/status to control plane.
