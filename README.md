@@ -21,6 +21,7 @@ It transforms Go-based load testing suites into compiled, self-contained Linux b
 - 📊 **Automated KPI Indexing & SLA Verification**: Automatically parses deterministic execution reports (`summary.json`), extracting and indexing latency percentiles ($p_{50}$, $p_{90}$, $p_{95}$, $p_{99}$), throughput (TPS), error rates, and SLA pass/fail status into PostgreSQL.
 - 📦 **Pluggable Object Storage**: Integrates seamlessly with AWS S3 or MinIO for long-term retention of source packages, compiled binaries, full execution logs, and detailed performance summaries.
 - ⏱ **Distributed Start Barrier Synchronization**: Built-in rendezvous coordinator guarantees multi-pod distributed load generators synchronize and fire simultaneously without clock skew.
+- 🛑 **Execution Lifecycle Control & Graceful Abort**: Monitor active runs in real time and abort executions on demand (`POST /api/v1/runs/{id}/abort`), instantly tearing down Kubernetes workloads while propagating SIGTERM for partial log flush, updating state to `ABORTED` with audited cancellation metadata, and reclaiming cluster resources.
 
 ---
 
@@ -41,7 +42,7 @@ It transforms Go-based load testing suites into compiled, self-contained Linux b
 │   │ Build Service          │   │ Profile & Run Service    │   │ Schedule Service   │   │
 │   └───────────┬────────────┘   └────────────┬─────────────┘   └─────────┬──────────┘   │
 │               │                             │                           │              │
-│               │ (Ephemeral Builds)          │ (Runner Jobs)             │ (CronJobs)   │
+│               │ (Ephemeral Builds)          │ (Runner Jobs / Abort)     │ (CronJobs)   │
 │               ▼                             ▼                           ▼              │
 │   ┌────────────────────────────────────────────────────────────────────────────────┐   │
 │   │ Kubernetes Client Orchestrator (batch/v1 Jobs, CronJobs, Informer Watcher)     │   │
@@ -65,7 +66,8 @@ For complete architectural specifications, DDD aggregate boundaries, and databas
 | Document | Purpose & Audience |
 |---|---|
 | **[`README.md`](./README.md)** | System overview, core capabilities, architecture, and quickstart. |
-| **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & API Recipes**: Step-by-step `curl` walkthroughs for building suites, runner profiles, scheduling, triggering executions, ingesting KPIs, and barrier coordination. |
+| **[`api/openapi.yaml`](./api/openapi.yaml)** | **OpenAPI 3.0 Specification**: Standard machine-readable specification and schema definitions for all control plane REST endpoints. |
+| **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & API Recipes**: Step-by-step `curl` walkthroughs for building suites, runner profiles, scheduling, triggering executions, aborting runs, ingesting KPIs, and barrier coordination. |
 | **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Helm Chart**: Production deployment guide, comprehensive configuration values reference, external secrets, RBAC, and security hardening. |
 | **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Helm Chart**: Quickstart backing services setup for local evaluation (PostgreSQL + MinIO). |
 | **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | Detailed engineering specification, domain models, database DDL, and multi-milestone roadmap. |

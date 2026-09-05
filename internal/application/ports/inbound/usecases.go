@@ -39,7 +39,7 @@ type RunsUseCase interface {
 	TriggerRun(ctx context.Context, cmd TriggerRunCommand) (*model.TestRun, error)
 	GetRun(ctx context.Context, id string) (*model.TestRun, error)
 	ListRuns(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error)
-	AbortRun(ctx context.Context, id string, reason string) error
+	AbortRun(ctx context.Context, id string, reason string) (*model.TestRun, error)
 	CompleteRun(ctx context.Context, cmd CompleteRunCommand) (*model.TestRun, error)
 }
 

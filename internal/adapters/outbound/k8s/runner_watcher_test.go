@@ -307,6 +307,98 @@ func TestRunnerJobWatcher_SyncJob(t *testing.T) {
 		assert.Equal(t, model.RunStatusFailed, updated.Status())
 	})
 
+	t.Run("transition RUNNING to ABORTED when job has deletion timestamp and not falsely marked failed", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-deleting", time.Now().UTC()))
+		require.NoError(t, repo.Save(ctx, run))
+
+		delTime := metav1.Now()
+		job := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "job-deleting",
+				Namespace:         "vuhive-runners",
+				DeletionTimestamp: &delTime,
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "vuhive-runner",
+					"vuhive.io/run-id":       run.ID(),
+				},
+			},
+			Status: batchv1.JobStatus{
+				// Pods might fail during eviction/termination, but this must NOT mark run as FAILED
+				Failed: 1,
+				Conditions: []batchv1.JobCondition{
+					{
+						Type:   batchv1.JobFailed,
+						Status: corev1.ConditionTrue,
+					},
+				},
+			},
+		}
+
+		err = watcher.SyncJob(ctx, job)
+		require.NoError(t, err)
+
+		updated, err := repo.FindByID(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusAborted, updated.Status())
+		assert.NotEqual(t, model.RunStatusFailed, updated.Status())
+		assert.Equal(t, "job deleted in kubernetes", updated.AbortReason())
+	})
+
+	t.Run("handle job deletion event transitions active run to ABORTED", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-async-del", time.Now().UTC()))
+		require.NoError(t, repo.Save(ctx, run))
+
+		job := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "job-async-del",
+				Namespace: "vuhive-runners",
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "vuhive-runner",
+					"vuhive.io/run-id":       run.ID(),
+				},
+			},
+		}
+
+		err = watcher.HandleJobDeletion(ctx, job)
+		require.NoError(t, err)
+
+		updated, err := repo.FindByID(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusAborted, updated.Status())
+		assert.Equal(t, "job deleted in kubernetes", updated.AbortReason())
+	})
+
+	t.Run("handle job deletion ignores already terminal run", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-already-aborted", time.Now().UTC()))
+		require.NoError(t, run.Abort("user cancelled", time.Now().UTC()))
+		require.NoError(t, repo.Save(ctx, run))
+
+		job := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "job-already-aborted",
+				Namespace: "vuhive-runners",
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "vuhive-runner",
+					"vuhive.io/run-id":       run.ID(),
+				},
+			},
+		}
+
+		err = watcher.HandleJobDeletion(ctx, job)
+		require.NoError(t, err)
+
+		updated, err := repo.FindByID(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusAborted, updated.Status())
+		assert.Equal(t, "user cancelled", updated.AbortReason())
+	})
+
 	t.Run("auto-creates and tracks linked TestRun when CronJob-spawned Job is detected", func(t *testing.T) {
 		schedule, err := model.NewSchedule(
 			"suite-sched-1",

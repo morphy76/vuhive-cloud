@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/inbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/service"
+	"github.com/morphy76/vuhive-cloud/internal/domain/event"
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 )
 
@@ -241,6 +243,33 @@ func (m *mockStoragePort) EnsureBucket(_ context.Context) error {
 	return nil
 }
 
+// Mock event publisher
+type mockEventPublisher struct {
+	mu     sync.Mutex
+	events []event.DomainEvent
+}
+
+func newMockEventPublisher() *mockEventPublisher {
+	return &mockEventPublisher{events: make([]event.DomainEvent, 0)}
+}
+
+func (m *mockEventPublisher) Publish(_ context.Context, evt event.DomainEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.events = append(m.events, evt)
+	return nil
+}
+
+func (m *mockEventPublisher) getEvents() []event.DomainEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	copied := make([]event.DomainEvent, len(m.events))
+	copy(copied, m.events)
+	return copied
+}
+
+var _ outbound.EventPublisher = (*mockEventPublisher)(nil)
+
 func setupTestRunService(t *testing.T) (
 	*service.RunService,
 	*mockSuiteRepo,
@@ -423,7 +452,7 @@ func TestRunService_TriggerRun(t *testing.T) {
 
 func TestRunService_GetListAndAbort(t *testing.T) {
 	ctx := context.Background()
-	svc, _, _, _, _, runRepo, orchestrator, suite, artifact, profile := setupTestRunService(t)
+	svc, suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, suite, artifact, profile := setupTestRunService(t)
 
 	run, err := svc.TriggerRun(ctx, inbound.TriggerRunCommand{
 		SuiteID:         suite.ID(),
@@ -454,19 +483,74 @@ func TestRunService_GetListAndAbort(t *testing.T) {
 		require.NoError(t, run.Start("vuhive-run-"+run.ID(), time.Now().UTC()))
 		require.NoError(t, runRepo.Save(ctx, run))
 
-		err := svc.AbortRun(ctx, run.ID(), "user cancellation")
+		aborted, err := svc.AbortRun(ctx, run.ID(), "user cancellation")
 		require.NoError(t, err)
-
-		aborted, err := svc.GetRun(ctx, run.ID())
-		require.NoError(t, err)
+		require.NotNil(t, aborted)
 		assert.Equal(t, model.RunStatusAborted, aborted.Status())
 		assert.Equal(t, "user cancellation", aborted.AbortReason())
 		assert.Contains(t, orchestrator.abortedJobs, "vuhive-run-"+run.ID())
+
+		fetched, err := svc.GetRun(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusAborted, fetched.Status())
+		assert.Equal(t, "user cancellation", fetched.AbortReason())
 	})
 
-	t.Run("abort already terminal run fails", func(t *testing.T) {
-		err := svc.AbortRun(ctx, run.ID(), "again")
+	t.Run("abort run emits RunAborted domain event", func(t *testing.T) {
+		eventPub := newMockEventPublisher()
+		svcWithPub := service.NewRunService(
+			suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, nil,
+			service.WithEventPublisher(eventPub),
+		)
+
+		newRun, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, newRun.Start("vuhive-run-pub-"+newRun.ID(), time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, newRun))
+
+		aborted, err := svcWithPub.AbortRun(ctx, newRun.ID(), "operator abort with event")
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusAborted, aborted.Status())
+
+		events := eventPub.getEvents()
+		require.Len(t, events, 1)
+		abortedEvt, ok := events[0].(*event.RunAborted)
+		require.True(t, ok)
+		assert.Equal(t, "RunAborted", abortedEvt.EventName())
+		assert.Equal(t, newRun.ID(), abortedEvt.RunID)
+		assert.Equal(t, suite.ID(), abortedEvt.SuiteID)
+		assert.Equal(t, "operator abort with event", abortedEvt.Reason)
+		assert.False(t, abortedEvt.OccurredAt().IsZero())
+	})
+
+	t.Run("abort already terminal run fails with ErrTerminalState", func(t *testing.T) {
+		_, err := svc.AbortRun(ctx, run.ID(), "again")
 		assert.ErrorIs(t, err, model.ErrTerminalState)
+	})
+
+	t.Run("abort run with empty id fails with ErrValidation", func(t *testing.T) {
+		_, err := svc.AbortRun(ctx, "   ", "some reason")
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("abort non-existent run fails with ErrNotFound", func(t *testing.T) {
+		_, err := svc.AbortRun(ctx, "non-existent-id", "some reason")
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("abort continues even if k8s orchestrator abort returns error", func(t *testing.T) {
+		newRun, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, newRun.Start("vuhive-run-k8serr-"+newRun.ID(), time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, newRun))
+
+		orchestrator.abortErr = errors.New("k8s api server unavailable")
+		defer func() { orchestrator.abortErr = nil }()
+
+		aborted, err := svc.AbortRun(ctx, newRun.ID(), "abort despite k8s error")
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusAborted, aborted.Status())
+		assert.Equal(t, "abort despite k8s error", aborted.AbortReason())
 	})
 }
 
@@ -689,4 +773,3 @@ func TestRunService_CompleteRun(t *testing.T) {
 		assert.ErrorIs(t, err, model.ErrTerminalState)
 	})
 }
-

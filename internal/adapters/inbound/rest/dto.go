@@ -397,6 +397,12 @@ func ToRunResponse(r *model.TestRun) RunResponse {
 	}
 }
 
+// AbortRunRequest defines the optional JSON payload for requesting a test run abort.
+type AbortRunRequest struct {
+	Reason      string `json:"reason,omitempty"`
+	RequestedBy string `json:"requested_by,omitempty"`
+}
+
 // BarrierAwaitRequest defines the JSON payload sent by worker pods to wait at the start barrier.
 type BarrierAwaitRequest struct {
 	WorkerID       string `json:"worker_id" binding:"required"`
@@ -473,4 +479,3 @@ func ToBarrierResponse(s *model.BarrierSession) BarrierResponse {
 		Participants:    participants,
 	}
 }
-

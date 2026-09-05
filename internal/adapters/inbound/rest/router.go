@@ -78,6 +78,7 @@ func SetupRouterWithBarrier(
 			runHandler := NewRunHandler(runsUC)
 			runs := v1.Group("/runs")
 			{
+				runs.POST("/:id/abort", runHandler.AbortRun)
 				runs.POST("/:id/complete", runHandler.CompleteRun)
 				runs.POST("/complete", runHandler.CompleteRun)
 			}
@@ -96,4 +97,3 @@ func SetupRouterWithBarrier(
 
 	return router
 }
-

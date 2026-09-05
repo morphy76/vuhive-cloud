@@ -21,7 +21,7 @@ type mockRunsUseCase struct {
 	triggerRunFunc  func(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error)
 	getRunFunc      func(ctx context.Context, id string) (*model.TestRun, error)
 	listRunsFunc    func(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error)
-	abortRunFunc    func(ctx context.Context, id string, reason string) error
+	abortRunFunc    func(ctx context.Context, id string, reason string) (*model.TestRun, error)
 	completeRunFunc func(ctx context.Context, cmd inbound.CompleteRunCommand) (*model.TestRun, error)
 }
 
@@ -43,11 +43,11 @@ func (m *mockRunsUseCase) ListRuns(ctx context.Context, suiteID string, status m
 	}
 	return nil, nil
 }
-func (m *mockRunsUseCase) AbortRun(ctx context.Context, id string, reason string) error {
+func (m *mockRunsUseCase) AbortRun(ctx context.Context, id string, reason string) (*model.TestRun, error) {
 	if m.abortRunFunc != nil {
 		return m.abortRunFunc(ctx, id, reason)
 	}
-	return nil
+	return nil, nil
 }
 func (m *mockRunsUseCase) CompleteRun(ctx context.Context, cmd inbound.CompleteRunCommand) (*model.TestRun, error) {
 	if m.completeRunFunc != nil {
@@ -160,6 +160,138 @@ func TestRunHandler_CompleteRun(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs/run-123/complete", bytes.NewReader([]byte(`{invalid json`)))
 		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+}
+
+var _ inbound.RunsUseCase = (*mockRunsUseCase)(nil)
+
+func TestRunHandler_AbortRun(t *testing.T) {
+	now := time.Now().UTC()
+
+	abortedRun, err := model.NewTestRunWithID(
+		"run-123", "suite-1", "art-1", nil, "prof-1", nil,
+		model.RunStatusAborted, "vuhive-run-job", "vuhive-runners",
+		&now, &now, nil, nil,
+		model.RunMetrics{}, "", "",
+		nil, "too much latency (requested by: operator-bob)", now,
+	)
+	require.NoError(t, err)
+
+	t.Run("successful abort via POST /api/v1/runs/:id/abort with body", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			abortRunFunc: func(ctx context.Context, id string, reason string) (*model.TestRun, error) {
+				assert.Equal(t, "run-123", id)
+				assert.Equal(t, "too much latency (requested by: operator-bob)", reason)
+				return abortedRun, nil
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		body := map[string]interface{}{
+			"reason":       "too much latency",
+			"requested_by": "operator-bob",
+		}
+		raw, _ := json.Marshal(body)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs/run-123/abort", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusOK, resp.Code)
+
+		var res rest.RunResponse
+		require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &res))
+		assert.Equal(t, "run-123", res.ID)
+		assert.Equal(t, "ABORTED", res.Status)
+		assert.Equal(t, "too much latency (requested by: operator-bob)", res.AbortReason)
+	})
+
+	t.Run("successful abort with empty body defaults reason", func(t *testing.T) {
+		defaultAborted, err := model.NewTestRunWithID(
+			"run-456", "suite-1", "art-1", nil, "prof-1", nil,
+			model.RunStatusAborted, "vuhive-run-job", "vuhive-runners",
+			&now, &now, nil, nil,
+			model.RunMetrics{}, "", "",
+			nil, "manual cancellation via API", now,
+		)
+		require.NoError(t, err)
+
+		mockUC := &mockRunsUseCase{
+			abortRunFunc: func(ctx context.Context, id string, reason string) (*model.TestRun, error) {
+				assert.Equal(t, "run-456", id)
+				assert.Equal(t, "manual cancellation via API", reason)
+				return defaultAborted, nil
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs/run-456/abort", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusOK, resp.Code)
+
+		var res rest.RunResponse
+		require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &res))
+		assert.Equal(t, "run-456", res.ID)
+		assert.Equal(t, "ABORTED", res.Status)
+		assert.Equal(t, "manual cancellation via API", res.AbortReason)
+	})
+
+	t.Run("terminal run returns 409 conflict", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			abortRunFunc: func(ctx context.Context, id string, reason string) (*model.TestRun, error) {
+				return nil, model.ErrTerminalState
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs/run-123/abort", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusConflict, resp.Code)
+	})
+
+	t.Run("run not found returns 404", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			abortRunFunc: func(ctx context.Context, id string, reason string) (*model.TestRun, error) {
+				return nil, model.ErrNotFound
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs/missing/abort", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusNotFound, resp.Code)
+	})
+
+	t.Run("validation error returns 400 bad request", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			abortRunFunc: func(ctx context.Context, id string, reason string) (*model.TestRun, error) {
+				return nil, model.ErrValidation
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs/invalid/abort", nil)
 		resp := httptest.NewRecorder()
 
 		router.ServeHTTP(resp, req)
