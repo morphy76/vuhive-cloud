@@ -65,4 +65,10 @@ var (
 
 	// ErrInvalidWorkerCount indicates an invalid expected worker count.
 	ErrInvalidWorkerCount = errors.New("invalid worker count: must be at least 1")
+
+	// ErrInvalidWorkerIndex indicates worker index is negative or >= worker count.
+	ErrInvalidWorkerIndex = errors.New("worker index out of bounds")
+
+	// ErrNoScenariosDefined indicates configuration lacks scenario definitions.
+	ErrNoScenariosDefined = errors.New("no scenarios defined in configuration")
 )

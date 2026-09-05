@@ -89,4 +89,47 @@ func TestStorageKeys(t *testing.T) {
 		_, err := s3.KeySummaryReport("")
 		assert.ErrorIs(t, err, model.ErrValidation)
 	})
+
+	t.Run("KeyWorkerSummaryReport returns expected path", func(t *testing.T) {
+		key, err := s3.KeyWorkerSummaryReport("run-321", 2)
+		require.NoError(t, err)
+		assert.Equal(t, "runs/run-321/workers/2/summary.json", key)
+	})
+
+	t.Run("KeyWorkerSummaryReport validates empty run ID or negative index", func(t *testing.T) {
+		_, err := s3.KeyWorkerSummaryReport("", 0)
+		assert.ErrorIs(t, err, model.ErrValidation)
+
+		_, err = s3.KeyWorkerSummaryReport("run-321", -1)
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("KeyWorkerExecutionLogs returns expected path", func(t *testing.T) {
+		key, err := s3.KeyWorkerExecutionLogs("run-321", 0)
+		require.NoError(t, err)
+		assert.Equal(t, "runs/run-321/workers/0/run.log", key)
+	})
+
+	t.Run("KeyWorkerExecutionLogs validates empty run ID or negative index", func(t *testing.T) {
+		_, err := s3.KeyWorkerExecutionLogs("", 0)
+		assert.ErrorIs(t, err, model.ErrValidation)
+
+		_, err = s3.KeyWorkerExecutionLogs("run-321", -1)
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("KeyWorkerConfig returns expected path", func(t *testing.T) {
+		key, err := s3.KeyWorkerConfig("run-321", 1)
+		require.NoError(t, err)
+		assert.Equal(t, "runs/run-321/workers/1/vuhive.yaml", key)
+	})
+
+	t.Run("KeyWorkerConfig validates empty run ID or negative index", func(t *testing.T) {
+		_, err := s3.KeyWorkerConfig("", 0)
+		assert.ErrorIs(t, err, model.ErrValidation)
+
+		_, err = s3.KeyWorkerConfig("run-321", -1)
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
 }
+

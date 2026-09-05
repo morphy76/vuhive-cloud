@@ -11,9 +11,12 @@ import (
 type RunnerJobOptions struct {
 	S3BinaryKey    string
 	S3ConfigKey    string
+	WorkerIndex   *int
 	WorkerCount    int
 	BarrierEnabled bool
 	BarrierTimeout time.Duration
+	EnvVars       map[string]string
+	JobNameSuffix string
 }
 
 // RunnerOrchestratorPort defines the driven port for dispatching and managing runner pods on Kubernetes.
