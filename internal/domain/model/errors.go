@@ -64,7 +64,7 @@ var (
 	ErrWorkerAlreadyRegistered = errors.New("worker already registered in barrier")
 
 	// ErrInvalidWorkerCount indicates an invalid expected worker count.
-	ErrInvalidWorkerCount = errors.New("invalid worker count: must be at least 1")
+	ErrInvalidWorkerCount = errors.New("worker count must be at least 1")
 
 	// ErrInvalidWorkerIndex indicates worker index is negative or >= worker count.
 	ErrInvalidWorkerIndex = errors.New("worker index out of bounds")

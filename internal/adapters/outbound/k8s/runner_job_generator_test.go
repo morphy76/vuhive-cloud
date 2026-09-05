@@ -252,9 +252,10 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		run, err := model.NewTestRun("suite-123", "art-456", nil, profile.ID(), nil)
 		require.NoError(t, err)
 
+		workerCount := 3
 		opts := outbound.RunnerJobOptions{
 			S3BinaryKey:    "vuhive-binaries/suite-123/art-456/linux-amd64/runner",
-			WorkerCount:    3,
+			WorkerCount:    &workerCount,
 			BarrierEnabled: true,
 			BarrierTimeout: 45 * time.Second,
 		}

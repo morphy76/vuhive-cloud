@@ -215,10 +215,10 @@ func (g *RunnerJobGenerator) GenerateJob(
 
 
 	// Multi-worker & barrier configuration
-	if opts.WorkerCount > 0 {
+	if opts.WorkerCount != nil && *opts.WorkerCount > 0 {
 		runnerEnvs = append(runnerEnvs, corev1.EnvVar{
 			Name:  "VUHIVE_WORKER_COUNT",
-			Value: fmt.Sprintf("%d", opts.WorkerCount),
+			Value: fmt.Sprintf("%d", *opts.WorkerCount),
 		})
 	}
 	if opts.BarrierEnabled {
@@ -245,9 +245,9 @@ func (g *RunnerJobGenerator) GenerateJob(
 	var parallelism *int32
 	var completions *int32
 	var completionMode *batchv1.CompletionMode
-	if opts.WorkerCount > 1 {
-		p := int32(opts.WorkerCount)
-		c := int32(opts.WorkerCount)
+	if opts.WorkerCount != nil && *opts.WorkerCount > 1 {
+		p := int32(*opts.WorkerCount)
+		c := int32(*opts.WorkerCount)
 		cm := batchv1.IndexedCompletion
 		parallelism = &p
 		completions = &c
