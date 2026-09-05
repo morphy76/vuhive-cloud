@@ -40,7 +40,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
 
 ### A. Test Scenario Structure
 
-`vuhive-cloud` uses Go test modules implementing load testing scenarios with the [`github.com/morphy76/vuhive`](https://github.com/morphy76/vuhive) engine. A minimal test suite consists of a `go.mod` and a Go source file defining the workload:
+`vuhive-cloud` executes Go test modules implementing load testing scenarios with the [`github.com/morphy76/vuhive`](https://github.com/morphy76/vuhive) engine (current release `v1.1.5`). A minimal test suite consists of a `go.mod` and a Go source file defining the workload:
 
 ```go
 // main.go
@@ -85,7 +85,7 @@ module my-load-test
 
 go 1.26
 
-require github.com/morphy76/vuhive v0.1.0
+require github.com/morphy76/vuhive v1.1.5
 ```
 
 ### B. Packaging Source Archives

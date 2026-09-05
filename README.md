@@ -6,7 +6,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.26-blue.svg)](https://go.dev/)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.28%2B-326ce5.svg)](https://kubernetes.io/)
 
-**`vuhive-cloud`** is an open-source, cloud-native control plane for orchestrating distributed load testing workloads on Kubernetes.
+**`vuhive-cloud`** is an open-source, cloud-native control plane for orchestrating distributed load testing workloads on Kubernetes. It manages, distributes, and scales load testing scenarios implemented with the [`vuhive`](https://github.com/morphy76/vuhive) Go library (current release `v1.1.5`).
 
 It transforms Go-based load testing suites into compiled, self-contained Linux binaries via ephemeral Kubernetes build jobs, executes them in security-hardened runner pods, schedules recurring executions with native Kubernetes `CronJob`s, synchronizes multi-pod workers via distributed rendezvous barriers, and indexes performance KPIs in real time.
 
