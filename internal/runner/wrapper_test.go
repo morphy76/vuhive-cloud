@@ -296,6 +296,104 @@ exit 0
 	assert.Equal(t, "runs/run-callback/run.log", callbackBody["logs_key"])
 }
 
+type mockBarrierClient struct {
+	rendezvousFn func(ctx context.Context, cfg runner.WrapperConfig) error
+}
+
+func (m *mockBarrierClient) PreflightCheck(cfg runner.WrapperConfig) error {
+	return nil
+}
+
+func (m *mockBarrierClient) Rendezvous(ctx context.Context, cfg runner.WrapperConfig) error {
+	if m.rendezvousFn != nil {
+		return m.rendezvousFn(ctx, cfg)
+	}
+	return nil
+}
+
+func (m *mockBarrierClient) SignalAbort(ctx context.Context, cfg runner.WrapperConfig, reason string) error {
+	return nil
+}
+
+var _ runner.BarrierClient = (*mockBarrierClient)(nil)
+
+func TestRunnerWrapper_WithBarrierSuccess(t *testing.T) {
+	tempDir := t.TempDir()
+	runnerPath := filepath.Join(tempDir, "runner")
+	summaryPath := filepath.Join(tempDir, "summary.json")
+	logPath := filepath.Join(tempDir, "run.log")
+
+	script := fmt.Sprintf(`#!/bin/sh
+echo '{}' > "%s"
+exit 0
+`, summaryPath)
+	require.NoError(t, os.WriteFile(runnerPath, []byte(script), 0755))
+
+	mockStorage := &mockStoragePort{}
+	wrapper := runner.NewRunnerWrapper(mockStorage)
+
+	rendezvousCalled := false
+	mockBarrier := &mockBarrierClient{
+		rendezvousFn: func(ctx context.Context, cfg runner.WrapperConfig) error {
+			rendezvousCalled = true
+			return nil
+		},
+	}
+	wrapper.SetBarrierClient(mockBarrier)
+
+	cfg := runner.WrapperConfig{
+		RunnerPath:     runnerPath,
+		SummaryPath:    summaryPath,
+		LogPath:        logPath,
+		ReportKey:      "runs/run-barrier/summary.json",
+		LogsKey:        "runs/run-barrier/run.log",
+		WorkerCount:    3,
+		BarrierEnabled: true,
+	}
+
+	exitCode, err := wrapper.Run(context.Background(), cfg, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 0, exitCode)
+	assert.True(t, rendezvousCalled)
+}
+
+func TestRunnerWrapper_WithBarrierFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	runnerPath := filepath.Join(tempDir, "runner")
+	summaryPath := filepath.Join(tempDir, "summary.json")
+	logPath := filepath.Join(tempDir, "run.log")
+
+	// Even if runner binary exists, it should NOT run
+	script := `#!/bin/sh
+exit 0
+`
+	require.NoError(t, os.WriteFile(runnerPath, []byte(script), 0755))
+
+	mockStorage := &mockStoragePort{}
+	wrapper := runner.NewRunnerWrapper(mockStorage)
+
+	mockBarrier := &mockBarrierClient{
+		rendezvousFn: func(ctx context.Context, cfg runner.WrapperConfig) error {
+			return errors.New("barrier rendezvous aborted: peer worker failed")
+		},
+	}
+	wrapper.SetBarrierClient(mockBarrier)
+
+	cfg := runner.WrapperConfig{
+		RunnerPath:     runnerPath,
+		SummaryPath:    summaryPath,
+		LogPath:        logPath,
+		ReportKey:      "runs/run-barrier-fail/summary.json",
+		LogsKey:        "runs/run-barrier-fail/run.log",
+		WorkerCount:    2,
+		BarrierEnabled: true,
+	}
+
+	exitCode, err := wrapper.Run(context.Background(), cfg, nil)
+	assert.Error(t, err)
+	assert.Equal(t, 1, exitCode)
+}
+
 type mockHTTPClient struct {
 	doFunc func(req *http.Request) (*http.Response, error)
 }

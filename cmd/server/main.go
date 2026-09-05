@@ -18,6 +18,7 @@ import (
 	k8sadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/k8s"
 	pgadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/postgres"
 	s3adapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/s3"
+	coordinatoradapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/coordinator"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/service"
 	"github.com/morphy76/vuhive-cloud/internal/version"
@@ -260,9 +261,11 @@ func main() {
 	profileService := service.NewProfileService(profileRepo)
 	runService := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, runnerOrchestrator, storageAdapter)
 	scheduleService := service.NewScheduleService(suiteRepo, artifactRepo, configRepo, profileRepo, scheduleRepo, scheduleOrchestrator)
+	barrierCoordinator := coordinatoradapter.NewMemoryBarrierCoordinator()
+	barrierService := service.NewBarrierService(barrierCoordinator)
 
 	// Router setup
-	router := rest.SetupRouter(buildService, profileService, scheduleService, runService)
+	router := rest.SetupRouterWithBarrier(buildService, profileService, scheduleService, runService, barrierService)
 
 	server := &http.Server{
 		Addr:         ":" + port,

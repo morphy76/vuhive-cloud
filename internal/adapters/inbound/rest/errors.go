@@ -15,7 +15,8 @@ func HandleError(c *gin.Context, err error) {
 	}
 
 	switch {
-	case errors.Is(err, model.ErrNotFound):
+	case errors.Is(err, model.ErrNotFound),
+		errors.Is(err, model.ErrBarrierNotFound):
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: err.Error()})
 	case errors.Is(err, model.ErrValidation),
 		errors.Is(err, model.ErrInvalidPlatform),
@@ -24,9 +25,16 @@ func HandleError(c *gin.Context, err error) {
 		errors.Is(err, model.ErrInvalidAffinity),
 		errors.Is(err, model.ErrInvalidToleration),
 		errors.Is(err, model.ErrInvalidCronExpression),
+		errors.Is(err, model.ErrInvalidWorkerCount),
 		errors.Is(err, model.ErrInvalidStateTransition):
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+	case errors.Is(err, model.ErrBarrierTimeout):
+		c.JSON(http.StatusRequestTimeout, ErrorResponse{Error: err.Error()})
+	case errors.Is(err, model.ErrBarrierAborted):
+		c.JSON(http.StatusFailedDependency, ErrorResponse{Error: err.Error()})
 	case errors.Is(err, model.ErrConflict),
+		errors.Is(err, model.ErrWorkerAlreadyRegistered),
+		errors.Is(err, model.ErrBarrierReleased),
 		errors.Is(err, model.ErrTerminalState):
 		c.JSON(http.StatusConflict, ErrorResponse{Error: err.Error()})
 	default:
