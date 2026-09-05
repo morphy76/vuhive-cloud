@@ -19,8 +19,9 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
   - [Recipe 5: Dispatching Ad-Hoc Test Executions & Job Lifecycle](#recipe-5-dispatching-ad-hoc-test-executions--job-lifecycle)
   - [Recipe 6: Reporting Run Completion, Ingesting KPIs & Querying Historical Runs](#recipe-6-reporting-run-completion-ingesting-kpis--querying-historical-runs)
   - [Recipe 7: Synchronizing Distributed Multi-Pod Runs with Start Barrier](#recipe-7-synchronizing-distributed-multi-pod-runs-with-start-barrier)
-  - [Recipe 8: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-8-execution-diagnostics-log-inspection--troubleshooting)
-  - [Recipe 9: Inspecting BFF Gateway Status & Session Management](#recipe-9-inspecting-bff-gateway-status--session-management)
+    - [Recipe 8: Aborting & Cancelling In-Flight Test Runs on Demand](#recipe-8-aborting--cancelling-in-flight-test-runs-on-demand)
+    - [Recipe 9: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-9-execution-diagnostics-log-inspection--troubleshooting)
+    - [Recipe 10: Inspecting BFF Gateway Status & Session Management](#recipe-10-inspecting-bff-gateway-status--session-management)
 
 ---
 
@@ -591,7 +592,48 @@ curl -i -X POST http://localhost:8080/api/v1/runs/dist-run-001/barrier/abort \
 
 ---
 
-### Recipe 8: Execution Diagnostics, Log Inspection & Troubleshooting
+### Recipe 8: Aborting & Cancelling In-Flight Test Runs on Demand
+
+If an active test execution behaves unexpectedly, introduces critical service degradation against the system under test, or exhausts cluster capacity, operators and automated CI/CD controllers can immediately abort the execution via `POST /api/v1/runs/{id}/abort`.
+
+#### 1. Abort an Active Execution:
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff012498beaa/abort \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "Observed unexpected latency spike exceeding SLA boundaries",
+    "requested_by": "qa-automation-pipeline"
+  }'
+```
+
+#### Response (`200 OK`):
+
+```json
+{
+  "id": "98bc19d4-1a3b-4882-a982-ff012498beaa",
+  "suite_id": "suite-auth-checkout",
+  "artifact_id": "c7a6e118-20ab-48d6-953b-e01140026e61",
+  "runner_profile_id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+  "status": "ABORTED",
+  "k8s_job_name": "vuhive-run-98bc19d4",
+  "k8s_namespace": "vuhive-runners",
+  "abort_reason": "Observed unexpected latency spike exceeding SLA boundaries (requested by: qa-automation-pipeline)",
+  "started_at": "2026-09-05T10:14:30Z",
+  "finished_at": "2026-09-05T10:15:02Z",
+  "created_at": "2026-09-05T10:14:25Z"
+}
+```
+
+#### 2. Workload Teardown & Lifecycle Mechanics:
+- **Kubernetes Job & Pod Termination**: The control plane deletes the underlying `batch/v1` Job and dispatches immediate deletion signals to runner pods.
+- **Graceful SIGTERM Propagation**: The runner wrapper traps `SIGTERM`, forwards it to the scenario process, allows an initial grace window for partial stdout/stderr log flushing, and attempts guaranteed upload of remaining logs to S3.
+- **State Machine Protection**: Only `QUEUED` and `RUNNING` executions can be aborted. If a run has already finalized (`COMPLETED`, `FAILED`, or `ABORTED`), the endpoint returns `409 Conflict`.
+- **Informer Watcher Resilience**: The Kubernetes informer watcher cleanly detects the deletion timestamp and avoids falsely flagging the aborted run as a system failure.
+
+---
+
+### Recipe 9: Execution Diagnostics, Log Inspection & Troubleshooting
 
 #### 1. Fetching Execution Logs & Reports via REST API:
 
@@ -658,15 +700,17 @@ kubectl logs -n vuhive-runners pod/<pod-name> -c runner
 | HTTP Status | Error String | Cause | Resolution |
 |---|---|---|---|
 | `400 Bad Request` | `invalid request payload: ...` | Malformed JSON or missing required fields. | Validate request body against API schema. |
-| `404 Not Found` | `suite not found` or `artifact not found` | The requested UUID does not exist. | Verify IDs via `GET /api/v1/suites/{id}/artifacts`. |
-| `404 Not Found` | `test run not found`, `report not found`, `logs not found` | The run ID does not exist or artifacts have not been uploaded to S3. | Verify run ID and verify run status is `COMPLETED` or `FAILED`. |
+| `404 Not Found` | `suite not found`, `run not found`, `artifact not found` | The requested UUID does not exist or artifacts have not been uploaded to S3. | Verify IDs via query endpoints and check run status is `COMPLETED` or `FAILED`. |
+| `404 Not Found` | `report not found` or `logs not found` | S3 artifacts not yet uploaded. | Await run completion before fetching reports/logs. |
+| `409 Conflict` | `cannot transition from a terminal state` | Attempted to abort or complete an already finalized run. | Run is already terminal (`COMPLETED`, `FAILED`, or `ABORTED`). |
 | `409 Conflict` | `build job already running` | A compilation job is already active for this suite/platform. | Await completion or check build job status in builder namespace. |
-| `409 Conflict` | `test run is still in progress` | Report or logs queried while the runner pod is still running. | Await run completion (`COMPLETED` or `FAILED`) before fetching reports/logs. |
+| `409 Conflict` | `test run is still in progress` | Report or logs queried while the runner pod is still running. | Await run completion before fetching reports/logs. |
+| `424 Failed Dependency` | `barrier rendezvous aborted` | Start barrier rendezvous was cancelled by a worker failure. | Inspect worker initialization logs and restart run. |
 | `422 Unprocessable Entity` | `unsupported target platform` | Platform is not `linux/amd64` or `linux/arm64`. | Specify valid platform architecture. |
 
 ---
 
-### Recipe 9: Inspecting BFF Gateway Status & Session Management
+### Recipe 10: Inspecting BFF Gateway Status & Session Management
 
 The Backend-For-Frontend service (`cmd/bff`) acts as the aggregator and API gateway for the web interface, exposing health status and managing client session state.
 

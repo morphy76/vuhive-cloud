@@ -103,6 +103,11 @@ func (o *RunnerOrchestrator) AbortJob(ctx context.Context, k8sJobName, namespace
 		return mapped
 	}
 
+	// Terminate associated runner pods to trigger immediate SIGTERM signal delivery
+	_ = o.client.CoreV1().Pods(trimmedNamespace).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{
+		LabelSelector: "job-name=" + trimmedJobName,
+	})
+
 	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed runner job abort")
 	return nil
 }
