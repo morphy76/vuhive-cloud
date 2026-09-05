@@ -84,6 +84,26 @@ func TestPostgresMigrations_Idempotency(t *testing.T) {
 	require.NoError(t, err, "MigrateUp after reset should succeed")
 }
 
+func TestPostgresMigrations_MigrateUpURL(t *testing.T) {
+	ctx := context.Background()
+	pgContainer, err := tcpostgres.Run(
+		ctx,
+		"postgres:16-alpine",
+		tcpostgres.WithDatabase("vuhivedb_url"),
+		tcpostgres.WithUsername("testuser"),
+		tcpostgres.WithPassword("testpass"),
+		tcpostgres.BasicWaitStrategies(),
+	)
+	require.NoError(t, err, "failed to start postgres container")
+	defer func() { _ = pgContainer.Terminate(ctx) }()
+
+	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	err = postgres.MigrateUpURL(ctx, connStr)
+	require.NoError(t, err, "MigrateUpURL should succeed on fresh database")
+}
+
 func TestRepositories_FullCRUD(t *testing.T) {
 	ctx := context.Background()
 	sqlDB, pool, cleanup := setupPostgresContainer(t)

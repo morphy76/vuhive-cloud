@@ -1,6 +1,7 @@
 package postgres_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/morphy76/vuhive-cloud/internal/adapters/outbound/postgres"
@@ -21,4 +22,18 @@ func TestEmbeddedMigrations(t *testing.T) {
 		}
 	}
 	assert.True(t, foundInit, "expected 000001_init_schema.sql to be embedded")
+}
+
+func TestMigrateUpURL_InvalidURL(t *testing.T) {
+	ctx := context.Background()
+	err := postgres.MigrateUpURL(ctx, "postgres://invalid-host:99999/invalid-db?sslmode=disable")
+	assert.Error(t, err)
+}
+
+func TestMigrateUpURL_CanceledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := postgres.MigrateUpURL(ctx, "postgres://127.0.0.1:5432/vuhive?sslmode=disable")
+	assert.Error(t, err)
 }
