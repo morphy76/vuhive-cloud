@@ -29,6 +29,7 @@ const (
 const (
 	DefaultBarrierTimeout = 60 * time.Second
 	DefaultReleaseDelay   = 300 * time.Millisecond
+	MaxBarrierWorkers     = 10000
 )
 
 // WorkerParticipant represents an active worker registered in the barrier.
@@ -64,7 +65,7 @@ func NewBarrierSession(
 	if trimmedRunID == "" {
 		return nil, fmt.Errorf("%w: run ID cannot be empty", ErrValidation)
 	}
-	if totalWorkers < 1 {
+	if totalWorkers < 1 || totalWorkers > MaxBarrierWorkers {
 		return nil, ErrInvalidWorkerCount
 	}
 
