@@ -182,6 +182,52 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		assert.Equal(t, "http://api.vuhive.local/api/v1/runs", runnerEnvMap["API_CALLBACK_URL"])
 	})
 
+	t.Run("successfully generate worker job manifest with partitioning options", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-123", "art-456", nil, profile.ID(), nil)
+		require.NoError(t, err)
+
+		workerIdx := 2
+		workerCnt := 5
+		opts := outbound.RunnerJobOptions{
+			S3BinaryKey: "vuhive-binaries/suite-123/art-456/linux-amd64/runner",
+			S3ConfigKey: "vuhive-configs/suite-123/vuhive.yaml",
+			WorkerIndex: &workerIdx,
+			WorkerCount: &workerCnt,
+			EnvVars: map[string]string{
+				"VUHIVE_WORKER_INDEX":           "2",
+				"VUHIVE_WORKER_COUNT":           "5",
+				"VUHIVE_SCENARIOS_CHECKOUT_VUS": "4",
+			},
+		}
+
+		job, err := generator.GenerateJob(run, profile, opts)
+		require.NoError(t, err)
+		require.NotNil(t, job)
+
+		// Name and labels
+		assert.Contains(t, job.Name, "-worker-2")
+		assert.Equal(t, "2", job.Labels["vuhive.io/worker-index"])
+		assert.Equal(t, "5", job.Labels["vuhive.io/worker-count"])
+
+		// Main container env vars
+		runnerC := job.Spec.Template.Spec.Containers[0]
+		runnerEnvMap := make(map[string]string)
+		for _, e := range runnerC.Env {
+			runnerEnvMap[e.Name] = e.Value
+		}
+
+		expectedReportKey, err := s3adapter.KeyWorkerSummaryReport(run.ID(), 2)
+		require.NoError(t, err)
+		expectedLogsKey, err := s3adapter.KeyWorkerExecutionLogs(run.ID(), 2)
+		require.NoError(t, err)
+
+		assert.Equal(t, expectedReportKey, runnerEnvMap["S3_REPORT_KEY"])
+		assert.Equal(t, expectedLogsKey, runnerEnvMap["S3_LOGS_KEY"])
+		assert.Equal(t, "2", runnerEnvMap["VUHIVE_WORKER_INDEX"])
+		assert.Equal(t, "5", runnerEnvMap["VUHIVE_WORKER_COUNT"])
+		assert.Equal(t, "4", runnerEnvMap["VUHIVE_SCENARIOS_CHECKOUT_VUS"])
+	})
+
 	t.Run("validation error on missing binary key", func(t *testing.T) {
 		run, err := model.NewTestRun("suite-123", "art-456", nil, profile.ID(), nil)
 		require.NoError(t, err)
@@ -201,3 +247,4 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		assert.ErrorIs(t, err, model.ErrValidation)
 	})
 }
+

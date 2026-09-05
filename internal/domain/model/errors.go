@@ -47,4 +47,13 @@ var (
 
 	// ErrInvalidToleration indicates an invalid Kubernetes toleration configuration.
 	ErrInvalidToleration = errors.New("invalid toleration configuration")
+
+	// ErrInvalidWorkerCount indicates worker count must be >= 1.
+	ErrInvalidWorkerCount = errors.New("worker count must be at least 1")
+
+	// ErrInvalidWorkerIndex indicates worker index is negative or >= worker count.
+	ErrInvalidWorkerIndex = errors.New("worker index out of bounds")
+
+	// ErrNoScenariosDefined indicates configuration lacks scenario definitions.
+	ErrNoScenariosDefined = errors.New("no scenarios defined in configuration")
 )
