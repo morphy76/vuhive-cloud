@@ -39,7 +39,7 @@ Official Helm chart for deploying the **`vuhive-cloud`** control plane on Kubern
 
 ## Architecture in Kubernetes
 
-The `vuhive-cloud` Helm chart deploys the following Kubernetes primitives:
+The `vuhive-cloud` Helm chart deploys the control plane server and associated orchestrator roles (with optional BFF sub-deployment in Milestone 1.5):
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐

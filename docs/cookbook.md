@@ -20,6 +20,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
   - [Recipe 6: Reporting Run Completion & Ingesting Performance KPIs](#recipe-6-reporting-run-completion--ingesting-performance-kpis)
   - [Recipe 7: Synchronizing Distributed Multi-Pod Runs with Start Barrier](#recipe-7-synchronizing-distributed-multi-pod-runs-with-start-barrier)
   - [Recipe 8: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-8-execution-diagnostics-log-inspection--troubleshooting)
+  - [Recipe 9: Inspecting BFF Gateway Status & Session Management](#recipe-9-inspecting-bff-gateway-status--session-management)
 
 ---
 
@@ -577,6 +578,65 @@ kubectl logs -n vuhive-runners pod/<pod-name> -c runner
 | `404 Not Found` | `suite not found` or `artifact not found` | The requested UUID does not exist. | Verify IDs via `GET /api/v1/suites/{id}/artifacts`. |
 | `409 Conflict` | `build job already running` | A compilation job is already active for this suite/platform. | Await completion or check build job status in builder namespace. |
 | `422 Unprocessable Entity` | `unsupported target platform` | Platform is not `linux/amd64` or `linux/arm64`. | Specify valid platform architecture. |
+
+---
+
+### Recipe 9: Inspecting BFF Gateway Status & Session Management
+
+The Backend-For-Frontend service (`cmd/bff`) acts as the aggregator and API gateway for the web interface, exposing health status and managing client session state.
+
+#### 1. Checking BFF Aggregated Health & Control Plane Connectivity:
+
+```bash
+curl -s -i http://localhost:8081/api/v1/bff/status
+```
+
+Expected response (`200 OK`):
+
+```json
+{
+  "bff_status": "UP",
+  "bff_version": "0.0.1",
+  "control_plane_status": "UP",
+  "control_plane_version": "0.0.1",
+  "timestamp": "2026-09-05T11:45:00Z"
+}
+```
+
+#### 2. Creating an Authenticated Client Session:
+
+```bash
+curl -s -i -X POST http://localhost:8081/api/v1/bff/sessions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "sess-usr-12345",
+    "user_id": "operator@vuhive.local",
+    "ttl_seconds": 3600,
+    "metadata": {
+      "role": "admin"
+    }
+  }'
+```
+
+Expected response (`201 Created`):
+
+```json
+{
+  "id": "sess-usr-12345",
+  "user_id": "operator@vuhive.local",
+  "created_at": "2026-09-05T11:45:00Z",
+  "expires_at": "2026-09-05T12:45:00Z",
+  "metadata": {
+    "role": "admin"
+  }
+}
+```
+
+#### 3. Retrieving Active Session Context:
+
+```bash
+curl -s -i http://localhost:8081/api/v1/bff/sessions/sess-usr-12345
+```
 
 ---
 
