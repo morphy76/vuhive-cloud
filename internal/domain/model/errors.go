@@ -47,4 +47,22 @@ var (
 
 	// ErrInvalidToleration indicates an invalid Kubernetes toleration configuration.
 	ErrInvalidToleration = errors.New("invalid toleration configuration")
+
+	// ErrBarrierNotFound indicates the barrier session was not found.
+	ErrBarrierNotFound = errors.New("barrier session not found")
+
+	// ErrBarrierAborted indicates the rendezvous was aborted by a worker or coordinator.
+	ErrBarrierAborted = errors.New("barrier rendezvous aborted")
+
+	// ErrBarrierTimeout indicates the barrier timed out waiting for all participants.
+	ErrBarrierTimeout = errors.New("barrier rendezvous timed out")
+
+	// ErrBarrierReleased indicates the barrier has already released participants.
+	ErrBarrierReleased = errors.New("barrier session already released")
+
+	// ErrWorkerAlreadyRegistered indicates a worker ID has already joined the barrier.
+	ErrWorkerAlreadyRegistered = errors.New("worker already registered in barrier")
+
+	// ErrInvalidWorkerCount indicates an invalid expected worker count.
+	ErrInvalidWorkerCount = errors.New("invalid worker count: must be at least 1")
 )

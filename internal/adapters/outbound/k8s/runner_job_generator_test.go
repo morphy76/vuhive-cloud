@@ -2,6 +2,7 @@ package k8s_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -199,5 +200,42 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 
 		_, err = generator.GenerateJob(run, nil, outbound.RunnerJobOptions{S3BinaryKey: "some/key"})
 		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("generate multi-worker job with barrier enabled", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-123", "art-456", nil, profile.ID(), nil)
+		require.NoError(t, err)
+
+		opts := outbound.RunnerJobOptions{
+			S3BinaryKey:    "vuhive-binaries/suite-123/art-456/linux-amd64/runner",
+			WorkerCount:    3,
+			BarrierEnabled: true,
+			BarrierTimeout: 45 * time.Second,
+		}
+
+		job, err := generator.GenerateJob(run, profile, opts)
+		require.NoError(t, err)
+		require.NotNil(t, job)
+
+		require.NotNil(t, job.Spec.Parallelism)
+		assert.Equal(t, int32(3), *job.Spec.Parallelism)
+		require.NotNil(t, job.Spec.Completions)
+		assert.Equal(t, int32(3), *job.Spec.Completions)
+
+		runnerC := job.Spec.Template.Spec.Containers[0]
+		envMap := make(map[string]string)
+		var workerIDRef *corev1.ObjectFieldSelector
+		for _, e := range runnerC.Env {
+			envMap[e.Name] = e.Value
+			if e.Name == "VUHIVE_WORKER_ID" && e.ValueFrom != nil && e.ValueFrom.FieldRef != nil {
+				workerIDRef = e.ValueFrom.FieldRef
+			}
+		}
+
+		assert.Equal(t, "3", envMap["VUHIVE_WORKER_COUNT"])
+		assert.Equal(t, "true", envMap["VUHIVE_BARRIER_ENABLED"])
+		assert.Equal(t, "45s", envMap["VUHIVE_BARRIER_TIMEOUT"])
+		require.NotNil(t, workerIDRef)
+		assert.Equal(t, "metadata.name", workerIDRef.FieldPath)
 	})
 }

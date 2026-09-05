@@ -397,3 +397,80 @@ func ToRunResponse(r *model.TestRun) RunResponse {
 	}
 }
 
+// BarrierAwaitRequest defines the JSON payload sent by worker pods to wait at the start barrier.
+type BarrierAwaitRequest struct {
+	WorkerID       string `json:"worker_id" binding:"required"`
+	TotalWorkers   int    `json:"total_workers" binding:"required,min=1"`
+	TimeoutMs      *int   `json:"timeout_ms"`
+	ReleaseDelayMs *int   `json:"release_delay_ms"`
+}
+
+// BarrierAbortRequest defines the JSON payload sent by a worker to abort the start barrier.
+type BarrierAbortRequest struct {
+	WorkerID string `json:"worker_id" binding:"required"`
+	Reason   string `json:"reason" binding:"required"`
+}
+
+// BarrierParticipantResponse represents an individual worker participant in the barrier response.
+type BarrierParticipantResponse struct {
+	WorkerID    string  `json:"worker_id"`
+	Status      string  `json:"status"`
+	JoinedAt    string  `json:"joined_at"`
+	ReadyAt     *string `json:"ready_at,omitempty"`
+	ErrorReason string  `json:"error_reason,omitempty"`
+}
+
+// BarrierResponse represents the JSON response for barrier rendezvous endpoints.
+type BarrierResponse struct {
+	RunID           string                       `json:"run_id"`
+	WorkerID        string                       `json:"worker_id,omitempty"`
+	Status          string                       `json:"status"`
+	TotalWorkers    int                          `json:"total_workers"`
+	ReadyWorkers    int                          `json:"ready_workers"`
+	TargetStartTime *string                      `json:"target_start_time,omitempty"`
+	StartInMs       int64                        `json:"start_in_ms,omitempty"`
+	AbortReason     string                       `json:"abort_reason,omitempty"`
+	Participants    []BarrierParticipantResponse `json:"participants,omitempty"`
+}
+
+// ToBarrierResponse converts a domain model.BarrierSession into a BarrierResponse DTO.
+func ToBarrierResponse(s *model.BarrierSession) BarrierResponse {
+	var targetTimeStr *string
+	var startInMs int64
+	if s.TargetStartTime() != nil {
+		tStr := s.TargetStartTime().Format(time.RFC3339Nano)
+		targetTimeStr = &tStr
+		d := time.Until(*s.TargetStartTime())
+		if d > 0 {
+			startInMs = d.Milliseconds()
+		}
+	}
+
+	participants := make([]BarrierParticipantResponse, 0, len(s.Participants()))
+	for _, p := range s.Participants() {
+		var readyAtStr *string
+		if p.ReadyAt != nil {
+			r := p.ReadyAt.Format(time.RFC3339Nano)
+			readyAtStr = &r
+		}
+		participants = append(participants, BarrierParticipantResponse{
+			WorkerID:    p.WorkerID,
+			Status:      string(p.Status),
+			JoinedAt:    p.JoinedAt.Format(time.RFC3339Nano),
+			ReadyAt:     readyAtStr,
+			ErrorReason: p.ErrorReason,
+		})
+	}
+
+	return BarrierResponse{
+		RunID:           s.RunID(),
+		Status:          string(s.Status()),
+		TotalWorkers:    s.TotalWorkers(),
+		ReadyWorkers:    s.ReadyCount(),
+		TargetStartTime: targetTimeStr,
+		StartInMs:       startInMs,
+		AbortReason:     s.AbortReason(),
+		Participants:    participants,
+	}
+}
+

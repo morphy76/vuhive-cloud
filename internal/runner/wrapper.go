@@ -26,19 +26,22 @@ type HTTPClient interface {
 
 // RunnerWrapper manages test binary execution, output capture, signal trapping, and artifact upload to S3.
 type RunnerWrapper struct {
-	storage    outbound.StoragePort
-	httpClient HTTPClient
-	stdout     io.Writer
-	stderr     io.Writer
+	storage       outbound.StoragePort
+	httpClient    HTTPClient
+	barrierClient BarrierClient
+	stdout        io.Writer
+	stderr        io.Writer
 }
 
 // NewRunnerWrapper creates a new RunnerWrapper using the provided storage adapter and default standard output/error.
 func NewRunnerWrapper(storage outbound.StoragePort) *RunnerWrapper {
+	client := &http.Client{Timeout: 90 * time.Second}
 	return &RunnerWrapper{
-		storage:    storage,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
-		stdout:     os.Stdout,
-		stderr:     os.Stderr,
+		storage:       storage,
+		httpClient:    client,
+		barrierClient: NewHTTPBarrierClient(client),
+		stdout:        os.Stdout,
+		stderr:        os.Stderr,
 	}
 }
 
@@ -46,6 +49,16 @@ func NewRunnerWrapper(storage outbound.StoragePort) *RunnerWrapper {
 func (w *RunnerWrapper) SetHTTPClient(client HTTPClient) {
 	if client != nil {
 		w.httpClient = client
+		if w.barrierClient == nil {
+			w.barrierClient = NewHTTPBarrierClient(client)
+		}
+	}
+}
+
+// SetBarrierClient allows overriding the barrier client (useful for unit testing).
+func (w *RunnerWrapper) SetBarrierClient(client BarrierClient) {
+	if client != nil {
+		w.barrierClient = client
 	}
 }
 
@@ -70,6 +83,22 @@ func (w *RunnerWrapper) Run(ctx context.Context, cfg WrapperConfig, extraArgs []
 	if err := cfg.Validate(); err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("invalid wrapper configuration")
 		return 1, err
+	}
+
+	// Distributed start barrier coordination (if multi-worker or explicitly enabled)
+	if cfg.BarrierEnabled || cfg.WorkerCount > 1 {
+		bClient := w.barrierClient
+		if bClient == nil {
+			bClient = NewHTTPBarrierClient(w.httpClient)
+		}
+		if err := bClient.Rendezvous(ctx, cfg); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("barrier rendezvous failed; aborting execution")
+			w.guaranteeReportAndLogsUpload(ctx, cfg, 1, fmt.Sprintf("barrier rendezvous failed: %v", err))
+			if cfg.APICallbackURL != "" {
+				w.sendCallback(ctx, cfg, 1)
+			}
+			return 1, err
+		}
 	}
 
 	// Ensure directory for logs and summary exists

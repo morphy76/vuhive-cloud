@@ -3,7 +3,9 @@ package runner
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/morphy76/vuhive-cloud/internal/adapters/outbound/s3"
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
@@ -56,6 +58,12 @@ type WrapperConfig struct {
 	ReportKey      string
 	LogsKey        string
 	APICallbackURL string
+	WorkerID       string
+	WorkerCount    int
+	BarrierEnabled bool
+	BarrierTimeout time.Duration
+	ReleaseDelay   time.Duration
+	CoordinatorURL string
 	S3Config       s3.Config
 }
 
@@ -108,6 +116,41 @@ func (c *WrapperConfig) Validate() error {
 	}
 	if c.LogsKey == "" {
 		return errors.New("logs key is required (provide LogsKey or RunID)")
+	}
+
+	c.WorkerID = strings.TrimSpace(c.WorkerID)
+	if c.WorkerID == "" {
+		if hostname, err := os.Hostname(); err == nil && hostname != "" {
+			c.WorkerID = hostname
+		} else {
+			c.WorkerID = "worker-1"
+		}
+	}
+
+	if c.WorkerCount <= 0 {
+		c.WorkerCount = 1
+	}
+
+	if c.WorkerCount > 1 {
+		c.BarrierEnabled = true
+	}
+
+	if c.BarrierTimeout <= 0 {
+		c.BarrierTimeout = 60 * time.Second
+	}
+
+	if c.ReleaseDelay <= 0 {
+		c.ReleaseDelay = 300 * time.Millisecond
+	}
+
+	c.CoordinatorURL = strings.TrimSpace(c.CoordinatorURL)
+	if c.CoordinatorURL == "" && c.APICallbackURL != "" {
+		base := strings.TrimSuffix(c.APICallbackURL, "/complete")
+		base = strings.TrimSuffix(base, "/runs")
+		if !strings.Contains(base, "/api/v1/runs") {
+			base = strings.TrimRight(base, "/") + "/api/v1/runs"
+		}
+		c.CoordinatorURL = fmt.Sprintf("%s/%s/barrier", base, c.RunID)
 	}
 
 	return nil

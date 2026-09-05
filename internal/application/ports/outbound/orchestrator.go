@@ -2,14 +2,18 @@ package outbound
 
 import (
 	"context"
+	"time"
 
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 )
 
 // RunnerJobOptions specifies the parameters needed to dispatch a runner Job.
 type RunnerJobOptions struct {
-	S3BinaryKey string
-	S3ConfigKey string
+	S3BinaryKey    string
+	S3ConfigKey    string
+	WorkerCount    int
+	BarrierEnabled bool
+	BarrierTimeout time.Duration
 }
 
 // RunnerOrchestratorPort defines the driven port for dispatching and managing runner pods on Kubernetes.

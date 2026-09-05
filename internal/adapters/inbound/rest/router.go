@@ -14,6 +14,17 @@ func SetupRouter(
 	schedulesUC inbound.SchedulesUseCase,
 	runsUC inbound.RunsUseCase,
 ) *gin.Engine {
+	return SetupRouterWithBarrier(buildsUC, profilesUC, schedulesUC, runsUC, nil)
+}
+
+// SetupRouterWithBarrier initializes and configures the Gin HTTP engine including optional barrier coordination.
+func SetupRouterWithBarrier(
+	buildsUC inbound.BuildsUseCase,
+	profilesUC inbound.ProfilesUseCase,
+	schedulesUC inbound.SchedulesUseCase,
+	runsUC inbound.RunsUseCase,
+	barrierUC inbound.BarrierUseCase,
+) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
@@ -69,6 +80,16 @@ func SetupRouter(
 			{
 				runs.POST("/:id/complete", runHandler.CompleteRun)
 				runs.POST("/complete", runHandler.CompleteRun)
+			}
+		}
+
+		if barrierUC != nil {
+			barrierHandler := NewBarrierHandler(barrierUC)
+			runs := v1.Group("/runs")
+			{
+				runs.POST("/:id/barrier/await", barrierHandler.AwaitBarrier)
+				runs.POST("/:id/barrier/abort", barrierHandler.AbortBarrier)
+				runs.GET("/:id/barrier", barrierHandler.GetBarrier)
 			}
 		}
 	}

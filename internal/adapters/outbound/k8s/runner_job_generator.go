@@ -177,6 +177,46 @@ func (g *RunnerJobGenerator) GenerateJob(
 		runnerEnvs = append(runnerEnvs, corev1.EnvVar{Name: "API_CALLBACK_URL", Value: g.cfg.APICallbackURL})
 	}
 
+	// Multi-worker & barrier configuration
+	if opts.WorkerCount > 0 {
+		runnerEnvs = append(runnerEnvs, corev1.EnvVar{
+			Name:  "VUHIVE_WORKER_COUNT",
+			Value: fmt.Sprintf("%d", opts.WorkerCount),
+		})
+	}
+	if opts.BarrierEnabled {
+		runnerEnvs = append(runnerEnvs, corev1.EnvVar{
+			Name:  "VUHIVE_BARRIER_ENABLED",
+			Value: "true",
+		})
+	}
+	if opts.BarrierTimeout > 0 {
+		runnerEnvs = append(runnerEnvs, corev1.EnvVar{
+			Name:  "VUHIVE_BARRIER_TIMEOUT",
+			Value: opts.BarrierTimeout.String(),
+		})
+	}
+	runnerEnvs = append(runnerEnvs, corev1.EnvVar{
+		Name: "VUHIVE_WORKER_ID",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.name",
+			},
+		},
+	})
+
+	var parallelism *int32
+	var completions *int32
+	var completionMode *batchv1.CompletionMode
+	if opts.WorkerCount > 1 {
+		p := int32(opts.WorkerCount)
+		c := int32(opts.WorkerCount)
+		cm := batchv1.IndexedCompletion
+		parallelism = &p
+		completions = &c
+		completionMode = &cm
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -184,6 +224,9 @@ func (g *RunnerJobGenerator) GenerateJob(
 			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
+			Parallelism:             parallelism,
+			Completions:             completions,
+			CompletionMode:          completionMode,
 			BackoffLimit:            &backoffLimit,
 			ActiveDeadlineSeconds:   &activeDeadlineSeconds,
 			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
