@@ -3,6 +3,7 @@ package inbound
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 )
@@ -23,12 +24,23 @@ type TriggerRunCommand struct {
 	RunnerProfileID string
 }
 
+// CompleteRunCommand encapsulates input parameters for finalizing a completed test run.
+type CompleteRunCommand struct {
+	RunID       string
+	ExitCode    *int
+	ReportKey   string
+	LogsKey     string
+	FinishedAt  *time.Time
+	SummaryJSON []byte
+}
+
 // RunsUseCase defines driving use cases for triggering, tracking, and aborting TestRun aggregates.
 type RunsUseCase interface {
 	TriggerRun(ctx context.Context, cmd TriggerRunCommand) (*model.TestRun, error)
 	GetRun(ctx context.Context, id string) (*model.TestRun, error)
 	ListRuns(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error)
 	AbortRun(ctx context.Context, id string, reason string) error
+	CompleteRun(ctx context.Context, cmd CompleteRunCommand) (*model.TestRun, error)
 }
 
 // SchedulesUseCase defines driving use cases for managing recurring TestSchedule aggregates.

@@ -73,7 +73,7 @@ func TestScheduleHandler_CreateSchedule(t *testing.T) {
 			},
 		}
 
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		payload := rest.CreateScheduleRequest{
 			SuiteID:         "suite-1",
@@ -104,7 +104,7 @@ func TestScheduleHandler_CreateSchedule(t *testing.T) {
 
 	t.Run("returns 400 on invalid JSON or missing fields", func(t *testing.T) {
 		mockUC := &mockSchedulesUseCase{}
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		req, err := http.NewRequest(http.MethodPost, "/api/v1/schedules", bytes.NewReader([]byte(`{"invalid":`)))
 		require.NoError(t, err)
@@ -122,7 +122,7 @@ func TestScheduleHandler_CreateSchedule(t *testing.T) {
 				return nil, model.ErrNotFound
 			},
 		}
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		payload := rest.CreateScheduleRequest{
 			SuiteID:         "suite-1",
@@ -156,7 +156,7 @@ func TestScheduleHandler_GetSchedule(t *testing.T) {
 			},
 		}
 
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		req, err := http.NewRequest(http.MethodGet, "/api/v1/schedules/"+s.ID(), nil)
 		require.NoError(t, err)
@@ -179,7 +179,7 @@ func TestScheduleHandler_GetSchedule(t *testing.T) {
 			},
 		}
 
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		req, err := http.NewRequest(http.MethodGet, "/api/v1/schedules/unknown", nil)
 		require.NoError(t, err)
@@ -200,7 +200,7 @@ func TestScheduleHandler_ListSchedules(t *testing.T) {
 			},
 		}
 
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		req, err := http.NewRequest(http.MethodGet, "/api/v1/schedules", nil)
 		require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestScheduleHandler_UpdateSchedule(t *testing.T) {
 			},
 		}
 
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		payload := rest.UpdateScheduleRequest{
 			CronExpression: "*/10 * * * *",
@@ -257,7 +257,7 @@ func TestScheduleHandler_UpdateSchedule(t *testing.T) {
 			},
 		}
 
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		payload := rest.UpdateScheduleRequest{CronExpression: "0 0 * * *"}
 		body, _ := json.Marshal(payload)
@@ -281,7 +281,7 @@ func TestScheduleHandler_DeleteSchedule(t *testing.T) {
 			},
 		}
 
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		req, err := http.NewRequest(http.MethodDelete, "/api/v1/schedules/sched-123", nil)
 		require.NoError(t, err)
@@ -299,7 +299,7 @@ func TestScheduleHandler_DeleteSchedule(t *testing.T) {
 			},
 		}
 
-		router := rest.SetupRouter(nil, nil, mockUC)
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
 		req, err := http.NewRequest(http.MethodDelete, "/api/v1/schedules/unknown", nil)
 		require.NoError(t, err)

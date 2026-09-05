@@ -237,3 +237,44 @@ func TestTestRun_SetK8sJobName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "vuhive-run-abc", run.K8sJobName())
 }
+
+func TestTestRun_SetExitCode(t *testing.T) {
+	run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+	require.NoError(t, err)
+	assert.Nil(t, run.ExitCode())
+
+	run.SetExitCode(42)
+	require.NotNil(t, run.ExitCode())
+	assert.Equal(t, 42, *run.ExitCode())
+}
+
+func TestTestRun_FailWithMetrics(t *testing.T) {
+	now := time.Now().UTC()
+	metrics := model.RunMetrics{
+		TotalIterations: 10,
+		TotalRequests:   50,
+	}
+
+	run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+	require.NoError(t, err)
+	require.NoError(t, run.Start("job-1", now))
+
+	finishTime := now.Add(time.Minute)
+	summary := []byte(`{"status":"FAILED"}`)
+	err = run.FailWithMetrics(1, metrics, "s3://rep", "s3://log", summary, finishTime)
+	require.NoError(t, err)
+
+	assert.Equal(t, model.RunStatusFailed, run.Status())
+	require.NotNil(t, run.ExitCode())
+	assert.Equal(t, 1, *run.ExitCode())
+	require.NotNil(t, run.SLAPassed())
+	assert.False(t, *run.SLAPassed())
+	assert.Equal(t, metrics, run.Metrics())
+	assert.Equal(t, "s3://rep", run.S3ReportKey())
+	assert.Equal(t, "s3://log", run.S3LogsKey())
+	assert.Equal(t, summary, run.SummaryJSON())
+	assert.Equal(t, &finishTime, run.FinishedAt())
+
+	// Cannot fail already failed run
+	assert.ErrorIs(t, run.FailWithMetrics(1, metrics, "s3://rep", "s3://log", summary, finishTime), model.ErrTerminalState)
+}

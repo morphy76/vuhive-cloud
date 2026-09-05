@@ -196,12 +196,11 @@ func main() {
 	// Application services wiring
 	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator)
 	profileService := service.NewProfileService(profileRepo)
-	runService := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, runnerOrchestrator)
-	_ = runService
+	runService := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, runnerOrchestrator, storageAdapter)
 	scheduleService := service.NewScheduleService(suiteRepo, artifactRepo, configRepo, profileRepo, scheduleRepo, scheduleOrchestrator)
 
 	// Router setup
-	router := rest.SetupRouter(buildService, profileService, scheduleService)
+	router := rest.SetupRouter(buildService, profileService, scheduleService, runService)
 
 	server := &http.Server{
 		Addr:         ":" + port,

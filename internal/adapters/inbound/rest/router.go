@@ -12,6 +12,7 @@ func SetupRouter(
 	buildsUC inbound.BuildsUseCase,
 	profilesUC inbound.ProfilesUseCase,
 	schedulesUC inbound.SchedulesUseCase,
+	runsUC inbound.RunsUseCase,
 ) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
@@ -61,7 +62,17 @@ func SetupRouter(
 				schedules.DELETE("/:id", scheduleHandler.DeleteSchedule)
 			}
 		}
+
+		if runsUC != nil {
+			runHandler := NewRunHandler(runsUC)
+			runs := v1.Group("/runs")
+			{
+				runs.POST("/:id/complete", runHandler.CompleteRun)
+				runs.POST("/complete", runHandler.CompleteRun)
+			}
+		}
 	}
 
 	return router
 }
+

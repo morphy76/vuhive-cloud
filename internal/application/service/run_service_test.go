@@ -1,8 +1,10 @@
 package service_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 
@@ -199,6 +201,46 @@ func (m *mockRunnerOrchestrator) AbortJob(_ context.Context, k8sJobName, namespa
 	return nil
 }
 
+// Mock storage port
+type mockStoragePort struct {
+	files map[string][]byte
+}
+
+func newMockStoragePort() *mockStoragePort {
+	return &mockStoragePort{files: make(map[string][]byte)}
+}
+func (m *mockStoragePort) Upload(_ context.Context, key string, content io.Reader, _ int64, _ string) error {
+	data, err := io.ReadAll(content)
+	if err != nil {
+		return err
+	}
+	m.files[key] = data
+	return nil
+}
+func (m *mockStoragePort) Download(_ context.Context, key string) (io.ReadCloser, error) {
+	if data, ok := m.files[key]; ok {
+		return io.NopCloser(bytes.NewReader(data)), nil
+	}
+	return nil, model.ErrNotFound
+}
+func (m *mockStoragePort) Delete(_ context.Context, key string) error {
+	delete(m.files, key)
+	return nil
+}
+func (m *mockStoragePort) Exists(_ context.Context, key string) (bool, error) {
+	_, ok := m.files[key]
+	return ok, nil
+}
+func (m *mockStoragePort) PresignDownload(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "http://presigned-download/" + key, nil
+}
+func (m *mockStoragePort) PresignUpload(_ context.Context, key string, _ time.Duration) (string, error) {
+	return "http://presigned-upload/" + key, nil
+}
+func (m *mockStoragePort) EnsureBucket(_ context.Context) error {
+	return nil
+}
+
 func setupTestRunService(t *testing.T) (
 	*service.RunService,
 	*mockSuiteRepo,
@@ -211,12 +253,30 @@ func setupTestRunService(t *testing.T) (
 	*model.Artifact,
 	*model.RunnerProfile,
 ) {
+	svc, suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, _, suite, artifact, profile := setupTestRunServiceWithStorage(t)
+	return svc, suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, suite, artifact, profile
+}
+
+func setupTestRunServiceWithStorage(t *testing.T) (
+	*service.RunService,
+	*mockSuiteRepo,
+	*mockArtifactRepo,
+	*mockConfigRepo,
+	*mockProfileRepo,
+	*mockRunRepo,
+	*mockRunnerOrchestrator,
+	*mockStoragePort,
+	*model.TestSuite,
+	*model.Artifact,
+	*model.RunnerProfile,
+) {
 	suiteRepo := newMockSuiteRepo()
 	artifactRepo := newMockArtifactRepo()
 	configRepo := newMockConfigRepo()
 	profileRepo := newMockProfileRepo()
 	runRepo := newMockRunRepo()
 	orchestrator := newMockRunnerOrchestrator()
+	storage := newMockStoragePort()
 
 	suite, err := model.NewTestSuite("load-tests", "Load test suite")
 	require.NoError(t, err)
@@ -235,9 +295,9 @@ func setupTestRunService(t *testing.T) (
 	require.NoError(t, err)
 	require.NoError(t, profileRepo.Save(context.Background(), profile))
 
-	svc := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator)
+	svc := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, storage)
 
-	return svc, suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, suite, artifact, profile
+	return svc, suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, storage, suite, artifact, profile
 }
 
 func TestRunService_TriggerRun(t *testing.T) {
@@ -409,3 +469,224 @@ func TestRunService_GetListAndAbort(t *testing.T) {
 		assert.ErrorIs(t, err, model.ErrTerminalState)
 	})
 }
+
+func TestRunService_CompleteRun(t *testing.T) {
+	ctx := context.Background()
+
+	validSummaryJSON := []byte(`{
+		"suite_name": "load-tests",
+		"scenario": "checkout",
+		"duration": 30000000000,
+		"passed": true,
+		"metrics": [
+			{
+				"name": "vuhive.vu.iterations_total",
+				"type": "counter",
+				"count": 500
+			},
+			{
+				"name": "vuhive.http.reqs",
+				"type": "counter",
+				"count": 2500
+			},
+			{
+				"name": "vuhive.http.req_duration",
+				"type": "duration",
+				"p50": 10000000,
+				"p90": 20000000,
+				"p95": 30000000,
+				"p99": 45000000
+			}
+		],
+		"thresholds": [
+			{
+				"metric": "vuhive.http.req_duration",
+				"stat": "p95",
+				"passed": true
+			}
+		]
+	}`)
+
+	t.Run("complete run with inline summary JSON", func(t *testing.T) {
+		svc, _, _, _, _, runRepo, _, suite, artifact, profile := setupTestRunService(t)
+
+		run, err := svc.TriggerRun(ctx, inbound.TriggerRunCommand{
+			SuiteID:         suite.ID(),
+			ArtifactID:      artifact.ID(),
+			RunnerProfileID: profile.ID(),
+		})
+		require.NoError(t, err)
+
+		// Start run
+		require.NoError(t, run.Start("job-1", time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		exitCode := 0
+		now := time.Now().UTC()
+		completedRun, err := svc.CompleteRun(ctx, inbound.CompleteRunCommand{
+			RunID:       run.ID(),
+			ExitCode:    &exitCode,
+			ReportKey:   "runs/" + run.ID() + "/summary.json",
+			LogsKey:     "runs/" + run.ID() + "/run.log",
+			FinishedAt:  &now,
+			SummaryJSON: validSummaryJSON,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusCompleted, completedRun.Status())
+		require.NotNil(t, completedRun.ExitCode())
+		assert.Equal(t, 0, *completedRun.ExitCode())
+		require.NotNil(t, completedRun.SLAPassed())
+		assert.True(t, *completedRun.SLAPassed())
+		assert.Equal(t, int64(500), completedRun.Metrics().TotalIterations)
+		assert.Equal(t, int64(2500), completedRun.Metrics().TotalRequests)
+		assert.InDelta(t, 10.0, completedRun.Metrics().P50DurationMs, 0.01)
+		assert.InDelta(t, 45.0, completedRun.Metrics().P99DurationMs, 0.01)
+		assert.Equal(t, "runs/"+run.ID()+"/summary.json", completedRun.S3ReportKey())
+		assert.Equal(t, "runs/"+run.ID()+"/run.log", completedRun.S3LogsKey())
+		assert.NotEmpty(t, completedRun.SummaryJSON())
+
+		// Verify persisted in repo
+		persisted, err := runRepo.FindByID(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusCompleted, persisted.Status())
+		assert.Equal(t, int64(500), persisted.Metrics().TotalIterations)
+	})
+
+	t.Run("complete run by fetching summary report from S3 storage", func(t *testing.T) {
+		svc, _, _, _, _, _, _, storage, suite, artifact, profile := setupTestRunServiceWithStorage(t)
+
+		run, err := svc.TriggerRun(ctx, inbound.TriggerRunCommand{
+			SuiteID:         suite.ID(),
+			ArtifactID:      artifact.ID(),
+			RunnerProfileID: profile.ID(),
+		})
+		require.NoError(t, err)
+
+		reportKey := "runs/" + run.ID() + "/summary.json"
+		logsKey := "runs/" + run.ID() + "/run.log"
+
+		// Pre-populate mock S3 storage
+		require.NoError(t, storage.Upload(ctx, reportKey, bytes.NewReader(validSummaryJSON), int64(len(validSummaryJSON)), "application/json"))
+
+		exitCode := 0
+		completedRun, err := svc.CompleteRun(ctx, inbound.CompleteRunCommand{
+			RunID:     run.ID(),
+			ExitCode:  &exitCode,
+			ReportKey: reportKey,
+			LogsKey:   logsKey,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusCompleted, completedRun.Status())
+		assert.Equal(t, int64(500), completedRun.Metrics().TotalIterations)
+	})
+
+	t.Run("complete run with failed SLA and non-zero exit code", func(t *testing.T) {
+		svc, _, _, _, _, _, _, suite, artifact, profile := setupTestRunService(t)
+
+		run, err := svc.TriggerRun(ctx, inbound.TriggerRunCommand{
+			SuiteID:         suite.ID(),
+			ArtifactID:      artifact.ID(),
+			RunnerProfileID: profile.ID(),
+		})
+		require.NoError(t, err)
+
+		slaFailedJSON := []byte(`{
+			"scenario": "checkout",
+			"passed": false,
+			"metrics": [{"name":"vuhive.vu.iterations_total","type":"counter","count":100}],
+			"thresholds": [{"metric":"vuhive.http.req_duration","stat":"p95","passed":false}]
+		}`)
+
+		exitCode := 1
+		completedRun, err := svc.CompleteRun(ctx, inbound.CompleteRunCommand{
+			RunID:       run.ID(),
+			ExitCode:    &exitCode,
+			SummaryJSON: slaFailedJSON,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusCompleted, completedRun.Status())
+		require.NotNil(t, completedRun.ExitCode())
+		assert.Equal(t, 1, *completedRun.ExitCode())
+		require.NotNil(t, completedRun.SLAPassed())
+		assert.False(t, *completedRun.SLAPassed())
+	})
+
+	t.Run("missing summary report marks run as FAILED", func(t *testing.T) {
+		svc, _, _, _, _, runRepo, _, suite, artifact, profile := setupTestRunService(t)
+
+		run, err := svc.TriggerRun(ctx, inbound.TriggerRunCommand{
+			SuiteID:         suite.ID(),
+			ArtifactID:      artifact.ID(),
+			RunnerProfileID: profile.ID(),
+		})
+		require.NoError(t, err)
+
+		exitCode := 137
+		completedRun, err := svc.CompleteRun(ctx, inbound.CompleteRunCommand{
+			RunID:     run.ID(),
+			ExitCode:  &exitCode,
+			ReportKey: "non-existent-report.json",
+			LogsKey:   "runs/" + run.ID() + "/run.log",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusFailed, completedRun.Status())
+		require.NotNil(t, completedRun.ExitCode())
+		assert.Equal(t, 137, *completedRun.ExitCode())
+
+		// Persisted as FAILED
+		persisted, err := runRepo.FindByID(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusFailed, persisted.Status())
+	})
+
+	t.Run("invalid summary JSON marks run as FAILED", func(t *testing.T) {
+		svc, _, _, _, _, _, _, suite, artifact, profile := setupTestRunService(t)
+
+		run, err := svc.TriggerRun(ctx, inbound.TriggerRunCommand{
+			SuiteID:         suite.ID(),
+			ArtifactID:      artifact.ID(),
+			RunnerProfileID: profile.ID(),
+		})
+		require.NoError(t, err)
+
+		exitCode := 1
+		completedRun, err := svc.CompleteRun(ctx, inbound.CompleteRunCommand{
+			RunID:       run.ID(),
+			ExitCode:    &exitCode,
+			SummaryJSON: []byte("{invalid json corrupt"),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusFailed, completedRun.Status())
+	})
+
+	t.Run("complete run not found fails", func(t *testing.T) {
+		svc, _, _, _, _, _, _, _, _, _ := setupTestRunService(t)
+
+		_, err := svc.CompleteRun(ctx, inbound.CompleteRunCommand{
+			RunID: "non-existent-id",
+		})
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("complete already terminal run fails", func(t *testing.T) {
+		svc, _, _, _, _, runRepo, _, suite, artifact, profile := setupTestRunService(t)
+
+		run, err := svc.TriggerRun(ctx, inbound.TriggerRunCommand{
+			SuiteID:         suite.ID(),
+			ArtifactID:      artifact.ID(),
+			RunnerProfileID: profile.ID(),
+		})
+		require.NoError(t, err)
+
+		// Mark aborted
+		require.NoError(t, run.Abort("abort", time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		_, err = svc.CompleteRun(ctx, inbound.CompleteRunCommand{
+			RunID:       run.ID(),
+			SummaryJSON: validSummaryJSON,
+		})
+		assert.ErrorIs(t, err, model.ErrTerminalState)
+	})
+}
+
