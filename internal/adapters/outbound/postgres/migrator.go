@@ -38,6 +38,32 @@ func MigrateUp(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// MigrateUpURL connects to the database specified by dbURL and executes all pending database migrations.
+func MigrateUpURL(ctx context.Context, dbURL string) error {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().Str("op", "MigrateUpURL").Logger()
+	log.Debug().Msg("starting database migration up from connection url")
+
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to open database connection")
+		return fmt.Errorf("failed to open database connection: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.PingContext(ctx); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to ping database")
+		return fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	if err := MigrateUp(ctx, db); err != nil {
+		return err
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed database migration up from connection url")
+	return nil
+}
+
 // MigrateDown rolls back the most recent database migration.
 func MigrateDown(ctx context.Context, db *sql.DB) error {
 	start := time.Now()

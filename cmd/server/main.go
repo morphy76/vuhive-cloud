@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/morphy76/vuhive-cloud/internal/adapters/inbound/rest"
 	k8sadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/k8s"
 	pgadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/postgres"
@@ -26,8 +28,45 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+func runMigrations(ctx context.Context, dbURL string) error {
+	start := time.Now()
+	log.Debug().Msg("starting database migrations")
+
+	sqlDB, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed opening database connection for migration")
+		return fmt.Errorf("failed opening database connection for migration: %w", err)
+	}
+	defer sqlDB.Close()
+
+	pingCtx, pingCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer pingCancel()
+
+	var pingErr error
+	for {
+		if pingErr = sqlDB.PingContext(pingCtx); pingErr == nil {
+			break
+		}
+		select {
+		case <-pingCtx.Done():
+			log.Error().Err(pingErr).Dur("duration_ms", time.Since(start)).Msg("database unreachable for migration")
+			return fmt.Errorf("database unreachable for migration: %w", pingErr)
+		case <-time.After(1 * time.Second):
+		}
+	}
+
+	if err := pgadapter.MigrateUp(ctx, sqlDB); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("database migrations execution failed")
+		return fmt.Errorf("failed executing database migrations: %w", err)
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed database migrations")
+	return nil
+}
+
 func main() {
 	showVersion := flag.Bool("version", false, "Print version information and exit")
+	migrateOnly := flag.Bool("migrate-only", false, "Run database migrations and exit")
 	portFlag := flag.String("port", "", "Server HTTP port (defaults to PORT env or 8080)")
 	flag.Parse()
 
@@ -40,6 +79,25 @@ func main() {
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if *migrateOnly {
+		dbURL := os.Getenv("DATABASE_URL")
+		if dbURL == "" {
+			dbURL = os.Getenv("POSTGRES_URL")
+		}
+		if dbURL == "" {
+			log.Fatal().Msg("DATABASE_URL or POSTGRES_URL is required when running with --migrate-only")
+		}
+		log.Info().Msg("running database migrations in standalone mode (--migrate-only)")
+		if err := runMigrations(ctx, dbURL); err != nil {
+			log.Fatal().Err(err).Msg("database migrations failed")
+		}
+		log.Info().Msg("database migrations finished successfully")
+		os.Exit(0)
+	}
+
 	port := *portFlag
 	if port == "" {
 		port = os.Getenv("PORT")
@@ -47,9 +105,6 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	log.Info().
 		Str("version", version.Version).
@@ -76,6 +131,13 @@ func main() {
 		dbURL = os.Getenv("POSTGRES_URL")
 	}
 	if dbURL != "" {
+		if os.Getenv("AUTO_MIGRATE") != "false" {
+			log.Info().Msg("running database migrations on server startup")
+			if err := runMigrations(ctx, dbURL); err != nil {
+				log.Fatal().Err(err).Msg("database migrations failed on startup; halting server")
+			}
+		}
+
 		poolConfig, err := pgxpool.ParseConfig(dbURL)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed parsing database url, running without postgres")

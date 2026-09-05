@@ -104,6 +104,8 @@ database:
   # Optional existing secret containing the database connection URL.
   existingSecret: ""
   existingSecretKey: "DATABASE_URL"
+  # Run database migrations via Helm pre-install / pre-upgrade hook job.
+  autoMigrate: true
 
 # ── Infrastructure Bindings: S3 / MinIO ─────────────────────────────────
 # Points to an existing S3/MinIO deployment (e.g. from vuhive-cloud-infra).
