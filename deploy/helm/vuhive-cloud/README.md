@@ -62,6 +62,7 @@ helm install vuhive deploy/helm/vuhive-cloud \
 | `database.password` | PostgreSQL password | `vuhive-dev` |
 | `database.sslmode` | PostgreSQL SSL mode | `disable` |
 | `database.existingSecret` | Existing Secret name for `DATABASE_URL` | `""` |
+| `database.autoMigrate` | Run database migrations via Helm pre-install / pre-upgrade hook job | `true` |
 | `s3.endpoint` | S3 endpoint URL | `http://vuhive-infra-minio:9000` |
 | `s3.region` | S3 region | `us-east-1` |
 | `s3.bucket` | S3 bucket name | `vuhive-artifacts` |
