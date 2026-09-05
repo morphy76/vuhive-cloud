@@ -485,6 +485,17 @@ func TestRepositories_FullCRUD(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, listQueued)
 
+		// D. ListFiltered with pagination and count
+		runsFiltered, totalFiltered, err := runRepo.ListFiltered(ctx, model.RunFilter{
+			SuiteID: suite.ID(),
+			Status:  model.RunStatusCompleted,
+			Limit:   10,
+			Offset:  0,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), totalFiltered)
+		assert.Len(t, runsFiltered, 1)
+
 		// 5. Delete
 		require.NoError(t, runRepo.Delete(ctx, run.ID()))
 		_, err = runRepo.FindByID(ctx, run.ID())

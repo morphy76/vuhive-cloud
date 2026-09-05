@@ -71,4 +71,14 @@ var (
 
 	// ErrNoScenariosDefined indicates configuration lacks scenario definitions.
 	ErrNoScenariosDefined = errors.New("no scenarios defined in configuration")
+
+	// ErrRunInFlight indicates an operation cannot be performed because the test run is still executing.
+	ErrRunInFlight = errors.New("test run is still in flight")
+
+	// ErrReportNotFound indicates an execution summary report was not found.
+	ErrReportNotFound = errors.New("summary report not found")
+
+	// ErrLogsNotFound indicates test execution logs were not found.
+	ErrLogsNotFound = errors.New("execution logs not found")
 )
+

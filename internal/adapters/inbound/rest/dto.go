@@ -338,6 +338,7 @@ type RunResponse struct {
 	K8sNamespace    string        `json:"k8s_namespace,omitempty"`
 	StartedAt       *string       `json:"started_at,omitempty"`
 	FinishedAt      *string       `json:"finished_at,omitempty"`
+	DurationMs      *int64        `json:"duration_ms,omitempty"`
 	ExitCode        *int          `json:"exit_code,omitempty"`
 	SLAPassed       *bool         `json:"sla_passed,omitempty"`
 	Metrics         RunMetricsDTO `json:"metrics"`
@@ -345,6 +346,21 @@ type RunResponse struct {
 	S3LogsKey       string        `json:"s3_logs_key,omitempty"`
 	AbortReason     string        `json:"abort_reason,omitempty"`
 	CreatedAt       string        `json:"created_at"`
+}
+
+// RunListResponse represents the JSON response for a list of TestRuns.
+type RunListResponse struct {
+	Runs   []RunResponse `json:"runs"`
+	Count  int           `json:"count"`
+	Total  int64         `json:"total"`
+	Limit  int           `json:"limit"`
+	Offset int           `json:"offset"`
+}
+
+// PresignedURLResponse represents the JSON response when requesting a presigned artifact download URL.
+type PresignedURLResponse struct {
+	DownloadURL      string `json:"download_url"`
+	ExpiresInSeconds int64  `json:"expires_in_seconds"`
 }
 
 // ToRunMetricsDTO maps domain model.RunMetrics to a RunMetricsDTO.
@@ -387,6 +403,7 @@ func ToRunResponse(r *model.TestRun) RunResponse {
 		K8sNamespace:    r.K8sNamespace(),
 		StartedAt:       startedAtStr,
 		FinishedAt:      finishedAtStr,
+		DurationMs:      r.DurationMs(),
 		ExitCode:        r.ExitCode(),
 		SLAPassed:       r.SLAPassed(),
 		Metrics:         ToRunMetricsDTO(r.Metrics()),
@@ -394,6 +411,21 @@ func ToRunResponse(r *model.TestRun) RunResponse {
 		S3LogsKey:       r.S3LogsKey(),
 		AbortReason:     r.AbortReason(),
 		CreatedAt:       r.CreatedAt().Format(time.RFC3339),
+	}
+}
+
+// ToRunListResponse maps a slice of domain TestRuns and pagination parameters to a RunListResponse DTO.
+func ToRunListResponse(runs []*model.TestRun, total int64, limit, offset int) RunListResponse {
+	items := make([]RunResponse, 0, len(runs))
+	for _, r := range runs {
+		items = append(items, ToRunResponse(r))
+	}
+	return RunListResponse{
+		Runs:   items,
+		Count:  len(items),
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
 	}
 }
 

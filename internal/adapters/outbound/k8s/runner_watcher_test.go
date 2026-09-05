@@ -85,6 +85,16 @@ func (r *inMemoryRunRepo) List(_ context.Context, _ string, _ model.RunStatus) (
 	return list, nil
 }
 
+func (r *inMemoryRunRepo) ListFiltered(_ context.Context, _ model.RunFilter) ([]*model.TestRun, int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var list []*model.TestRun
+	for _, run := range r.runs {
+		list = append(list, run)
+	}
+	return list, int64(len(list)), nil
+}
+
 func (r *inMemoryRunRepo) Delete(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
