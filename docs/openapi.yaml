@@ -1,0 +1,975 @@
+openapi: "3.1.0"
+info:
+  title: vuhive-cloud Control Plane API
+  description: |
+    REST API exposed by the `vuhive-cloud` control plane for managing test suites,
+    artifacts, runner profiles, schedules, test runs, and distributed barrier coordination.
+  version: "0.0.1"
+  contact:
+    name: morphy76
+    url: https://github.com/morphy76/vuhive-cloud
+  license:
+    name: MIT
+    url: https://github.com/morphy76/vuhive-cloud/blob/main/LICENSE
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: http://vuhive-vuhive-cloud.vuhive-system.svc.cluster.local:8080
+    description: In-cluster (default namespace)
+
+tags:
+  - name: health
+    description: Liveness and readiness probes
+  - name: builds
+    description: Source upload and ephemeral compilation into binaries
+  - name: artifacts
+    description: Query compiled artifact records for a test suite
+  - name: profiles
+    description: Runner profile management (resource limits, node affinity, tolerations)
+  - name: schedules
+    description: Recurring test schedule management backed by Kubernetes CronJobs
+  - name: runs
+    description: Test run lifecycle and completion callbacks
+  - name: barrier
+    description: Distributed start barrier / rendezvous for multi-pod coordinated runs
+
+paths:
+  # ── Health ─────────────────────────────────────────────────────────────
+  /healthz:
+    get:
+      tags: [health]
+      summary: Kubernetes liveness / readiness probe
+      operationId: healthz
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/health:
+    get:
+      tags: [health]
+      summary: API health check
+      operationId: apiHealth
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  # ── Builds ─────────────────────────────────────────────────────────────
+  /api/v1/suites/{id}/builds:
+    post:
+      tags: [builds]
+      summary: Upload source archive and trigger an ephemeral build job
+      description: |
+        Accepts a multipart/form-data payload containing the Go test source archive
+        and triggers an ephemeral Kubernetes Job to compile it for the requested platform.
+        The response is returned immediately; the build runs asynchronously.
+      operationId: uploadAndBuild
+      parameters:
+        - $ref: "#/components/parameters/SuiteId"
+        - name: platform
+          in: query
+          description: "Target build platform (e.g. `linux/amd64`, `linux/arm64`)"
+          schema:
+            type: string
+            example: linux/amd64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [source]
+              properties:
+                source:
+                  type: string
+                  format: binary
+                  description: Gzipped tar archive of the Go test module source tree
+      responses:
+        "202":
+          description: Build accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildTriggerResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Artifacts ──────────────────────────────────────────────────────────
+  /api/v1/suites/{id}/artifacts:
+    get:
+      tags: [artifacts]
+      summary: List compiled artifacts for a test suite
+      operationId: listArtifacts
+      parameters:
+        - $ref: "#/components/parameters/SuiteId"
+      responses:
+        "200":
+          description: List of artifacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactListResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Runner Profiles ────────────────────────────────────────────────────
+  /api/v1/profiles:
+    post:
+      tags: [profiles]
+      summary: Create a runner profile
+      operationId: createProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProfileRequest"
+      responses:
+        "201":
+          description: Runner profile created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      tags: [profiles]
+      summary: List all runner profiles
+      operationId: listProfiles
+      responses:
+        "200":
+          description: List of runner profiles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileListResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/profiles/{id}:
+    get:
+      tags: [profiles]
+      summary: Get a runner profile by ID
+      operationId: getProfile
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Runner profile details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    put:
+      tags: [profiles]
+      summary: Update a runner profile
+      operationId: updateProfile
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Runner profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      tags: [profiles]
+      summary: Delete a runner profile
+      operationId: deleteProfile
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Runner profile deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Schedules ──────────────────────────────────────────────────────────
+  /api/v1/schedules:
+    post:
+      tags: [schedules]
+      summary: Create a recurring test schedule (backed by a Kubernetes CronJob)
+      operationId: createSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScheduleRequest"
+      responses:
+        "201":
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    get:
+      tags: [schedules]
+      summary: List all schedules
+      operationId: listSchedules
+      responses:
+        "200":
+          description: List of schedules
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleListResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/schedules/{id}:
+    get:
+      tags: [schedules]
+      summary: Get a schedule by ID
+      operationId: getSchedule
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Schedule details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    put:
+      tags: [schedules]
+      summary: Update a schedule's cron expression
+      operationId: updateSchedule
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateScheduleRequest"
+      responses:
+        "200":
+          description: Schedule updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      tags: [schedules]
+      summary: Delete a schedule and its backing Kubernetes CronJob
+      operationId: deleteSchedule
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "204":
+          description: Schedule deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Runs ───────────────────────────────────────────────────────────────
+  /api/v1/runs/{id}/complete:
+    post:
+      tags: [runs]
+      summary: Report test run completion (called by runner job)
+      description: |
+        Callback endpoint invoked by the runner init container once execution finishes.
+        The run ID can be provided either as a path parameter or in the request body.
+      operationId: completeRunById
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteRunRequest"
+      responses:
+        "200":
+          description: Run completion acknowledged
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/runs/complete:
+    post:
+      tags: [runs]
+      summary: Report test run completion (run ID from body)
+      description: |
+        Alternative completion callback where the run ID is embedded in the request body
+        instead of the URL path.
+      operationId: completeRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteRunRequest"
+      responses:
+        "200":
+          description: Run completion acknowledged
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── Barrier ────────────────────────────────────────────────────────────
+  /api/v1/runs/{id}/barrier/await:
+    post:
+      tags: [barrier]
+      summary: Join the distributed start barrier for a run
+      description: |
+        Worker pods call this endpoint to register themselves at the start barrier
+        (rendezvous point). Once `total_workers` pods have joined, the barrier is
+        released and all participants receive a synchronized `target_start_time`.
+      operationId: awaitBarrier
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BarrierAwaitRequest"
+      responses:
+        "200":
+          description: Barrier status after joining
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BarrierResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/runs/{id}/barrier/abort:
+    post:
+      tags: [barrier]
+      summary: Abort the start barrier for a run
+      description: |
+        A worker pod can abort the barrier (e.g., due to a fatal initialization error).
+        All waiting participants are unblocked and the run transitions to ABORTED.
+      operationId: abortBarrier
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BarrierAbortRequest"
+      responses:
+        "200":
+          description: Barrier aborted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BarrierResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/runs/{id}/barrier:
+    get:
+      tags: [barrier]
+      summary: Get current barrier state for a run
+      operationId: getBarrier
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Current barrier state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BarrierResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+# ── Components ─────────────────────────────────────────────────────────────
+components:
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      description: UUID of the resource
+      schema:
+        type: string
+        format: uuid
+
+    SuiteId:
+      name: id
+      in: path
+      required: true
+      description: UUID of the test suite
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request payload or parameters
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    Conflict:
+      description: Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # ── Generic ──────────────────────────────────────────────────────────
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "resource not found"
+
+    # ── Artifacts ─────────────────────────────────────────────────────────
+    ArtifactResponse:
+      type: object
+      required: [id, suite_id, platform, status, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        suite_id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          example: linux/amd64
+        s3_binary_key:
+          type: string
+          description: S3 object key of the compiled binary (present when status is READY)
+        sha256_checksum:
+          type: string
+          description: SHA-256 checksum of the compiled binary
+        build_logs_s3_key:
+          type: string
+          description: S3 object key of the build logs
+        status:
+          type: string
+          enum: [PENDING, BUILDING, READY, FAILED]
+        error_message:
+          type: string
+          description: Human-readable build failure reason (present when status is FAILED)
+        created_at:
+          type: string
+          format: date-time
+
+    ArtifactListResponse:
+      type: object
+      required: [artifacts, count]
+      properties:
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactResponse"
+        count:
+          type: integer
+
+    BuildTriggerResponse:
+      type: object
+      required: [message, artifacts]
+      properties:
+        message:
+          type: string
+          example: "build triggered"
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactResponse"
+
+    # ── Runner Profiles ────────────────────────────────────────────────────
+    TolerationDTO:
+      type: object
+      properties:
+        key:
+          type: string
+        operator:
+          type: string
+          enum: [Exists, Equal]
+        value:
+          type: string
+        effect:
+          type: string
+          enum: [NoSchedule, PreferNoSchedule, NoExecute]
+        toleration_seconds:
+          type: integer
+          format: int64
+
+    NodeAffinityTermDTO:
+      type: object
+      required: [key, operator]
+      properties:
+        key:
+          type: string
+        operator:
+          type: string
+          enum: [In, NotIn, Exists, DoesNotExist, Gt, Lt]
+        values:
+          type: array
+          items:
+            type: string
+
+    AffinityDTO:
+      type: object
+      properties:
+        node_selector_terms:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeAffinityTermDTO"
+
+    CreateProfileRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        runner_image:
+          type: string
+          example: alpine:3.20
+        cpu_request:
+          type: string
+          example: "100m"
+        cpu_limit:
+          type: string
+          example: "500m"
+        memory_request:
+          type: string
+          example: "128Mi"
+        memory_limit:
+          type: string
+          example: "512Mi"
+        node_selector:
+          type: object
+          additionalProperties:
+            type: string
+        affinity:
+          $ref: "#/components/schemas/AffinityDTO"
+        tolerations:
+          type: array
+          items:
+            $ref: "#/components/schemas/TolerationDTO"
+
+    UpdateProfileRequest:
+      allOf:
+        - $ref: "#/components/schemas/CreateProfileRequest"
+
+    ProfileResponse:
+      type: object
+      required: [id, name, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        runner_image:
+          type: string
+        cpu_request:
+          type: string
+        cpu_limit:
+          type: string
+        memory_request:
+          type: string
+        memory_limit:
+          type: string
+        node_selector:
+          type: object
+          additionalProperties:
+            type: string
+        affinity:
+          $ref: "#/components/schemas/AffinityDTO"
+        tolerations:
+          type: array
+          items:
+            $ref: "#/components/schemas/TolerationDTO"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProfileListResponse:
+      type: object
+      required: [profiles, count]
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileResponse"
+        count:
+          type: integer
+
+    # ── Schedules ─────────────────────────────────────────────────────────
+    CreateScheduleRequest:
+      type: object
+      required: [suite_id, artifact_id, runner_profile_id, name, cron_expression]
+      properties:
+        suite_id:
+          type: string
+          format: uuid
+        artifact_id:
+          type: string
+          format: uuid
+        configuration_id:
+          type: string
+          format: uuid
+          nullable: true
+        runner_profile_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        cron_expression:
+          type: string
+          example: "*/5 * * * *"
+
+    UpdateScheduleRequest:
+      type: object
+      required: [cron_expression]
+      properties:
+        cron_expression:
+          type: string
+          example: "0 * * * *"
+
+    ScheduleResponse:
+      type: object
+      required: [id, suite_id, artifact_id, runner_profile_id, name, cron_expression, k8s_cronjob_name, is_active, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        suite_id:
+          type: string
+          format: uuid
+        artifact_id:
+          type: string
+          format: uuid
+        configuration_id:
+          type: string
+          format: uuid
+          nullable: true
+        runner_profile_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        cron_expression:
+          type: string
+        k8s_cronjob_name:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ScheduleListResponse:
+      type: object
+      required: [schedules, count]
+      properties:
+        schedules:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduleResponse"
+        count:
+          type: integer
+
+    # ── Runs ──────────────────────────────────────────────────────────────
+    CompleteRunRequest:
+      type: object
+      properties:
+        run_id:
+          type: string
+          format: uuid
+          description: Run ID (required when using the path-less /runs/complete endpoint)
+        exit_code:
+          type: integer
+          nullable: true
+        report_key:
+          type: string
+          description: S3 object key of the uploaded JSON report
+        logs_key:
+          type: string
+          description: S3 object key of the uploaded execution log
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        summary:
+          type: object
+          additionalProperties: true
+          description: Arbitrary key/value summary from the test report
+
+    RunMetricsDTO:
+      type: object
+      properties:
+        total_iterations:
+          type: integer
+          format: int64
+        total_requests:
+          type: integer
+          format: int64
+        avg_tps:
+          type: number
+          format: double
+        p50_duration_ms:
+          type: number
+          format: double
+        p90_duration_ms:
+          type: number
+          format: double
+        p95_duration_ms:
+          type: number
+          format: double
+        p99_duration_ms:
+          type: number
+          format: double
+        error_rate_pct:
+          type: number
+          format: double
+
+    RunResponse:
+      type: object
+      required: [id, suite_id, artifact_id, runner_profile_id, status, metrics, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        suite_id:
+          type: string
+          format: uuid
+        artifact_id:
+          type: string
+          format: uuid
+        configuration_id:
+          type: string
+          format: uuid
+          nullable: true
+        runner_profile_id:
+          type: string
+          format: uuid
+        schedule_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, RUNNING, COMPLETED, FAILED, ABORTED]
+        k8s_job_name:
+          type: string
+        k8s_namespace:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        exit_code:
+          type: integer
+          nullable: true
+        sla_passed:
+          type: boolean
+          nullable: true
+        metrics:
+          $ref: "#/components/schemas/RunMetricsDTO"
+        s3_report_key:
+          type: string
+        s3_logs_key:
+          type: string
+        abort_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Barrier ────────────────────────────────────────────────────────────
+    BarrierAwaitRequest:
+      type: object
+      required: [worker_id, total_workers]
+      properties:
+        worker_id:
+          type: string
+          description: Unique identifier for this worker pod (e.g. pod name)
+        total_workers:
+          type: integer
+          minimum: 1
+          description: Total number of workers expected at the barrier
+        timeout_ms:
+          type: integer
+          nullable: true
+          description: Maximum milliseconds to wait for all workers to join
+        release_delay_ms:
+          type: integer
+          nullable: true
+          description: Additional delay added to the synchronized start time after all workers join
+
+    BarrierAbortRequest:
+      type: object
+      required: [worker_id, reason]
+      properties:
+        worker_id:
+          type: string
+        reason:
+          type: string
+
+    BarrierParticipantResponse:
+      type: object
+      required: [worker_id, status, joined_at]
+      properties:
+        worker_id:
+          type: string
+        status:
+          type: string
+          enum: [WAITING, READY, ABORTED]
+        joined_at:
+          type: string
+          format: date-time
+        ready_at:
+          type: string
+          format: date-time
+          nullable: true
+        error_reason:
+          type: string
+
+    BarrierResponse:
+      type: object
+      required: [run_id, status, total_workers, ready_workers]
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        worker_id:
+          type: string
+          description: Echo of the requesting worker_id (present on await/abort responses)
+        status:
+          type: string
+          enum: [WAITING, READY, ABORTED]
+        total_workers:
+          type: integer
+        ready_workers:
+          type: integer
+        target_start_time:
+          type: string
+          format: date-time
+          nullable: true
+          description: UTC time at which all workers should start execution simultaneously
+        start_in_ms:
+          type: integer
+          format: int64
+          description: Milliseconds until target_start_time (0 if already elapsed)
+        abort_reason:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/BarrierParticipantResponse"
