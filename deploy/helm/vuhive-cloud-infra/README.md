@@ -13,6 +13,13 @@ The `vuhive-cloud-infra` umbrella chart bundles community-proven Helm subcharts:
 > [!WARNING]
 > This chart is intended for **local development and evaluation** only (e.g., Rancher Desktop, Kind, Minikube). For production deployments, provision PostgreSQL and S3/MinIO via managed cloud services and reference them from the [`vuhive-cloud`](../vuhive-cloud/README.md) chart using `existingSecret`.
 
+> **Documentation Navigation**:
+> - **System Architecture & Overview**: [`README.md`](../../README.md) and [`ARCHITECTURE_SPEC.md`](../../ARCHITECTURE_SPEC.md)
+> - **Control Plane Helm Chart**: [`deploy/helm/vuhive-cloud/README.md`](../vuhive-cloud/README.md)
+> - **Adoption Guide & API Recipes**: [`docs/cookbook.md`](../../docs/cookbook.md)
+> - **REST API Reference**: [`api/openapi.yaml`](../../api/openapi.yaml)
+> - **Engineering Philosophy**: [`AI_DISCLOSURE.md`](../../AI_DISCLOSURE.md)
+
 ## Prerequisites
 
 - Kubernetes 1.28+

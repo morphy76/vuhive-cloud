@@ -60,16 +60,29 @@ For complete architectural specifications, DDD aggregate boundaries, and databas
 
 ---
 
-## Documentation Navigation
+## Development Philosophy & AI Disclosure
 
-| Document | Purpose & Audience |
+`vuhive-cloud` is engineered using **Spec-Driven Development (SDD)** and actively fosters the adoption of autonomous coding agents.
+
+- **The Human "What"**: Human engineers define the specifications, domain boundaries, security invariants, architectural contracts, and acceptance criteria.
+- **The Agent "How"**: Autonomous coding agents execute implementation details, strict TDD cycles (Red-Green-Refactor), plumbing, and mechanical refactoring.
+- **Strict Quality Enforcement**: AI generation is never unchecked—every change is subject to static compile-time interface assertions, race condition detection, automated test suites, linters, and mandatory human review.
+
+For complete details on our development methodology, human oversight model, and guidelines for contributing with AI tools, see **[`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md)**.
+
+---
+
+## Documentation Ecosystem & Navigation
+
+| Document | Role & Audience |
 |---|---|
-| **[`README.md`](./README.md)** | System overview, core capabilities, architecture, and quickstart. |
-| **[`api/openapi.yaml`](./api/openapi.yaml)** | **REST API Specification**: OpenAPI 3.0.3 contract covering test suites, builds, profiles, schedules, runs, performance metrics, reports, logs, and abort lifecycle control. |
-| **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & API Recipes**: Step-by-step `curl` walkthroughs for building suites, runner profiles, scheduling, triggering executions, aborting runs, querying runs/KPIs, retrieving reports and logs, and barrier coordination. |
-| **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Helm Chart**: Production deployment guide, comprehensive configuration values reference, external secrets, RBAC, and security hardening. |
-| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Helm Chart**: Quickstart backing services setup for local evaluation (PostgreSQL + MinIO). |
-| **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | Detailed engineering specification, domain models, database DDL, and multi-milestone roadmap. |
+| **[`README.md`](./README.md)** | **Introduction & Overview**: System capabilities, architectural topology, and project roadmap. |
+| **[`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md)** | **Development Philosophy & AI Disclosure**: Spec-Driven Development (SDD) paradigm, human vs. agent responsibility division, and quality gates. |
+| **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Installation**: Production Helm deployment guide, configuration values reference, external secrets, RBAC, and security hardening. |
+| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation**: Quickstart backing services setup for evaluation (PostgreSQL + MinIO). |
+| **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & API Recipes**: End-to-end recipes for packaging test suites, configuring runner profiles, scheduling CronJobs, dispatching runs, and querying KPIs. |
+| **[`api/openapi.yaml`](./api/openapi.yaml)** | **REST API Reference**: Full OpenAPI 3.0.3 specification covering all control plane endpoints, schemas, and abort lifecycle APIs. |
+| **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | **Architectural Specification**: Bounded contexts, DDD domain aggregates, database schema (DDL), and security postures. |
 
 ---
 
@@ -78,7 +91,7 @@ For complete architectural specifications, DDD aggregate boundaries, and databas
 Get up and running locally on Rancher Desktop, Kind, or Minikube in three steps:
 
 ### 1. Deploy Backing Infrastructure (PostgreSQL + MinIO)
-Deploy the full stack on any Kubernetes cluster (Rancher Desktop, EKS, GKE, AKS):
+Deploy backing services via the local infrastructure chart:
 
 ```bash
 # 1. Add chart repositories
@@ -92,16 +105,22 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --namespace vuhive-system \
   --create-namespace \
   --wait --timeout=180s
+```
 
-# 3. Deploy the control plane
+> For details on database and storage parameters, see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
+
+### 2. Deploy vuhive-cloud Control Plane
+Deploy the control plane connected to the local infrastructure:
+
+```bash
 helm install vuhive deploy/helm/vuhive-cloud \
   --namespace vuhive-system \
   --wait --timeout=120s
 ```
 
-> **MinIO Note**: Setting `s3.endpoint` automatically enables path-style S3 addressing in the control plane server, runner-init, and runner-wrapper — no extra flag needed. See [`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md) for full configuration reference.
+> **MinIO Note**: Setting `s3.endpoint` automatically enables path-style S3 addressing in the control plane server, runner-init, and runner-wrapper — no extra flag needed. See the [Control Plane Helm Installation Guide (`deploy/helm/vuhive-cloud/README.md`)](./deploy/helm/vuhive-cloud/README.md) for full configuration reference and production deployment options.
 
-### 3. Verify Health & Explore API Recipes
+### 3. Verify Health & Explore Adoption Recipes
 
 Port-forward the control plane service:
 
@@ -115,7 +134,7 @@ Verify service liveness:
 curl -i http://localhost:8080/healthz
 ```
 
-To create your first runner profile, upload test suites, and trigger runs, follow the **[Adoption Cookbook (`docs/cookbook.md`)](./docs/cookbook.md)**.
+To create your first runner profile, upload test suites, and trigger runs, follow the **[Adoption Cookbook (`docs/cookbook.md`)](./docs/cookbook.md)**. For full REST API endpoint specifications, refer to the **[OpenAPI Reference (`api/openapi.yaml`)](./api/openapi.yaml)**.
 
 ---
 
@@ -218,3 +237,9 @@ All work is organized across three primary milestones on GitHub:
 - **[Milestone 3: Multi-Namespace, Multi-Cluster & Enterprise SSO](https://github.com/morphy76/vuhive-cloud/milestone/3)**
   - Epic 3.1: Multi-Namespace & Multi-Cluster Dispatcher (#16, #17)
   - Epic 3.2: Enterprise Authentication & RBAC (#18, #19)
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
