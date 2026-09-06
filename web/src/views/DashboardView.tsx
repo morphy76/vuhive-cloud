@@ -3,6 +3,7 @@ import { Activity, Layers, CalendarClock, CheckCircle2, Play, Cpu, ArrowUpRight 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 
 export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({ onNavigate }) => {
   const stats = [
@@ -51,6 +52,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
 
         {/* Quick action buttons */}
         <div className="flex items-center gap-3">
+          <OfflinePreviewBadge />
           <Button
             onClick={() => onNavigate?.('runs')}
             className="min-h-[44px] gap-2"
