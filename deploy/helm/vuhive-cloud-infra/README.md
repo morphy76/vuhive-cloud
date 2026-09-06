@@ -17,7 +17,7 @@ This chart bundles backing infrastructure dependencies for the `vuhive-cloud` co
 > - **Developer & Contributor Guide**: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
 > - **Control Plane Helm Chart**: [`deploy/helm/vuhive-cloud/README.md`](../vuhive-cloud/README.md)
 > - **Adoption Guide & API Recipes**: [`docs/cookbook.md`](../../docs/cookbook.md)
-> - **REST API Reference**: [`api/openapi.yaml`](../../api/openapi.yaml)
+> - **REST API Reference**: [OpenAPI 3.1 Specification (`api/openapi.yaml`)](../../api/openapi.yaml) (served live at `GET /openapi.yaml` and `GET /openapi.json`)
 > - **Engineering Philosophy**: [`AI_DISCLOSURE.md`](../../AI_DISCLOSURE.md)
 
 ## Prerequisites

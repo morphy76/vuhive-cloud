@@ -6,7 +6,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
 > - **System Overview & Architecture**: [`README.md`](../README.md) and [`ARCHITECTURE_SPEC.md`](../ARCHITECTURE_SPEC.md)
 > - **Developer & Contributor Guide**: [`CONTRIBUTING.md`](../CONTRIBUTING.md)
 > - **Installation Guides**: [Control Plane Helm Chart (`deploy/helm/vuhive-cloud/README.md`)](../deploy/helm/vuhive-cloud/README.md) and [Infrastructure Helm Chart (`deploy/helm/vuhive-cloud-infra/README.md`)](../deploy/helm/vuhive-cloud-infra/README.md)
-> - **REST API Specification**: [OpenAPI 3.0.3 Reference (`api/openapi.yaml`)](../api/openapi.yaml)
+> - **REST API Specification**: [OpenAPI 3.1 Reference (`api/openapi.yaml`)](../api/openapi.yaml) (served live at `GET /openapi.yaml` and `GET /openapi.json`)
 > - **Engineering Philosophy**: [Spec-Driven Development & AI Disclosure (`AI_DISCLOSURE.md`)](../AI_DISCLOSURE.md)
 
 ---
@@ -880,7 +880,7 @@ During frontend development (e.g. running Vite on port `5173`), start the Go BFF
 
 ## 4. Next Steps
 
-- **[OpenAPI 3.0.3 Specification](../api/openapi.yaml)**: Complete REST API contract, interactive endpoints, and request/response schemas.
+- **[OpenAPI 3.1 Specification (`api/openapi.yaml`)](../api/openapi.yaml)**: Complete REST API contract, machine-readable schemas, and live endpoints (`GET /openapi.yaml`, `GET /openapi.json`).
 - **[Main Project README](../README.md)**: System overview, architecture diagram, and repository roadmap.
 - **[vuhive-cloud Helm Chart](../deploy/helm/vuhive-cloud/README.md)**: Production deployment instructions and configuration parameter reference.
 - **[vuhive-cloud-infra Helm Chart](../deploy/helm/vuhive-cloud-infra/README.md)**: Local backing services guide (PostgreSQL + MinIO + Swagger UI OpenAPI viewer).

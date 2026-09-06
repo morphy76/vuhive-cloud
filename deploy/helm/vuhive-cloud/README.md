@@ -11,7 +11,7 @@ Official Helm chart for the `vuhive-cloud` control plane.
 > - **Developer & Contributor Guide**: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
 > - **Infrastructure Chart (PostgreSQL + MinIO + OpenAPI Viewer)**: [`deploy/helm/vuhive-cloud-infra/README.md`](../vuhive-cloud-infra/README.md)
 > - **Adoption Guide & API Recipes**: [`docs/cookbook.md`](../../docs/cookbook.md)
-> - **REST API Reference**: [`api/openapi.yaml`](../../api/openapi.yaml)
+> - **REST API Reference**: [OpenAPI 3.1 Specification (`api/openapi.yaml`)](../../api/openapi.yaml) (served live at `GET /openapi.yaml` and `GET /openapi.json`)
 > - **Engineering Philosophy**: [`AI_DISCLOSURE.md`](../../AI_DISCLOSURE.md)
 
 ### Architecture Components

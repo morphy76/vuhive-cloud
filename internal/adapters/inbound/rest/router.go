@@ -4,7 +4,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/morphy76/vuhive-cloud/api"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/inbound"
+	"github.com/morphy76/vuhive-cloud/internal/version"
 )
 
 // SetupRouter initializes and configures the Gin HTTP engine with routes and middleware.
@@ -37,6 +39,23 @@ func SetupRouterWithBarrier(
 	}
 	router.GET("/healthz", healthHandler)
 	router.GET("/api/v1/health", healthHandler)
+
+	// Runtime version endpoint
+	router.GET("/version", func(c *gin.Context) {
+		c.JSON(http.StatusOK, VersionResponse{
+			Version:   version.Version,
+			Commit:    version.Commit,
+			BuildTime: version.BuildTime,
+		})
+	})
+
+	// Machine-readable OpenAPI 3.1 specifications
+	router.GET("/openapi.yaml", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/yaml", api.OpenAPISpecYAML)
+	})
+	router.GET("/openapi.json", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/json", api.OpenAPISpecJSON)
+	})
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
