@@ -468,6 +468,46 @@ func TestRunnerJobWatcher_SyncJob(t *testing.T) {
 		assert.NotEmpty(t, completedRun.S3ReportKey())
 		assert.NotEmpty(t, completedRun.S3LogsKey())
 	})
+
+	t.Run("auto-created TestRun records actual job namespace, not the default", func(t *testing.T) {
+		schedule, err := model.NewSchedule(
+			"suite-ns-1",
+			"art-ns-1",
+			nil,
+			"prof-ns-1",
+			"smoke-cron",
+			"*/5 * * * *",
+		)
+		require.NoError(t, err)
+		require.NoError(t, schedRepo.Save(ctx, schedule))
+
+		now := metav1.Now()
+		spawnedJob := &batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "vuhive-sched-smoke-28492021",
+				Namespace: "vuhive-smoke-99999", // custom namespace, NOT "vuhive-runners"
+				Labels: map[string]string{
+					"app.kubernetes.io/name": "vuhive-runner",
+					"vuhive.io/schedule-id":  schedule.ID(),
+				},
+			},
+			Status: batchv1.JobStatus{
+				Active:    1,
+				StartTime: &now,
+			},
+		}
+
+		err = watcher.SyncJob(ctx, spawnedJob)
+		require.NoError(t, err)
+
+		foundRun, err := repo.FindByK8sJobName(ctx, spawnedJob.Name)
+		require.NoError(t, err)
+		require.NotNil(t, foundRun)
+
+		// The TestRun must record the actual execution namespace, not "vuhive-runners"
+		assert.Equal(t, "vuhive-smoke-99999", foundRun.K8sNamespace())
+		assert.Equal(t, spawnedJob.Name, foundRun.K8sJobName())
+	})
 }
 
 func TestRunnerJobWatcher_InformerLifecycle(t *testing.T) {

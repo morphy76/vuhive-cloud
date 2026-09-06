@@ -396,7 +396,11 @@ kubectl create job nightly-adhoc-manual-1 \
   -n vuhive-runners
 ```
 
-The control plane Informer Watcher (`RunnerJobWatcher`) detects the newly spawned Job, inspects its owner references and labels, registers a correlated `TestRun` entity in `QUEUED` / `RUNNING` status, and tracks its execution lifecycle.
+The control plane Informer Watcher (`RunnerJobWatcher`) detects the newly spawned Job, inspects its `vuhive.io/schedule-id` label, auto-creates a correlated `TestRun` entity in `QUEUED` status, and tracks its execution lifecycle. The `TestRun` record stores:
+- `k8s_job_name`: the Kubernetes Job name (e.g. `vuhive-sched-7fa1205c-28492020`)
+- `k8s_namespace`: the **actual** namespace where the Job ran (e.g. `vuhive-runners`), not a hard-coded default
+
+> **Run Correlation for CronJob-spawned pods**: The runner pod's `VUHIVE_RUN_ID` environment variable is populated from `metadata.labels['batch.kubernetes.io/job-name']` — the Kubernetes Job name automatically injected onto every pod in the Job. When the runner-wrapper POSTs the completion callback with `run_id = <job-name>`, the control plane resolves the `TestRun` first by UUID lookup, then by `k8s_job_name` as a fallback, ensuring the completion report and KPIs are always correctly indexed.
 
 #### 2. Pod Lifecycle & Security Architecture:
 

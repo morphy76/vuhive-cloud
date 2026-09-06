@@ -164,7 +164,11 @@ func (g *CronJobGenerator) GenerateCronJob(
 			Name: "VUHIVE_RUN_ID",
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "metadata.name",
+					// Use the Job-name label injected by Kubernetes onto every pod belonging
+					// to a Job. This ensures the runner-wrapper sends the Job name in the
+					// completion callback, which the control plane can correlate via
+					// k8s_job_name even when FindByID (UUID lookup) finds nothing.
+					FieldPath: "metadata.labels['batch.kubernetes.io/job-name']",
 				},
 			},
 		},
