@@ -140,7 +140,9 @@ builder:
   image: "golang:1.26-alpine"
 
 # API Callback URL used by runner jobs to report completion/status to control plane.
-# If empty, automatically configured as http://<fullname>.<namespace>.svc.cluster.local:<port>
+# If empty, automatically configured as:
+#   - http://<fullname>:<port>/api/v1/runs/complete (when runner and control plane share the same namespace)
+#   - http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete (cross-namespace, trailing dot mitigates ndots:5 upstream search hijacking)
 apiCallbackUrl: ""
 
 nodeSelector: {}

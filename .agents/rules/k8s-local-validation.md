@@ -100,7 +100,7 @@ sed -n '1,/-- +goose Down/p' internal/adapters/outbound/postgres/migrations/0000
 ### Step 4: Workload Deployment (`deploy/helm/vuhive-cloud`)
 Deploy the control plane with local images and namespace overrides:
 - **Scoped RBAC Caveat:** Until Issue #43 is resolved, avoid defaulting `runner.namespace` / `builder.namespace` to external non-existent namespaces (`vuhive-runners`, `vuhive-system`). Explicitly point them to `${SMOKE_NS}` or set `rbac.clusterScoped=true`.
-- **Callback URL Caveat:** To avoid DNS `ndots:5` search domain leaks and ensure proper path routing (Issue #47), explicitly set `apiCallbackUrl` to `http://vuhive-vuhive-cloud:8080/api/v1/runs/complete`:
+- **Callback URL (Issue #47 Resolved):** The chart automatically resolves `apiCallbackUrl` with `/api/v1/runs/complete` and mitigates `ndots:5` search leaks (using the unqualified service name when `runner.namespace` matches the release namespace). Explicit `--set apiCallbackUrl=...` is optional.
 ```bash
 helm --kube-context rancher-desktop install vuhive deploy/helm/vuhive-cloud \
   --namespace "${SMOKE_NS}" \
@@ -109,7 +109,6 @@ helm --kube-context rancher-desktop install vuhive deploy/helm/vuhive-cloud \
   --set runner.namespace="${SMOKE_NS}" \
   --set builder.namespace="${SMOKE_NS}" \
   --set runner.initImage=vuhive/runner-init:local \
-  --set apiCallbackUrl="http://vuhive-vuhive-cloud:8080/api/v1/runs/complete" \
   --wait --timeout=120s
 ```
 

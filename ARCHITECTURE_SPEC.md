@@ -177,7 +177,7 @@ vuhive-cloud/
    - Injected wrapper / post-execution step uploads `/shared/summary.json` and `/shared/run.log` to S3:
      - `s3://vuhive-reports/{run_id}/summary.json`
      - `s3://vuhive-reports/{run_id}/run.log`
-   - Wrapper posts completion callback to `POST /api/v1/runs/{id}/complete`.
+   - Wrapper posts completion callback to `POST /api/v1/runs/complete` (with `run_id` in request body) or `POST /api/v1/runs/{id}/complete`.
    - Control plane parses `summary.json`, verifies the deterministic `vuhive` report schema, extracts SLA pass/fail status, latency percentiles (`p50`, `p90`, `p95`, `p99`), total iterations, throughput TPS, and updates the `test_runs` record in PostgreSQL. Runs with invalid or missing summary reports are flagged as `FAILED`.
 
 ### 4.3 Native K8s CronJob Workflow (Scheduled Runs)
@@ -318,7 +318,8 @@ All endpoints require Header `Authorization: Bearer <token>` or `X-API-Key: <key
 | `POST` | `/api/v1/runs/{id}/abort` | Cancel/abort running K8s Job |
 | `GET` | `/api/v1/runs/{id}/report` | Fetch full `summary.json` report |
 | `GET` | `/api/v1/runs/{id}/logs` | Fetch test execution logs |
-| `POST` | `/api/v1/runs/{id}/complete` | Internal runner callback to finalize report |
+| `POST` | `/api/v1/runs/{id}/complete` | Internal runner callback to finalize report (path ID) |
+| `POST` | `/api/v1/runs/complete` | Internal runner callback to finalize report (body ID) |
 | `POST` | `/api/v1/schedules` | Create a recurring schedule (creates K8s CronJob) |
 | `GET` | `/api/v1/schedules` | List active schedules |
 | `DELETE` | `/api/v1/schedules/{id}` | Delete schedule and associated K8s CronJob |
