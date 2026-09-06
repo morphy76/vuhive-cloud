@@ -99,7 +99,7 @@ func (h *SPAHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 4. Try opening the requested file in the static filesystem
 	f, err := h.fileSystem.Open(cleanPath)
 	if err == nil {
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		stat, err := f.Stat()
 		if err == nil && !stat.IsDir() {
 			h.serveStaticFile(w, cleanPath, f)
@@ -126,7 +126,7 @@ func (h *SPAHandler) serveIndex(w http.ResponseWriter) {
 		_, _ = w.Write([]byte("index.html not found"))
 		return
 	}
-	defer indexFile.Close()
+	defer func() { _ = indexFile.Close() }()
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")

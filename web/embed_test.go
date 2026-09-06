@@ -29,7 +29,7 @@ func TestGetFS_EmbeddedFiles(t *testing.T) {
 		t.Run("embeds "+filename, func(t *testing.T) {
 			f, err := distFS.Open(filename)
 			require.NoError(t, err, "failed to open %s", filename)
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 
 			stat, err := f.Stat()
 			require.NoError(t, err)
