@@ -28,8 +28,16 @@ func HandleError(c *gin.Context, err error) {
 		errors.Is(err, model.ErrInvalidToleration),
 		errors.Is(err, model.ErrInvalidCronExpression),
 		errors.Is(err, model.ErrInvalidWorkerCount),
-		errors.Is(err, model.ErrInvalidStateTransition):
+		errors.Is(err, model.ErrInvalidStateTransition),
+		errors.Is(err, model.ErrMissingGoMod),
+		errors.Is(err, model.ErrMissingVuhiveDependency),
+		errors.Is(err, model.ErrForbiddenImport),
+		errors.Is(err, model.ErrForbiddenPackageMain),
+		errors.Is(err, model.ErrMissingScenarioContract),
+		errors.Is(err, model.ErrInvalidArchive):
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+	case errors.Is(err, model.ErrInsecureOverrideForbidden):
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
 	case errors.Is(err, model.ErrBarrierTimeout):
 		c.JSON(http.StatusRequestTimeout, ErrorResponse{Error: err.Error()})
 	case errors.Is(err, model.ErrBarrierAborted):

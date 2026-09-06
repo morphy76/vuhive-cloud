@@ -74,7 +74,14 @@ func (h *ArtifactHandler) UploadAndBuild(c *gin.Context) {
 		targetPlatform = &p
 	}
 
-	artifacts, err := h.buildsUC.TriggerBuild(ctx, suiteID, targetPlatform, file, header.Size)
+	allowInsecure := false
+	if insecureVal := strings.TrimSpace(c.Request.FormValue("allow_insecure_imports")); insecureVal != "" {
+		allowInsecure = insecureVal == "true" || insecureVal == "1"
+	}
+
+	artifacts, err := h.buildsUC.TriggerBuildWithOptions(ctx, suiteID, targetPlatform, file, header.Size, inbound.BuildOptions{
+		AllowInsecureImports: allowInsecure,
+	})
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed triggering build")
 		HandleError(c, err)

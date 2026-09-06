@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	coordinatoradapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/coordinator"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/service"
+	domainservice "github.com/morphy76/vuhive-cloud/internal/domain/service"
 	"github.com/morphy76/vuhive-cloud/internal/version"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -260,7 +262,20 @@ func main() {
 	}
 
 	// Application services wiring
-	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator)
+	allowInsecure := os.Getenv("ALLOW_INSECURE_IMPORTS") == "true"
+	var whitelistedPackages []string
+	if pkgs := os.Getenv("ALLOWED_IMPORT_PACKAGES"); pkgs != "" {
+		for _, p := range strings.Split(pkgs, ",") {
+			if trimmed := strings.TrimSpace(p); trimmed != "" {
+				whitelistedPackages = append(whitelistedPackages, trimmed)
+			}
+		}
+	}
+	staticAnalyzer := domainservice.NewStaticAnalyzer(domainservice.StaticAnalyzerConfig{
+		AllowInsecureOverride: allowInsecure,
+		WhitelistedPackages:   whitelistedPackages,
+	})
+	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator, staticAnalyzer)
 	profileService := service.NewProfileService(profileRepo)
 	runService := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, runnerOrchestrator, storageAdapter)
 	scheduleService := service.NewScheduleService(suiteRepo, artifactRepo, configRepo, profileRepo, scheduleRepo, scheduleOrchestrator)

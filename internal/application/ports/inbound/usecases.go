@@ -56,9 +56,15 @@ type SchedulesUseCase interface {
 	DeleteSchedule(ctx context.Context, id string) error
 }
 
+// BuildOptions provides optional configuration parameters for artifact compilation.
+type BuildOptions struct {
+	AllowInsecureImports bool
+}
+
 // BuildsUseCase defines driving use cases for compiling test suite sources into binary artifacts.
 type BuildsUseCase interface {
 	TriggerBuild(ctx context.Context, suiteID string, platform *model.Platform, source io.Reader, size int64) ([]*model.Artifact, error)
+	TriggerBuildWithOptions(ctx context.Context, suiteID string, platform *model.Platform, source io.Reader, size int64, opts BuildOptions) ([]*model.Artifact, error)
 	BuildArtifact(ctx context.Context, suiteID, artifactID string) (*model.Artifact, error)
 	BuildSuite(ctx context.Context, suiteID string) ([]*model.Artifact, error)
 	GetArtifact(ctx context.Context, id string) (*model.Artifact, error)

@@ -50,13 +50,28 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
 
 ## 2. Authoring & Packaging Load Tests
 
-### A. Test Scenario Structure
+### A. Test Scenario Structure & Inverted Control Contract
 
-`vuhive-cloud` executes Go test modules implementing load testing scenarios with the [`github.com/morphy76/vuhive`](https://github.com/morphy76/vuhive) engine (current release `v1.1.5`). A minimal test suite consists of a `go.mod` and a Go source file defining the workload:
+`vuhive-cloud` executes Go test modules implementing load testing scenarios with the [`github.com/morphy76/vuhive`](https://github.com/morphy76/vuhive) engine (current release `v1.1.5`).
+
+To enforce consistent operational behavior, signal handling, and metrics collection across distributed Kubernetes runners, `vuhive-cloud` utilizes an **Inverted Control** architectural model:
+- **`package scenario` Enforcement:** User test code **must** declare `package scenario`. User-defined `package main` and `func main()` are strictly forbidden.
+- **Platform-Managed Driver Injection:** The control plane pre-build analyzer validates the uploaded archive and automatically injects an immutable, trusted `main.go` driver that wires the scenario into `vuhive.NewEngine()`, parsing CLI flags (`--summary-export`, `--config`), capturing OS signals (`SIGINT`, `SIGTERM`), and generating execution telemetry.
+- **Direct `go.mod` Dependency:** `go.mod` must explicitly declare a direct `require github.com/morphy76/vuhive <version>` dependency (indirect dependencies are rejected).
+- **Import Blocklist Enforcement:** To prevent crypto-mining, backdoors, or non-load-testing batch workloads, the static analyzer blocks dangerous packages: `os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`, and direct low-level socket creation.
+
+A scenario can implement the contract using any of the supported function or variable signatures:
+1. `func NewScenario() *vuhive.Scenario` (or returning `(*vuhive.Scenario, error)`)
+2. `func Scenario() *vuhive.Scenario`
+3. `func InitScenario() (*vuhive.Scenario, error)`
+4. `func Register(engine *vuhive.Engine)`
+5. An exported package-level variable `var Scenario = ...`
+
+#### Example `scenario.go`:
 
 ```go
-// main.go
-package main
+// scenario.go
+package scenario
 
 import (
 	"context"
@@ -67,10 +82,10 @@ import (
 	"github.com/morphy76/vuhive"
 )
 
-func main() {
+func NewScenario() *vuhive.Scenario {
 	client := &http.Client{Timeout: 5 * time.Second}
 
-	scenario := vuhive.NewScenario("User Checkout Flow").
+	return vuhive.NewScenario("User Checkout Flow").
 		Step("Homepage", func(ctx context.Context) error {
 			resp, err := client.Get("http://target-service.default.svc.cluster.local/healthz")
 			if err != nil || resp.StatusCode != http.StatusOK {
@@ -78,15 +93,6 @@ func main() {
 			}
 			return nil
 		})
-
-	engine := vuhive.NewEngine(vuhive.EngineConfig{
-		DefaultDuration: 30 * time.Second,
-		DefaultVUs:      10,
-	})
-
-	if err := engine.Run(scenario); err != nil {
-		panic(err)
-	}
 }
 ```
 
@@ -102,11 +108,14 @@ require github.com/morphy76/vuhive v1.1.5
 
 ### B. Packaging Source Archives
 
-Compress your test scenario into a standard `.tar.gz` archive before uploading:
+Compress your test scenario files into a standard `.tar.gz` archive before uploading:
 
 ```bash
-tar -czvf test-suite.tar.gz main.go go.mod
+tar -czvf test-suite.tar.gz scenario.go go.mod
 ```
+
+> [!TIP]
+> You may organize helper packages or multiple Go files inside subdirectories, as long as the scenario entrypoint is declared under `package scenario` and `go.mod` sits at the package root.
 
 ### C. Scenario Configuration (`vuhive.yaml`)
 
@@ -135,7 +144,7 @@ All examples assume the control plane is reachable at `http://vuhive-cloud.vuhiv
 
 ### Recipe 1: Registering a Test Suite & Uploading Source Packages
 
-Upload the source archive to trigger an asynchronous compilation build job in Kubernetes.
+Upload the source archive to trigger synchronous static analysis and schedule an asynchronous compilation build job in Kubernetes.
 
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/suites/suite-auth-checkout/builds \
@@ -145,6 +154,26 @@ curl -i -X POST http://localhost:8080/api/v1/suites/suite-auth-checkout/builds \
 
 > [!TIP]
 > You can target `linux/amd64` or `linux/arm64`. If `platform` is omitted or set to `all`, artifacts for both architectures will be scheduled for compilation.
+
+#### Pre-Build Static Validation & Fast Rejection:
+The control plane executes static analysis **before** accepting the package:
+- If `go.mod` is missing or does not require `github.com/morphy76/vuhive` directly, returns `400 Bad Request` with `code: "MISSING_VUHIVE_DEPENDENCY"`.
+- If user declares `package main` or `func main()`, returns `400 Bad Request` with `code: "FORBIDDEN_PACKAGE_MAIN"`.
+- If user imports a blocked package (e.g. `os/exec`, `syscall`), returns `400 Bad Request` with `code: "FORBIDDEN_IMPORT"`.
+- If no scenario contract is found, returns `400 Bad Request` with `code: "MISSING_SCENARIO_CONTRACT"`.
+
+#### Bypassing Blocklist via Insecure Import Override:
+If your cluster administrator enabled insecure import overrides (`ALLOW_INSECURE_IMPORTS=true` or Helm `build.allowInsecureImports: true`), you can bypass the import blocklist by passing `allow_insecure_imports=true`:
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/suites/suite-auth-checkout/builds \
+  -F "source=@test-suite.tar.gz" \
+  -F "platform=linux/amd64" \
+  -F "allow_insecure_imports=true"
+```
+
+> [!CAUTION]
+> If cluster policy forbids overrides, attempting to pass `allow_insecure_imports=true` will be rejected with `403 Forbidden` (`code: "INSECURE_OVERRIDE_FORBIDDEN"`). Artifacts built with insecure imports enabled are flagged with `is_dangerous: true`.
 
 #### Response (`202 Accepted`):
 
@@ -213,7 +242,7 @@ If a build fails (e.g., a missing `go.mod` or a compile-time error), fix your so
 
 ```bash
 # Fix your source, re-package, and re-upload
-tar -czvf test-suite-fixed.tar.gz main.go go.mod
+tar -czvf test-suite-fixed.tar.gz scenario.go go.mod
 
 curl -i -X POST http://localhost:8080/api/v1/suites/suite-auth-checkout/builds \
   -F "source=@test-suite-fixed.tar.gz" \
