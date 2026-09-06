@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import App from '../App'
 
 describe('App & Responsive Shell Layout', () => {
@@ -44,7 +44,7 @@ describe('App & Responsive Shell Layout', () => {
 
   it('toggles dark and light mode themes', () => {
     render(<App />)
-    const themeButton = screen.getByRole('button', { name: /toggle theme/i })
+    const themeButton = screen.getByRole('button', { name: /switch to dark mode/i })
     expect(themeButton).toBeInTheDocument()
 
     // Initially light (or default)
@@ -55,7 +55,8 @@ describe('App & Responsive Shell Layout', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true)
 
     // Toggle back to light
-    fireEvent.click(themeButton)
+    const lightButton = screen.getByRole('button', { name: /switch to light mode/i })
+    fireEvent.click(lightButton)
     expect(document.documentElement.classList.contains('dark')).toBe(false)
   })
 
@@ -74,24 +75,39 @@ describe('App & Responsive Shell Layout', () => {
     expect(screen.getByRole('button', { name: /collapse sidebar/i })).toBeInTheDocument()
   })
 
-  it('opens and closes tablet navigation drawer', () => {
+  it('opens and closes navigation drawer via Radix Dialog', async () => {
     render(<App />)
     const openMenuButton = screen.getByRole('button', { name: /open navigation menu/i })
     expect(openMenuButton).toBeInTheDocument()
 
     // Open drawer
     fireEvent.click(openMenuButton)
-    const closeDrawerButton = screen.getByRole('button', { name: /close navigation menu/i })
-    expect(closeDrawerButton).toBeInTheDocument()
+    
+    // Radix Dialog renders via portal, so we need to check the document
+    await waitFor(() => {
+      // The dialog content with close button should be visible
+      expect(screen.getByRole('button', { name: /close navigation menu/i })).toBeInTheDocument()
+    })
 
     // Close drawer
-    fireEvent.click(closeDrawerButton)
-    expect(screen.queryByRole('button', { name: /close navigation menu/i })).not.toBeInTheDocument()
+    const closeButton = screen.getByRole('button', { name: /close navigation menu/i })
+    fireEvent.click(closeButton)
+    
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /close navigation menu/i })).not.toBeInTheDocument()
+    })
   })
 
   it('renders mobile bottom navigation bar', () => {
     render(<App />)
     const bottomNav = screen.getByRole('navigation', { name: /mobile bottom navigation/i })
     expect(bottomNav).toBeInTheDocument()
+  })
+
+  it('renders skip-to-main-content link', () => {
+    const { container } = render(<App />)
+    const skipLink = container.querySelector('a[href="#main-content"]')
+    expect(skipLink).toBeInTheDocument()
+    expect(skipLink?.textContent).toContain('Skip to main content')
   })
 })

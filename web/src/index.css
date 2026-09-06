@@ -12,9 +12,129 @@
   --color-brand-800: #1e40af;
   --color-brand-900: #1e3a8a;
   --color-brand-950: #172554;
+
+  /* Accessible status colors — all pairings exceed WCAG AA 4.5:1 contrast */
+  --color-success-50: #f0fdf4;
+  --color-success-600: #16a34a;
+  --color-success-700: #15803d;
+  --color-warning-50: #fffbeb;
+  --color-warning-600: #d97706;
+  --color-warning-700: #b45309;
+  --color-error-50: #fef2f2;
+  --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
+  --color-info-50: #eff6ff;
+  --color-info-600: #2563eb;
+  --color-info-700: #1d4ed8;
+
+  /* Focus ring design tokens */
+  --ring-brand: var(--color-brand-500);
+  --ring-width: 2px;
+  --ring-offset: 2px;
+
+  /* Animation durations */
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+
+  /* Radix UI transition keyframes */
+  --animate-dialog-overlay-in: dialog-overlay-in var(--duration-normal) ease-out;
+  --animate-dialog-content-in: dialog-content-in var(--duration-normal) ease-out;
+  --animate-dialog-overlay-out: dialog-overlay-out var(--duration-fast) ease-in;
+  --animate-dialog-content-out: dialog-content-out var(--duration-fast) ease-in;
+  --animate-popover-in: popover-in var(--duration-normal) ease-out;
+  --animate-popover-out: popover-out var(--duration-fast) ease-in;
+  --animate-toast-in: toast-in var(--duration-slow) ease-out;
+  --animate-toast-out: toast-out var(--duration-fast) ease-in;
+  --animate-toast-swipe-out: toast-swipe-out 100ms ease-out;
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* ──── Radix UI Animation Keyframes ──── */
+
+@keyframes dialog-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialog-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes dialog-content-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes dialog-content-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes popover-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes toast-swipe-out {
+  from { transform: translateX(var(--radix-toast-swipe-end-x)); }
+  to { transform: translateX(100%); }
+}
+
+/* ──── Base Styles ──── */
 
 /* Smooth transitions */
 html {
@@ -24,4 +144,18 @@ html {
 /* Safe area support for mobile devices */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ──── Accessible Focus Ring Utility ──── */
+
+/* High-contrast focus rings visible on all backgrounds */
+*:focus-visible {
+  outline: var(--ring-width) solid var(--ring-brand);
+  outline-offset: var(--ring-offset);
+  border-radius: inherit;
+}
+
+/* Remove default focus outline (replaced by focus-visible above) */
+*:focus:not(:focus-visible) {
+  outline: none;
 }

@@ -1,5 +1,6 @@
 import React from 'react'
 import { PRIMARY_NAV_ITEMS, RouteId } from '@/types/navigation'
+import { cn } from '@/lib/utils'
 
 interface BottomNavProps {
   currentRoute: RouteId
@@ -23,14 +24,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentRoute, onSelectRout
               type="button"
               onClick={() => onSelectRoute(item.id)}
               aria-label={item.label}
-              className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors ${
+              aria-current={isActive ? "page" : undefined}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors",
                 isActive
-                  ? 'text-brand-600 dark:text-brand-400 font-semibold'
-                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
-              }`}
+                  ? "text-brand-600 dark:text-brand-400 font-semibold"
+                  : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              )}
             >
               <div className="relative">
-                <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />
+                <Icon className={cn("w-5 h-5 transition-transform", isActive ? "scale-110" : "")} />
                 {isActive && (
                   <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-brand-600 dark:bg-brand-400" />
                 )}

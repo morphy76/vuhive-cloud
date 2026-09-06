@@ -1,5 +1,8 @@
 import React from 'react'
-import { CalendarClock, Plus, CheckCircle2 } from 'lucide-react'
+import { CalendarClock, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { VisuallyHidden } from '@/components/ui/visually-hidden'
 
 export const SchedulesView: React.FC = () => {
   const sampleSchedules = [
@@ -41,25 +44,25 @@ export const SchedulesView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition-all min-h-[44px]"
-        >
+        <Button className="min-h-[44px] gap-2">
           <Plus className="w-4 h-4" />
           <span>New Schedule</span>
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+            <caption>
+              <VisuallyHidden>Kubernetes CronJob schedules with cron expressions and trigger times</VisuallyHidden>
+            </caption>
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="px-6 py-4">Schedule Name</th>
-                <th className="px-6 py-4">Cron Expression</th>
-                <th className="px-6 py-4">Target Suite</th>
-                <th className="px-6 py-4">Next Trigger</th>
-                <th className="px-6 py-4">Status</th>
+                <th scope="col" className="px-6 py-4">Schedule Name</th>
+                <th scope="col" className="px-6 py-4">Cron Expression</th>
+                <th scope="col" className="px-6 py-4">Target Suite</th>
+                <th scope="col" className="px-6 py-4">Next Trigger</th>
+                <th scope="col" className="px-6 py-4">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -84,10 +87,7 @@ export const SchedulesView: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-xs font-mono">{s.nextRun}</td>
                   <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      {s.status}
-                    </span>
+                    <Badge variant="success">{s.status}</Badge>
                   </td>
                 </tr>
               ))}
