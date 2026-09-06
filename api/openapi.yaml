@@ -820,6 +820,12 @@ paths:
         for the requested target platform. The response is returned immediately; the
         build runs asynchronously.
 
+        **Pre-Build AST Static Analysis & Framework Enforcement**:
+        Uploaded archives undergo strict automated static verification before compilation:
+        - **Direct Dependency Check**: `go.mod` must declare `github.com/morphy76/vuhive` as a direct dependency.
+        - **Inverted Control Driver**: Source code must declare `package scenario` (defining a valid `vuhive.Scenario` entrypoint such as `NewScenario()`, `Scenario()`, `InitScenario()`, or `Register(*vuhive.Engine)`). Defining `package main` or `func main()` is prohibited; the platform injects a trusted `main.go` execution driver.
+        - **Package Import Blocklist**: Dangerous packages (`os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`) are blocked by default. Callers may request an override with `allow_insecure_imports=true` if enabled by cluster administrator policy.
+
         **Retry semantics**: If a previous compilation attempt for the same suite and
         platform resulted in a `FAILED` artifact, uploading corrected sources via this
         endpoint automatically resets the artifact from `FAILED → PENDING` and prunes
@@ -853,6 +859,10 @@ paths:
                   type: string
                   description: Target architecture (linux/amd64, linux/arm64, or all)
                   default: linux/amd64
+                allow_insecure_imports:
+                  type: boolean
+                  description: Optional override to allow suspicious packages (e.g., syscall, unsafe) if permitted by cluster deployment policy
+                  default: false
       responses:
         '202':
           description: Compilation build job accepted
@@ -860,6 +870,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BuildTriggerResponse'
+        '400':
+          description: Pre-build static analysis or validation failure (missing vuhive dependency, forbidden import, illegal package main, missing scenario contract, or invalid archive)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Import blocklist override forbidden by cluster policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/suites/{id}/artifacts:
     get:

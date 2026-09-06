@@ -27,7 +27,11 @@ type MockBuildsUseCase struct {
 }
 
 func (m *MockBuildsUseCase) TriggerBuild(ctx context.Context, suiteID string, platform *model.Platform, source io.Reader, size int64) ([]*model.Artifact, error) {
-	args := m.Called(ctx, suiteID, platform, source, size)
+	return m.TriggerBuildWithOptions(ctx, suiteID, platform, source, size, inbound.BuildOptions{})
+}
+
+func (m *MockBuildsUseCase) TriggerBuildWithOptions(ctx context.Context, suiteID string, platform *model.Platform, source io.Reader, size int64, opts inbound.BuildOptions) ([]*model.Artifact, error) {
+	args := m.Called(ctx, suiteID, platform, source, size, opts)
 	if a := args.Get(0); a != nil {
 		return a.([]*model.Artifact), args.Error(1)
 	}
@@ -104,7 +108,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 		art, err := model.NewArtifact(suiteID, expectedPlatform)
 		require.NoError(t, err)
 
-		mockUC.On("TriggerBuild", mock.Anything, suiteID, &expectedPlatform, mock.Anything, mock.AnythingOfType("int64")).
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, &expectedPlatform, mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{AllowInsecureImports: false}).
 			Return([]*model.Artifact{art}, nil)
 
 		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("fake-tarball"), map[string]string{
@@ -135,7 +139,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 		art, err := model.NewArtifact(suiteID, expectedPlatform)
 		require.NoError(t, err)
 
-		mockUC.On("TriggerBuild", mock.Anything, suiteID, &expectedPlatform, mock.Anything, mock.AnythingOfType("int64")).
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, &expectedPlatform, mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{AllowInsecureImports: false}).
 			Return([]*model.Artifact{art}, nil)
 
 		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("fake-tarball"), map[string]string{
@@ -155,7 +159,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 		art1, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
 		art2, _ := model.NewArtifact(suiteID, model.PlatformLinuxArm64)
 
-		mockUC.On("TriggerBuild", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64")).
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{AllowInsecureImports: false}).
 			Return([]*model.Artifact{art1, art2}, nil)
 
 		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("fake-tarball"), nil)
@@ -211,7 +215,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
 		router := rest.SetupRouter(mockUC, nil, nil, nil)
 
-		mockUC.On("TriggerBuild", mock.Anything, "non-existent-suite", (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64")).
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, "non-existent-suite", (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{AllowInsecureImports: false}).
 			Return(nil, model.ErrNotFound)
 
 		req, _ := createMultipartRequest(t, "/api/v1/suites/non-existent-suite/builds", "file", "source.tar.gz", []byte("content"), nil)
@@ -226,7 +230,7 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
 		router := rest.SetupRouter(mockUC, nil, nil, nil)
 
-		mockUC.On("TriggerBuild", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64")).
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{AllowInsecureImports: false}).
 			Return(nil, errors.New("s3 connection failed"))
 
 		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("content"), nil)
@@ -235,6 +239,85 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 		router.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+
+	t.Run("failure when pre-build static analysis fails (missing vuhive dependency)", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{AllowInsecureImports: false}).
+			Return(nil, model.ErrMissingVuhiveDependency)
+
+		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("content"), nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		var errResp rest.ErrorResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		assert.Contains(t, errResp.Error, "github.com/morphy76/vuhive")
+	})
+
+	t.Run("failure when pre-build static analysis fails (forbidden import)", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{AllowInsecureImports: false}).
+			Return(nil, model.ErrForbiddenImport)
+
+		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("content"), nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		var errResp rest.ErrorResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		assert.Contains(t, errResp.Error, "disallowed package")
+	})
+
+	t.Run("failure when insecure override is forbidden by cluster policy", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{AllowInsecureImports: true}).
+			Return(nil, model.ErrInsecureOverrideForbidden)
+
+		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("content"), map[string]string{
+			"allow_insecure_imports": "true",
+		})
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+		var errResp rest.ErrorResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		assert.Contains(t, errResp.Error, "override is forbidden")
+	})
+
+	t.Run("success with allow_insecure_imports override flag", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		art, err := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{AllowInsecureImports: true}).
+			Return([]*model.Artifact{art}, nil)
+
+		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("content"), map[string]string{
+			"allow_insecure_imports": "true",
+		})
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusAccepted, rec.Code)
 	})
 }
 

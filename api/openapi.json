@@ -2693,7 +2693,7 @@
     },
     "/api/v1/suites/{id}/builds": {
       "post": {
-        "description": "Accepts a multipart/form-data payload containing the Go test source archive\n(`.tar.gz`) and triggers an ephemeral Kubernetes `batch/v1` Job to compile it\nfor the requested target platform. The response is returned immediately; the\nbuild runs asynchronously.\n\n**Retry semantics**: If a previous compilation attempt for the same suite and\nplatform resulted in a `FAILED` artifact, uploading corrected sources via this\nendpoint automatically resets the artifact from `FAILED → PENDING` and prunes\nthe stale Kubernetes Job before dispatching a fresh one. No manual database or\ncluster intervention is required — just re-upload and the control plane handles\nthe rest.\n",
+        "description": "Accepts a multipart/form-data payload containing the Go test source archive\n(`.tar.gz`) and triggers an ephemeral Kubernetes `batch/v1` Job to compile it\nfor the requested target platform. The response is returned immediately; the\nbuild runs asynchronously.\n\n**Pre-Build AST Static Analysis & Framework Enforcement**:\nUploaded archives undergo strict automated static verification before compilation:\n- **Direct Dependency Check**: `go.mod` must declare `github.com/morphy76/vuhive` as a direct dependency.\n- **Inverted Control Driver**: Source code must declare `package scenario` (defining a valid `vuhive.Scenario` entrypoint such as `NewScenario()`, `Scenario()`, `InitScenario()`, or `Register(*vuhive.Engine)`). Defining `package main` or `func main()` is prohibited; the platform injects a trusted `main.go` execution driver.\n- **Package Import Blocklist**: Dangerous packages (`os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`) are blocked by default. Callers may request an override with `allow_insecure_imports=true` if enabled by cluster administrator policy.\n\n**Retry semantics**: If a previous compilation attempt for the same suite and\nplatform resulted in a `FAILED` artifact, uploading corrected sources via this\nendpoint automatically resets the artifact from `FAILED → PENDING` and prunes\nthe stale Kubernetes Job before dispatching a fresh one. No manual database or\ncluster intervention is required — just re-upload and the control plane handles\nthe rest.\n",
         "operationId": "uploadAndBuild",
         "parameters": [
           {
@@ -2711,6 +2711,11 @@
             "multipart/form-data": {
               "schema": {
                 "properties": {
+                  "allow_insecure_imports": {
+                    "default": false,
+                    "description": "Optional override to allow suspicious packages (e.g., syscall, unsafe) if permitted by cluster deployment policy",
+                    "type": "boolean"
+                  },
                   "platform": {
                     "default": "linux/amd64",
                     "description": "Target architecture (linux/amd64, linux/arm64, or all)",
@@ -2741,6 +2746,36 @@
               }
             },
             "description": "Compilation build job accepted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Pre-build static analysis or validation failure (missing vuhive dependency, forbidden import, illegal package main, missing scenario contract, or invalid archive)"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Import blocklist override forbidden by cluster policy"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test suite not found"
           }
         },
         "summary": "Upload Go test source and trigger build Job",

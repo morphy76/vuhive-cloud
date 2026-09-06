@@ -188,6 +188,16 @@ When a `CronJob` fires a `batch/v1` Job:
 2. The `RunnerJobWatcher` informer auto-creates a `TestRun` record linked to the schedule, and records both `k8s_job_name` and the **actual `k8s_namespace`** from `runner.namespace` (not a hard-coded default).
 3. When the runner-wrapper POSTs the completion callback with `run_id = <job-name>`, the control plane first attempts UUID lookup, then falls back to `k8s_job_name` correlation, ensuring the `TestRun` is correctly finalized with summary KPIs regardless of whether the run was dispatched ad-hoc or via a CronJob.
 
+### Pre-Build AST Static Analysis & Framework Enforcement
+
+The control plane implements an automated pre-build static verification gate for all uploaded test archives (`POST /api/v1/suites/{id}/builds`):
+- **`go.mod` Verification**: Validates that `go.mod` declares `github.com/morphy76/vuhive` as a required direct dependency.
+- **Inverted Control (`package scenario`)**: Uploaded Go files must belong to `package scenario` (defining `NewScenario()`, `Scenario()`, `InitScenario()`, or `Register(*vuhive.Engine)`). Defining `package main` or `func main()` is prohibited. The platform automatically injects an immutable `main.go` driver into the compilation workspace.
+- **Import Blocklist**: Prohibits dangerous libraries (`os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`) by default.
+- **Cluster Deployment Overrides**:
+  - `ALLOW_INSECURE_IMPORTS` (`true`/`false`): Controls whether users can request an import blocklist override (`allow_insecure_imports=true`). When enabled, overridden artifacts are flagged as dangerous.
+  - `ALLOWED_IMPORT_PACKAGES` (comma-separated): Configures cluster-wide package exemptions.
+
 ### Backend-For-Frontend (BFF) Gateway & Dashboard Routing
 
 The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway and SPA host for the control plane:

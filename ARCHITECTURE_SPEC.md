@@ -143,17 +143,19 @@ vuhive-cloud/
 ## 4. Detailed Workflows
 
 ### 4.1 Source-to-Binary Build Workflow & Framework Enforcement
-1. **Upload:** User/CI posts a tarball/zip of Go source code (or Git reference) and target architecture (`linux/amd64` or `linux/arm64`) to `POST /api/v1/suites/{id}/builds`. The archive contains the test scenario implementation.
-2. **Staging:** Control plane validates archive integrity and saves the source archive to S3 bucket `vuhive-sources/{suite_id}/{build_id}.tar.gz`.
-3. **Build Job Dispatch:** Control plane dispatches an ephemeral Kubernetes Job (`vuhive-build-{build_id}`) in `vuhive-system` using image `golang:1.26-alpine`.
-4. **Pre-Build Static Analysis & Framework Enforcement:**
-   Before invoking the Go compiler, the build pod executes an automated static verification gate:
-   - **`go.mod` Dependency Verification:** Validates that `go.mod` exists and declares `github.com/morphy76/vuhive` as a required direct dependency.
-   - **Go AST Analysis (`go/parser` & `go/ast`):** Parses all uploaded Go source files to verify that the code implements the `vuhive.Scenario` contract or scenario registration entrypoints.
-   - **Disallowed Package Import Blocklist:** Rejects any source code importing unauthorized system or execution libraries (e.g. `os/exec`, `syscall`, `unsafe`, `plugin`, raw network socket creation) to prevent crypto-mining, backdoors, or non-load-testing batch workloads.
-   - **Platform-Managed Driver Injection (`main.go`):** To enforce framework lifecycle and telemetry compliance, the build pipeline injects a trusted, immutable `main.go` template that wires the uploaded scenario into `vuhive.NewEngine()`, ensuring that `--summary-export`, signal trapping, and metrics emitters cannot be bypassed.
-   - **Fast Rejection:** If static inspection fails, compilation is aborted immediately, build status transitions to `FAILED`, and the error report is returned to the user.
-5. **Compilation:** If static checks pass, the build pod compiles the static binary:
+1. **Upload:** User/CI posts a tarball/zip of Go source code (or Git reference) and target architecture (`linux/amd64` or `linux/arm64`) to `POST /api/v1/suites/{id}/builds`. The archive contains the test scenario implementation under `package scenario`.
+2. **Pre-Build Static Analysis & Framework Enforcement:**
+   Upon upload, the control plane synchronously executes an automated static verification gate before accepting the build:
+   - **`go.mod` Dependency Verification:** Validates that `go.mod` exists and declares `github.com/morphy76/vuhive` as a direct dependency (indirect dependencies are rejected).
+   - **Inverted Control (`package scenario` Enforcement):** Enforces that all user code belongs to `package scenario`. User-defined `package main` or `func main()` declarations are strictly prohibited.
+   - **Go AST Analysis (`go/parser` & `go/ast`):** Parses all uploaded Go source files to verify implementation of the `vuhive.Scenario` contract (`NewScenario()`, `Scenario()`, `InitScenario()`, `Register(*vuhive.Engine)`, or exported `var Scenario`).
+   - **Disallowed Package Import Blocklist:** Rejects source code importing unauthorized system or execution libraries (e.g. `os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`, raw sockets) to prevent crypto-mining, backdoors, or non-load-testing workloads.
+   - **Policy-Governed Insecure Import Override:** Deployers may configure `ALLOW_INSECURE_IMPORTS` or `ALLOWED_IMPORT_PACKAGES`. When permitted, users can supply `allow_insecure_imports=true` (marking the resulting artifact as `is_dangerous: true` for executor visibility).
+   - **Platform-Managed Driver Injection (`main.go`):** Normalizes user code under `scenario/` and injects an immutable, trusted `main.go` driver wiring CLI flags (`--summary-export`, `--config`) and OS signal handling (`SIGINT`, `SIGTERM`).
+   - **Fast Rejection:** If static inspection fails, `POST /api/v1/suites/{id}/builds` immediately aborts with `400 Bad Request` (or `403 Forbidden`), preventing malformed or dangerous archives from consuming cluster build resources.
+3. **Staging:** Control plane saves the normalized source archive with injected driver to S3 bucket `vuhive-sources/{suite_id}/{build_id}.tar.gz`.
+4. **Build Job Dispatch:** Control plane dispatches an ephemeral Kubernetes Job (`vuhive-build-{build_id}`) in `vuhive-system` using image `golang:1.26-alpine`.
+5. **Compilation:** The build pod compiles the static binary:
    ```bash
    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGET_ARCH} go build -trimpath -ldflags="-s -w" -o /workspace/runner .
    ```
@@ -490,9 +492,10 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
   - Provide endpoints `POST /api/v1/suites/{id}/builds` and callback handlers for build completion.
 - [**Issue 1.2.3: Pre-Build AST Static Analysis & vuhive Framework Enforcement**](https://github.com/morphy76/vuhive-cloud/issues/22)
   - Inspect `go.mod` to ensure `github.com/morphy76/vuhive` is declared as a direct dependency.
-  - Implement AST inspector using Go's `go/parser` and `go/ast` to assert implementation of `vuhive.Scenario` or execution contracts.
-  - Enforce package import blocklist (blocking `os/exec`, `syscall`, `unsafe`, raw sockets).
-  - Implement platform-managed `main.go` entrypoint template stitching user scenario into trusted `vuhive.Engine` runner.
+  - Enforce inverted control: validate `package scenario` contract via AST inspection (`go/parser` & `go/ast`) and prohibit `package main` / `func main()`.
+  - Enforce package import blocklist (blocking `os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`, raw sockets).
+  - Provide deployer-governed insecure import bypass (`ALLOW_INSECURE_IMPORTS`) with `is_dangerous` tagging.
+  - Implement platform-managed `main.go` entrypoint template stitching user scenario into trusted `vuhive.Engine` runner with signal traps and CLI flags.
 
 #### Epic 1.3: Kubernetes Runner Orchestration, Profiles & Security Isolation
 - [**Issue 1.3.1: Runner Profile Management**](https://github.com/morphy76/vuhive-cloud/issues/6)

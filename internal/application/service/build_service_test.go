@@ -1,7 +1,9 @@
 package service_test
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"io"
 	"strings"
@@ -17,6 +19,7 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/service"
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
+	domainservice "github.com/morphy76/vuhive-cloud/internal/domain/service"
 )
 
 // MockTestSuiteRepository mocks outbound.TestSuiteRepository
@@ -578,3 +581,113 @@ func TestBuildService_TriggerBuild_RetryAfterFailure(t *testing.T) {
 		}))
 	})
 }
+
+func createBuildServiceTestArchive(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+
+	for name, content := range files {
+		data := []byte(content)
+		hdr := &tar.Header{
+			Name: name,
+			Mode: 0644,
+			Size: int64(len(data)),
+		}
+		require.NoError(t, tw.WriteHeader(hdr))
+		_, err := tw.Write(data)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, tw.Close())
+	require.NoError(t, gw.Close())
+	return buf.Bytes()
+}
+
+func TestBuildService_TriggerBuild_WithStaticAnalyzer(t *testing.T) {
+	ctx := context.Background()
+	suiteID := "suite-analyzer-1"
+
+	analyzer := domainservice.NewStaticAnalyzer(domainservice.StaticAnalyzerConfig{
+		AllowInsecureOverride: false,
+	})
+
+	t.Run("fails fast when static analysis detects missing vuhive", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		suite, _ := model.NewTestSuite("Suite", "desc")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		svc := service.NewBuildService(suiteRepo, repo, storage, orchestrator, analyzer)
+
+		archive := createBuildServiceTestArchive(t, map[string]string{
+			"go.mod":      "module mytest\n\ngo 1.26\n",
+			"scenario.go": "package scenario\n",
+		})
+
+		_, err := svc.TriggerBuild(ctx, suiteID, nil, bytes.NewReader(archive), int64(len(archive)))
+		require.Error(t, err)
+		assert.ErrorIs(t, err, model.ErrMissingVuhiveDependency)
+
+		// Assert storage.Upload was NEVER called
+		storage.AssertNotCalled(t, "Upload", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("succeeds when archive passes static analysis and injects main.go", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		suite, _ := model.NewTestSuite("Suite", "desc")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		svc := service.NewBuildService(suiteRepo, repo, storage, orchestrator, analyzer)
+
+		archive := createBuildServiceTestArchive(t, map[string]string{
+			"go.mod": "module mytest\n\ngo 1.26\n\nrequire github.com/morphy76/vuhive v1.1.5\n",
+			"scenario.go": `package scenario
+
+import (
+	"github.com/morphy76/vuhive"
+)
+
+func NewScenario() *vuhive.Scenario {
+	return vuhive.NewScenario("Test")
+}
+`,
+		})
+
+		storage.On("Upload", ctx, "suites/"+suiteID+"/sources/source.tar.gz", mock.Anything, mock.AnythingOfType("int64"), "application/gzip").Return(nil)
+		repo.On("ListBySuiteID", ctx, suiteID).Return([]*model.Artifact{}, nil)
+		repo.On("Save", ctx, mock.AnythingOfType("*model.Artifact")).Return(nil)
+
+		// Async build mocks
+		repo.On("FindByID", mock.Anything, mock.Anything).Return(func(ctx context.Context, id string) *model.Artifact {
+			art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+			return art
+		}, nil).Maybe()
+		storage.On("Exists", mock.Anything, mock.Anything).Return(true, nil).Maybe()
+		storage.On("PresignDownload", mock.Anything, mock.Anything, mock.Anything).Return("https://download", nil).Maybe()
+		storage.On("PresignUpload", mock.Anything, mock.Anything, mock.Anything).Return("https://upload", nil).Maybe()
+		orchestrator.On("DispatchBuildJob", mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
+		orchestrator.On("WaitForJob", mock.Anything, "job-1").Return(&outbound.BuildJobExecution{
+			JobName:        "job-1",
+			SHA256Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			Logs:           io.NopCloser(strings.NewReader("logs")),
+		}, nil).Maybe()
+		storage.On("Upload", mock.Anything, mock.Anything, mock.Anything, mock.Anything, "text/plain").Return(nil).Maybe()
+
+		platform := model.PlatformLinuxAmd64
+		artifacts, err := svc.TriggerBuild(ctx, suiteID, &platform, bytes.NewReader(archive), int64(len(archive)))
+		require.NoError(t, err)
+		require.Len(t, artifacts, 1)
+
+		storage.AssertCalled(t, "Upload", ctx, "suites/"+suiteID+"/sources/source.tar.gz", mock.Anything, mock.AnythingOfType("int64"), "application/gzip")
+	})
+}
+

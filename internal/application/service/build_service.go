@@ -17,6 +17,7 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/inbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
+	domainservice "github.com/morphy76/vuhive-cloud/internal/domain/service"
 )
 
 const (
@@ -25,24 +26,33 @@ const (
 
 // BuildService implements the inbound.BuildsUseCase port to orchestrate multi-arch binary compilation.
 type BuildService struct {
-	suiteRepo    outbound.TestSuiteRepository
-	artifactRepo outbound.ArtifactRepository
-	storage      outbound.StoragePort
-	orchestrator outbound.BuildOrchestratorPort
+	suiteRepo      outbound.TestSuiteRepository
+	artifactRepo   outbound.ArtifactRepository
+	storage        outbound.StoragePort
+	orchestrator   outbound.BuildOrchestratorPort
+	staticAnalyzer *domainservice.StaticAnalyzer
 }
 
-// NewBuildService creates a new BuildService with the supplied outbound ports.
+var _ inbound.BuildsUseCase = (*BuildService)(nil)
+
+// NewBuildService creates a new BuildService with the supplied outbound ports and optional static analyzer.
 func NewBuildService(
 	suiteRepo outbound.TestSuiteRepository,
 	artifactRepo outbound.ArtifactRepository,
 	storage outbound.StoragePort,
 	orchestrator outbound.BuildOrchestratorPort,
+	analyzer ...*domainservice.StaticAnalyzer,
 ) *BuildService {
+	var sa *domainservice.StaticAnalyzer
+	if len(analyzer) > 0 {
+		sa = analyzer[0]
+	}
 	return &BuildService{
-		suiteRepo:    suiteRepo,
-		artifactRepo: artifactRepo,
-		storage:      storage,
-		orchestrator: orchestrator,
+		suiteRepo:      suiteRepo,
+		artifactRepo:   artifactRepo,
+		storage:        storage,
+		orchestrator:   orchestrator,
+		staticAnalyzer: sa,
 	}
 }
 
@@ -53,6 +63,18 @@ func (s *BuildService) TriggerBuild(
 	platform *model.Platform,
 	source io.Reader,
 	size int64,
+) ([]*model.Artifact, error) {
+	return s.TriggerBuildWithOptions(ctx, suiteID, platform, source, size, inbound.BuildOptions{})
+}
+
+// TriggerBuildWithOptions stages a source tarball in S3 with optional static analysis flags, creates artifact records, and initiates compilation asynchronously.
+func (s *BuildService) TriggerBuildWithOptions(
+	ctx context.Context,
+	suiteID string,
+	platform *model.Platform,
+	source io.Reader,
+	size int64,
+	opts inbound.BuildOptions,
 ) ([]*model.Artifact, error) {
 	start := time.Now()
 	trimmedSuiteID := strings.TrimSpace(suiteID)
@@ -86,8 +108,23 @@ func (s *BuildService) TriggerBuild(
 		}
 	}
 
+	uploadReader := source
+	uploadSize := size
+
+	if s.staticAnalyzer != nil {
+		preparedBytes, _, err := s.staticAnalyzer.PrepareSourceArchive(source, domainservice.StaticAnalysisOptions{
+			AllowInsecureImports: opts.AllowInsecureImports,
+		})
+		if err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("pre-build static analysis failed")
+			return nil, err
+		}
+		uploadReader = bytes.NewReader(preparedBytes)
+		uploadSize = int64(len(preparedBytes))
+	}
+
 	sourceKey := formatSourceKey(trimmedSuiteID)
-	if err := s.storage.Upload(ctx, sourceKey, source, size, "application/gzip"); err != nil {
+	if err := s.storage.Upload(ctx, sourceKey, uploadReader, uploadSize, "application/gzip"); err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed uploading source archive to s3")
 		return nil, fmt.Errorf("failed to upload source archive: %w", err)
 	}

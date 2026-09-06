@@ -80,5 +80,26 @@ var (
 
 	// ErrLogsNotFound indicates test execution logs were not found.
 	ErrLogsNotFound = errors.New("execution logs not found")
+
+	// ErrMissingGoMod indicates the uploaded archive does not contain a go.mod file.
+	ErrMissingGoMod = errors.New("missing go.mod in source archive")
+
+	// ErrMissingVuhiveDependency indicates go.mod does not declare github.com/morphy76/vuhive as a direct dependency.
+	ErrMissingVuhiveDependency = errors.New("go.mod must declare github.com/morphy76/vuhive as a direct dependency")
+
+	// ErrForbiddenImport indicates source code imports a disallowed or suspicious package.
+	ErrForbiddenImport = errors.New("source code imports disallowed package")
+
+	// ErrForbiddenPackageMain indicates user code illegally declared package main or func main().
+	ErrForbiddenPackageMain = errors.New("user source code must declare package scenario and must not define package main or func main()")
+
+	// ErrMissingScenarioContract indicates the source package fails to implement a valid vuhive.Scenario contract.
+	ErrMissingScenarioContract = errors.New("source package does not declare or implement a valid vuhive.Scenario contract")
+
+	// ErrInvalidArchive indicates the source package archive could not be read or is corrupted.
+	ErrInvalidArchive = errors.New("source package is not a valid tar.gz archive")
+
+	// ErrInsecureOverrideForbidden indicates that overriding the import blocklist is not permitted by cluster policy.
+	ErrInsecureOverrideForbidden = errors.New("import blocklist override is forbidden by cluster policy")
 )
 
