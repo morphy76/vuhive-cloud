@@ -6,6 +6,11 @@ Official Helm chart for the `vuhive-cloud` control plane.
 
 `vuhive-cloud` provides the Kubernetes-native control plane for orchestrating distributed load testing suites and runner jobs.
 
+### Architecture Components
+
+- **Control Plane (`cmd/server`)**: Core engine orchestrating ephemeral compilation jobs, runner profiles, `batch/v1` Jobs, native CronJobs, and KPI indexing.
+- **Backend-For-Frontend (`cmd/bff`)**: Lightweight gateway serving the embedded React 19 SPA web dashboard and PWA assets directly via Go `embed.FS`, managing client sessions, and aggregating API calls.
+
 ## Prerequisites
 
 - Kubernetes 1.28+

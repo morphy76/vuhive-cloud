@@ -22,6 +22,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 8: Aborting & Cancelling In-Flight Test Runs on Demand](#recipe-8-aborting--cancelling-in-flight-test-runs-on-demand)
     - [Recipe 9: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-9-execution-diagnostics-log-inspection--troubleshooting)
     - [Recipe 10: Inspecting BFF Gateway Status & Session Management](#recipe-10-inspecting-bff-gateway-status--session-management)
+    - [Recipe 11: Accessing the Embedded Web Dashboard & PWA Routing](#recipe-11-accessing-the-embedded-web-dashboard--pwa-routing)
 
 ---
 
@@ -765,6 +766,78 @@ Expected response (`201 Created`):
 
 ```bash
 curl -s -i http://localhost:8081/api/v1/bff/sessions/sess-usr-12345
+```
+
+---
+
+### Recipe 11: Accessing the Embedded Web Dashboard & PWA Routing
+
+The Go Backend-For-Frontend (`cmd/bff`) embeds the compiled React 19 single-page application (SPA) and progressive web app (PWA) assets using Go's `embed.FS`. It serves the production bundle directly without requiring an auxiliary Nginx reverse proxy.
+
+#### 1. Loading the Web Dashboard Root (`index.html`)
+
+Requests to `/` return the SPA shell with no-cache directives to ensure users always receive the latest release:
+
+```bash
+curl -s -i http://localhost:8081/
+```
+
+Key headers returned:
+- `HTTP/1.1 200 OK`
+- `Content-Type: text/html; charset=utf-8`
+- `Cache-Control: no-cache, no-store, must-revalidate`
+
+#### 2. Deep Client-Side SPA Route Fallback
+
+When navigating directly to deep client-side routes (e.g. `/suites/123/runs` or `/schedules`), the BFF resolves non-API routes back to `index.html`, allowing the client-side router to handle the view:
+
+```bash
+curl -s -i http://localhost:8081/suites/suite-abc-123/runs
+```
+
+Expected output:
+- Returns `index.html` with HTTP 200 and `Cache-Control: no-cache, no-store, must-revalidate`.
+
+> [!NOTE]
+> Non-existent API paths (e.g. `GET /api/v1/bff/unknown`) return `404 Not Found` with a JSON payload (`{"error": "endpoint not found"}`) and **never** fall back to `index.html`.
+
+#### 3. Static & Hashed Asset Delivery (Immutable Caching)
+
+Production bundle assets (e.g. `/assets/*.js`, `/assets/*.css`) are cached immutably for 1 year:
+
+```bash
+curl -s -i http://localhost:8081/assets/index.js
+```
+
+Key headers returned:
+- `HTTP/1.1 200 OK`
+- `Content-Type: application/javascript`
+- `Cache-Control: public, max-age=31536000, immutable`
+
+#### 4. PWA Manifest & Service Worker Verification
+
+The BFF provides proper MIME types and cache headers for PWA installation:
+
+```bash
+# Verify Web App Manifest
+curl -s -i http://localhost:8081/manifest.webmanifest
+# Returns: Content-Type: application/manifest+json, Cache-Control: no-cache, no-store, must-revalidate
+
+# Verify Service Worker
+curl -s -i http://localhost:8081/sw.js
+# Returns: Content-Type: application/javascript, Cache-Control: no-cache, no-store, must-revalidate
+
+# Verify Vector Favicon
+curl -s -i http://localhost:8081/favicon.svg
+# Returns: Content-Type: image/svg+xml
+```
+
+#### 5. Local Frontend Development with Vite Live-Reloading (HMR)
+
+During frontend development (e.g. running Vite on port `5173`), start the Go BFF with `--dev-proxy-url` to transparently forward non-API requests to Vite while keeping BFF API endpoints active:
+
+```bash
+./bin/bff --port=8081 --control-plane-url=http://localhost:8080 --dev-proxy-url=http://localhost:5173
 ```
 
 ---

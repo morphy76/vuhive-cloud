@@ -15,6 +15,8 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development
+  - url: http://localhost:8081
+    description: Local Backend-For-Frontend (BFF) gateway
   - url: http://vuhive-vuhive-cloud.vuhive-system.svc.cluster.local:8080
     description: In-cluster (default namespace)
 
@@ -33,6 +35,8 @@ tags:
     description: Test run lifecycle and completion callbacks
   - name: barrier
     description: Distributed start barrier / rendezvous for multi-pod coordinated runs
+  - name: bff
+    description: Backend-For-Frontend gateway and client session management
 
 paths:
   # ── Health ─────────────────────────────────────────────────────────────
@@ -447,6 +451,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BarrierResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ── BFF ────────────────────────────────────────────────────────────────
+  /api/v1/bff/status:
+    get:
+      tags: [bff]
+      summary: Aggregated BFF and Control Plane status
+      description: Returns health and version metadata from both the BFF and upstream Control Plane.
+      operationId: getBFFStatus
+      responses:
+        "200":
+          description: Aggregated system status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BFFStatusResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/bff/sessions:
+    post:
+      tags: [bff]
+      summary: Create client session
+      description: Establishes a cached client session in the BFF.
+      operationId: createBFFSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/bff/sessions/{id}:
+    get:
+      tags: [bff]
+      summary: Retrieve client session
+      description: Returns session context for the given session identifier.
+      operationId: getBFFSession
+      parameters:
+        - $ref: "#/components/parameters/ResourceId"
+      responses:
+        "200":
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -973,3 +1038,77 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BarrierParticipantResponse"
+
+    # ── BFF ────────────────────────────────────────────────────────────────
+    BFFStatusResponse:
+      type: object
+      required:
+        - bff_status
+        - bff_version
+        - control_plane_status
+        - timestamp
+      properties:
+        bff_status:
+          type: string
+          example: UP
+        bff_version:
+          type: string
+          example: 0.1.0
+        control_plane_status:
+          type: string
+          example: UP
+        control_plane_version:
+          type: string
+          example: 0.0.1
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CreateSessionRequest:
+      type: object
+      required:
+        - session_id
+        - user_id
+      properties:
+        session_id:
+          type: string
+          example: sess-usr-12345
+        user_id:
+          type: string
+          example: operator@vuhive.local
+        ttl_seconds:
+          type: integer
+          format: int64
+          example: 3600
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    SessionResponse:
+      type: object
+      required:
+        - id
+        - user_id
+        - created_at
+        - expires_at
+      properties:
+        id:
+          type: string
+          example: sess-usr-12345
+        user_id:
+          type: string
+          example: operator@vuhive.local
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string

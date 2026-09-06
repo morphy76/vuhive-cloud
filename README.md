@@ -17,6 +17,7 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
 - 📦 **Pluggable Object Storage**: Integrates seamlessly with AWS S3 or MinIO for long-term retention of source packages, compiled binaries, full execution logs, and detailed performance summaries.
 - ⏱ **Distributed Start Barrier Synchronization**: Built-in rendezvous coordinator guarantees multi-pod distributed load generators synchronize and fire simultaneously without clock skew.
 - 🛑 **Execution Lifecycle Control & Graceful Abort**: Monitor active runs in real time and abort executions on demand (`POST /api/v1/runs/{id}/abort`), instantly tearing down Kubernetes workloads while propagating SIGTERM for partial log flush, updating state to `ABORTED` with audited cancellation metadata, and reclaiming cluster resources.
+- 🌐 **Embedded React 19 SPA & PWA File Server**: The Go Backend-For-Frontend (`cmd/bff`) serves the compiled React 19 web dashboard and PWA assets directly using Go `embed.FS`, eliminating separate web server containers (e.g. Nginx). Includes SPA fallback routing to `index.html`, immutable HTTP caching headers for hashed assets (`/assets/*`), service worker / manifest delivery, and live-reload reverse proxying (`--dev-proxy-url`) for local Vite frontend development.
 
 ---
 
@@ -167,6 +168,19 @@ make lint
 
 # View all available targets
 make help
+```
+
+### Running the Go BFF & Web Dashboard Locally
+
+```bash
+# Run BFF with embedded SPA assets
+./bin/bff --port=8081 --control-plane-url=http://localhost:8080
+
+# Run BFF during frontend development with Vite HMR reverse proxying
+./bin/bff --port=8081 --control-plane-url=http://localhost:8080 --dev-proxy-url=http://localhost:5173
+
+# Run BFF with a local static build directory override
+./bin/bff --port=8081 --control-plane-url=http://localhost:8080 --static-dir=./web/dist
 ```
 
 ---

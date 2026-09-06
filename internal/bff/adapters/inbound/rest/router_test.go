@@ -153,4 +153,24 @@ func TestRouter_Endpoints(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, rec.Code)
 		mockSvc.AssertExpectations(t)
 	})
+
+	t.Run("GET / returns embedded index.html by default", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+		assert.Contains(t, rec.Body.String(), "vuhive-cloud Web Dashboard")
+	})
+
+	t.Run("GET /suites/42/runs returns embedded index.html fallback", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/suites/42/runs", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+		assert.Contains(t, rec.Body.String(), "vuhive-cloud Web Dashboard")
+	})
 }
