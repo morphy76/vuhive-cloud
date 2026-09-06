@@ -229,6 +229,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RunListResponse'
+    post:
+      summary: Trigger an ad-hoc test run
+      description: |
+        Dispatches an immediate ad-hoc test run execution. Validates the test suite,
+        compiled artifact, and runner profile, creates a TestRun record in QUEUED status,
+        and manifests an ephemeral Kubernetes batch/v1 Job in the runner namespace.
+      operationId: triggerRun
+      tags:
+        - Runs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerRunRequest'
+      responses:
+        '201':
+          description: Test run created and Kubernetes Job dispatched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '400':
+          description: Invalid request payload or validation failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Suite, artifact, configuration, or runner profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Resource state conflict (e.g. inactive suite or unready artifact)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/runs/{id}:
     get:
@@ -1054,6 +1094,34 @@ components:
         requested_by:
           type: string
           example: "operator-alice"
+
+    TriggerRunRequest:
+      type: object
+      required:
+        - suite_id
+        - artifact_id
+        - runner_profile_id
+      properties:
+        suite_id:
+          type: string
+          format: uuid
+          description: Unique identifier of the target TestSuite
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        artifact_id:
+          type: string
+          format: uuid
+          description: Unique identifier of the compiled, READY Artifact
+          example: "c7a6e118-20ab-48d6-953b-e01140026e61"
+        configuration_id:
+          type: string
+          format: uuid
+          description: Optional identifier of the attached scenario configuration
+          example: "d1a85f64-5717-4562-b3fc-2c963f66afa7"
+        runner_profile_id:
+          type: string
+          format: uuid
+          description: Unique identifier of the RunnerProfile specifying execution resources
+          example: "e8d665b1-2e67-4228-8ab6-79c5b248a31e"
 
     CompleteRunRequest:
       type: object

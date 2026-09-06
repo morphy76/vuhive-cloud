@@ -28,6 +28,50 @@ func NewRunHandler(runsUC inbound.RunsUseCase) *RunHandler {
 	}
 }
 
+// TriggerRun handles POST /api/v1/runs.
+// Dispatches an ad-hoc test run execution with the specified suite, artifact, runner profile, and optional configuration.
+func (h *RunHandler) TriggerRun(c *gin.Context) {
+	start := time.Now()
+	ctx := c.Request.Context()
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunHandler.TriggerRun").
+		Logger()
+	log.Debug().Msg("handling trigger test run request")
+
+	var req TriggerRunRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Warn().Err(err).Msg("invalid trigger run request payload")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request payload: " + err.Error()})
+		return
+	}
+
+	cmd := inbound.TriggerRunCommand{
+		SuiteID:         req.SuiteID,
+		ArtifactID:      req.ArtifactID,
+		ConfigurationID: req.ConfigurationID,
+		RunnerProfileID: req.RunnerProfileID,
+	}
+
+	run, err := h.runsUC.TriggerRun(ctx, cmd)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed triggering test run")
+		HandleError(c, err)
+		return
+	}
+
+	log.Info().
+		Str("run_id", run.ID()).
+		Str("suite_id", run.SuiteID()).
+		Str("artifact_id", run.ArtifactID()).
+		Str("runner_profile_id", run.RunnerProfileID()).
+		Str("status", string(run.Status())).
+		Dur("duration_ms", time.Since(start)).
+		Msg("successfully triggered test run")
+
+	c.JSON(http.StatusCreated, ToRunResponse(run))
+}
+
 // CompleteRun handles POST /api/v1/runs/:id/complete and POST /api/v1/runs/complete.
 // Ingests deterministic vuhive summary.json, extracts KPIs into PostgreSQL,
 // and updates the run execution lifecycle state.
