@@ -1259,26 +1259,32 @@ components:
         avg_tps:
           type: number
           format: double
+          description: Average Transactions Per Second (TPS) throughput rate
           example: 1666.67
         p50_duration_ms:
           type: number
           format: double
+          description: Median transaction duration (50th percentile latency) in milliseconds
           example: 12.40
         p90_duration_ms:
           type: number
           format: double
+          description: 90th percentile latency duration in milliseconds
           example: 28.10
         p95_duration_ms:
           type: number
           format: double
+          description: 95th percentile benchmark SLA latency threshold in milliseconds
           example: 45.20
         p99_duration_ms:
           type: number
           format: double
+          description: 99th percentile worst 1% tail latency duration in milliseconds
           example: 89.60
         error_rate_pct:
           type: number
           format: double
+          description: Percentage of failed HTTP transactions (5xx status or network timeouts)
           example: 0.02
 
     RunResponse:
@@ -1567,12 +1573,20 @@ components:
           type: string
         cpu_request:
           type: string
+          description: Kubernetes CPU allocation in millicores (e.g. 500m = 0.5 CPU, 1000m = 1 CPU)
+          example: 1000m
         cpu_limit:
           type: string
+          description: Kubernetes CPU limit in millicores to prevent noisy-neighbor throttling
+          example: 1000m
         memory_request:
           type: string
+          description: Kubernetes memory allocation using binary SI units (e.g. 512Mi, 1Gi, 2Gi)
+          example: 1Gi
         memory_limit:
           type: string
+          description: Kubernetes memory boundary limit (exceeding triggers container OOMKilled)
+          example: 1Gi
         node_selector:
           type: object
           additionalProperties:
@@ -1693,6 +1707,8 @@ components:
           type: string
         cron_expression:
           type: string
+          description: Standard 5-field CRON expression (minute hour day-of-month month day-of-week) executed in cluster UTC timezone
+          example: "0 2 * * *"
 
     UpdateScheduleRequest:
       type: object
@@ -1701,6 +1717,8 @@ components:
       properties:
         cron_expression:
           type: string
+          description: Standard 5-field CRON expression (minute hour day-of-month month day-of-week) executed in cluster UTC timezone
+          example: "0 2 * * *"
 
     ScheduleResponse:
       type: object

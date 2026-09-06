@@ -1,11 +1,15 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Layers, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
+import { HelpTooltip } from '@/components/help/HelpTooltip'
+import { CreateSuiteDialog } from '@/components/dialogs/CreateSuiteDialog'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 
 export const SuitesView: React.FC = () => {
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+
   const sampleSuites = [
     {
       id: 'suite-e2e-checkout',
@@ -47,7 +51,10 @@ export const SuitesView: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <OfflinePreviewBadge />
-          <Button className="min-h-[44px] gap-2">
+          <Button
+            onClick={() => setIsCreateOpen(true)}
+            className="min-h-[44px] gap-2"
+          >
             <Plus className="w-4 h-4" />
             <span>New Suite</span>
           </Button>
@@ -63,9 +70,33 @@ export const SuitesView: React.FC = () => {
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th scope="col" className="px-6 py-4">Suite Name</th>
-                <th scope="col" className="px-6 py-4">Status</th>
-                <th scope="col" className="px-6 py-4">Build Artifact</th>
-                <th scope="col" className="px-6 py-4">Target Arch</th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Status</span>
+                    <HelpTooltip
+                      text="Lifecycle state of the test suite (ACTIVE or ARCHIVED)."
+                      label="Help for status column"
+                    />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Build Artifact</span>
+                    <HelpTooltip
+                      text="Cross-compilation status of scenario binary (READY, BUILDING, FAILED, or PENDING)."
+                      label="Help for build artifact column"
+                    />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Target Arch</span>
+                    <HelpTooltip
+                      text="Target CPU architectures compiled statically for runner container execution."
+                      label="Help for target architecture column"
+                    />
+                  </div>
+                </th>
                 <th scope="col" className="px-6 py-4">Updated</th>
               </tr>
             </thead>
@@ -82,10 +113,22 @@ export const SuitesView: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <Badge variant="success">{s.status}</Badge>
+                    <div className="inline-flex items-center gap-1.5">
+                      <Badge variant="success">{s.status}</Badge>
+                      <HelpTooltip
+                        text="Active suite ready for scheduling and execution."
+                        label="Help for suite status badge"
+                      />
+                    </div>
                   </td>
                   <td className="px-6 py-4">
-                    <Badge variant="info">{s.buildStatus}</Badge>
+                    <div className="inline-flex items-center gap-1.5">
+                      <Badge variant="info">{s.buildStatus}</Badge>
+                      <HelpTooltip
+                        text="Scenario statically compiled and packaged in S3 object store."
+                        label="Help for build status badge"
+                      />
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex gap-1.5 flex-wrap">
@@ -103,6 +146,8 @@ export const SuitesView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <CreateSuiteDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />
     </div>
   )
 }

@@ -1560,6 +1560,31 @@ This ensures that object expiration occurs efficiently at the object storage lay
 
 ---
 
+### Recipe 13: Web UI Micro-Guidance & Domain Concepts Adoption Guide
+
+The official React 19 web interface (`web/`) features an accessible inline micro-guidance system designed to streamline test engineering onboarding and prevent configuration errors without context-switching away from the UI.
+
+#### 1. Accessible Micro-Guidance Components
+
+The UI introduces two core guidance primitives adhering strictly to **WCAG 2.1 AA**:
+- **`<HelpTooltip text="..." label="..." />`**: An interactive hover and keyboard-focusable trigger (`<button type="button" aria-label="...">`) powered by Radix UI `Tooltip`. When focused via `Tab` or hovered, it reveals a contextual popover describing domain constraints, units, and formatting conventions.
+- **`<InfoBadge variant="..." title="..." />`**: Inline banner callouts with semantic visual cues and icons (`info`, `warning`, `error`, `success`) with `role="note"` announcing critical security caveats and platform constraints to screen readers.
+
+#### 2. Domain Concept Guidance Matrix
+
+| Domain Concept | UI Location | Key Invariants & Guidance Provided |
+|---|---|---|
+| **AST Static Analysis** | New Suite Dialog (`CreateSuiteDialog`) | Scenarios must declare `package scenario` (never user `package main` or `func main()`) and import `github.com/morphy76/vuhive`. Forbidden packages (`os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`) trigger immediate pre-build rejection. |
+| **CPU Millicores** | New Execution Dialog (`TriggerRunDialog`) | Explains Kubernetes millicore allocation (e.g. `500m` = 0.5 CPU, `1000m` = 1 vCPU). Recommends setting requests equal to limits to guarantee CPU scheduling without throttling. |
+| **Memory Units** | New Execution Dialog (`TriggerRunDialog`) | Explains Kubernetes binary SI units (e.g. `512Mi`, `1Gi`, `2Gi`). Warns that memory limits enforce container boundaries; exceeding them triggers kernel `OOMKilled` terminations. |
+| **Node Tolerations** | New Execution Dialog (`TriggerRunDialog`) | Details toleration syntax (`key=value:Effect`, e.g. `dedicated=loadgen:NoSchedule`) for scheduling runner pods onto tainted high-performance benchmark nodes. |
+| **Start Barrier Rendezvous** | New Execution Dialog & Pipeline Cards | Coordinates distributed worker pods to hold traffic generation until all replicas reach readiness, eliminating clock-skew anomalies. |
+| **CRON Expression Syntax** | New Schedule Dialog (`CreateScheduleDialog`) | 5-field standard syntax (`minute hour day-of-month month day-of-week`) with quick presets (Hourly `0 * * * *`, Nightly `0 2 * * *`, Weekly `0 4 * * 6`). Emphasizes cluster UTC clock evaluation. |
+| **KPI Latency Percentiles** | Runs View & Dashboard Metrics | Explains $p_{50}$ (median duration), $p_{90}$ (90% threshold), $p_{95}$ (SLA benchmark threshold), and $p_{99}$ (worst 1% tail latency identifying lock contention and GC pauses). |
+| **Throughput & Error Rate** | Runs View & Dashboard Metrics | Explains Transactions Per Second (TPS) as the average rate of successfully completed requests, and error rate percentage as the proportion of HTTP 5xx responses or connection timeouts. |
+
+---
+
 ## 4. Next Steps
 
 - **[OpenAPI 3.1 Specification (`api/openapi.yaml`)](../api/openapi.yaml)**: Complete REST API contract, machine-readable schemas, and live endpoints (`GET /openapi.yaml`, `GET /openapi.json`).
@@ -1567,3 +1592,4 @@ This ensures that object expiration occurs efficiently at the object storage lay
 - **[vuhive-cloud Helm Chart](../deploy/helm/vuhive-cloud/README.md)**: Production deployment instructions and configuration parameter reference.
 - **[vuhive-cloud-infra Helm Chart](../deploy/helm/vuhive-cloud-infra/README.md)**: Local backing services guide (PostgreSQL + MinIO + Swagger UI OpenAPI viewer).
 - **[Architecture Specification](../ARCHITECTURE_SPEC.md)**: Complete internal hexagonal architecture, DDL schemas, and domain models.
+

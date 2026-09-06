@@ -1,11 +1,15 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { CalendarClock, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
+import { HelpTooltip } from '@/components/help/HelpTooltip'
+import { CreateScheduleDialog } from '@/components/dialogs/CreateScheduleDialog'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 
 export const SchedulesView: React.FC = () => {
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+
   const sampleSchedules = [
     {
       id: 'sched-nightly-soak',
@@ -47,7 +51,10 @@ export const SchedulesView: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <OfflinePreviewBadge />
-          <Button className="min-h-[44px] gap-2">
+          <Button
+            onClick={() => setIsCreateOpen(true)}
+            className="min-h-[44px] gap-2"
+          >
             <Plus className="w-4 h-4" />
             <span>New Schedule</span>
           </Button>
@@ -63,10 +70,34 @@ export const SchedulesView: React.FC = () => {
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th scope="col" className="px-6 py-4">Schedule Name</th>
-                <th scope="col" className="px-6 py-4">Cron Expression</th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Cron Expression</span>
+                    <HelpTooltip
+                      text="Standard 5-field CRON expression (minute, hour, day, month, weekday) executed in UTC timezone."
+                      label="Help for cron expression column"
+                    />
+                  </div>
+                </th>
                 <th scope="col" className="px-6 py-4">Target Suite</th>
-                <th scope="col" className="px-6 py-4">Next Trigger</th>
-                <th scope="col" className="px-6 py-4">Status</th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Next Trigger</span>
+                    <HelpTooltip
+                      text="Calculated next trigger timestamp according to the cluster UTC clock."
+                      label="Help for next trigger column"
+                    />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Status</span>
+                    <HelpTooltip
+                      text="State of the native Kubernetes CronJob (ACTIVE or SUSPENDED)."
+                      label="Help for status column"
+                    />
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -99,6 +130,8 @@ export const SchedulesView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <CreateScheduleDialog open={isCreateOpen} onOpenChange={setIsCreateOpen} />
     </div>
   )
 }

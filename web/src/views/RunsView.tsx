@@ -1,11 +1,15 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { PlayCircle, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
+import { HelpTooltip } from '@/components/help/HelpTooltip'
+import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 
 export const RunsView: React.FC = () => {
+  const [isRunDialogOpen, setIsRunDialogOpen] = useState(false)
+
   const sampleRuns = [
     {
       id: 'run-9f8e7d6c',
@@ -53,7 +57,10 @@ export const RunsView: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <OfflinePreviewBadge />
-          <Button className="min-h-[44px] gap-2">
+          <Button
+            onClick={() => setIsRunDialogOpen(true)}
+            className="min-h-[44px] gap-2"
+          >
             <Play className="w-4 h-4 fill-current" />
             <span>New Execution</span>
           </Button>
@@ -69,12 +76,60 @@ export const RunsView: React.FC = () => {
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
                 <th scope="col" className="px-6 py-4">Run Identifier</th>
-                <th scope="col" className="px-6 py-4">Status</th>
-                <th scope="col" className="px-6 py-4">Pods</th>
-                <th scope="col" className="px-6 py-4">Duration</th>
-                <th scope="col" className="px-6 py-4">Throughput</th>
-                <th scope="col" className="px-6 py-4">p95 Latency</th>
-                <th scope="col" className="px-6 py-4">Error Rate</th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Status</span>
+                    <HelpTooltip
+                      text="Execution state of the test run (QUEUED, RUNNING, COMPLETED, FAILED, ABORTED)."
+                      label="Help for execution status column"
+                    />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Pods</span>
+                    <HelpTooltip
+                      text="Number of parallel runner pods assigned and participating in the distributed test run."
+                      label="Help for pods column"
+                    />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Duration</span>
+                    <HelpTooltip
+                      text="Total elapsed wall-clock duration of the load-testing execution."
+                      label="Help for duration column"
+                    />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Throughput</span>
+                    <HelpTooltip
+                      text="Transactions Per Second (TPS): average rate of successfully completed HTTP requests per second."
+                      label="Help for throughput column"
+                    />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>p95 Latency</span>
+                    <HelpTooltip
+                      text="95th percentile latency: 95% of requests finished within this response time."
+                      label="Help for p95 latency column"
+                    />
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    <span>Error Rate</span>
+                    <HelpTooltip
+                      text="Percentage of failed HTTP transactions (HTTP 5xx status codes or network timeouts)."
+                      label="Help for error rate column"
+                    />
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -110,6 +165,8 @@ export const RunsView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <TriggerRunDialog open={isRunDialogOpen} onOpenChange={setIsRunDialogOpen} />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { ThemeProvider } from '@/context/ThemeContext'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { Shell } from '@/components/layout/Shell'
 import { RouteId } from '@/types/navigation'
 import { DashboardView } from '@/views/DashboardView'
@@ -29,7 +30,9 @@ export const App: React.FC = () => {
       persistOptions={{ persister: idbPersister }}
     >
       <ThemeProvider>
-        <AppContent />
+        <TooltipProvider>
+          <AppContent />
+        </TooltipProvider>
       </ThemeProvider>
     </PersistQueryClientProvider>
   )

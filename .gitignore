@@ -35,6 +35,8 @@ bin/
 
 # Frontend / Node
 node_modules/
+node_modules
+web/node_modules
 .pnpm-store/
 .vite/
 coverage/
