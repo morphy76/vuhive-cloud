@@ -184,6 +184,31 @@ When `status` reaches `READY`, the artifact is available for execution by runner
 
 ---
 
+### Recipe 2b: Retrying a Failed Build
+
+If a build fails (e.g., a missing `go.mod` or a compile-time error), fix your source code locally and re-upload the corrected archive using the **same endpoint** as Recipe 1 — no additional steps required:
+
+```bash
+# Fix your source, re-package, and re-upload
+tar -czvf test-suite-fixed.tar.gz main.go go.mod
+
+curl -i -X POST http://localhost:8080/api/v1/suites/suite-auth-checkout/builds \
+  -F "source=@test-suite-fixed.tar.gz" \
+  -F "platform=linux/amd64"
+```
+
+The control plane automatically:
+1. Detects the existing `FAILED` artifact for the requested platform.
+2. Calls `RetryBuild()` on the domain entity — resetting its state from `FAILED → PENDING` and clearing error metadata.
+3. Persists the reset artifact to the database.
+4. Prunes the stale Kubernetes `batch/v1` Job from the previous failed attempt (background deletion, so no "already exists" conflict).
+5. Dispatches a fresh compilation Job against the newly uploaded sources.
+
+> [!TIP]
+> You can verify the artifact was reset by polling `GET /api/v1/suites/{id}/artifacts` — you should see `"status": "PENDING"` immediately after the `POST` returns, transitioning to `"BUILDING"` within a few seconds.
+
+---
+
 ### Recipe 3: Defining & Managing Reusable Runner Profiles
 
 Runner Profiles decouple test suite logic from cluster compute topology. A profile encapsulates resource constraints, node affinity, and tolerations.
@@ -703,7 +728,7 @@ kubectl logs -n vuhive-runners pod/<pod-name> -c runner
 | `404 Not Found` | `suite not found`, `run not found`, `artifact not found` | The requested UUID does not exist or artifacts have not been uploaded to S3. | Verify IDs via query endpoints and check run status is `COMPLETED` or `FAILED`. |
 | `404 Not Found` | `report not found` or `logs not found` | S3 artifacts not yet uploaded. | Await run completion before fetching reports/logs. |
 | `409 Conflict` | `cannot transition from a terminal state` | Attempted to abort or complete an already finalized run. | Run is already terminal (`COMPLETED`, `FAILED`, or `ABORTED`). |
-| `409 Conflict` | `build job already running` | A compilation job is already active for this suite/platform. | Await completion or check build job status in builder namespace. |
+| `409 Conflict` | `build job already running` | A compilation job is already active (`BUILDING`) for this suite/platform. | Await completion before re-uploading. Uploads against a `FAILED` artifact automatically retry — no 409 is returned. |
 | `409 Conflict` | `test run is still in progress` | Report or logs queried while the runner pod is still running. | Await run completion before fetching reports/logs. |
 | `424 Failed Dependency` | `barrier rendezvous aborted` | Start barrier rendezvous was cancelled by a worker failure. | Inspect worker initialization logs and restart run. |
 | `422 Unprocessable Entity` | `unsupported target platform` | Platform is not `linux/amd64` or `linux/arm64`. | Specify valid platform architecture. |
