@@ -214,6 +214,14 @@ The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway an
   - `--sse-heartbeat-interval` / `SSE_HEARTBEAT_INTERVAL`: Keep-alive heartbeat interval for active SSE connections (default `15s`).
   - `--port` / `PORT`: Listening HTTP port (default `8081`).
 
+#### Progressive Web App (PWA) & HTTPS / Ingress Requirements
+
+The embedded dashboard delivered by the BFF operates as an installable Progressive Web App (PWA) with offline resilience:
+- **Embedded Production Bundle**: Pre-compiled static assets (`manifest.webmanifest`, `sw.js`, icons, vendor chunks) are packaged directly into the Go BFF binary via `embed.FS`, requiring no external static file server.
+- **Service Worker & Workbox Caching**: Workbox caches static JS/CSS/font assets (**Cache-First**) and API read responses (**Network-First** with 24-hour cache fallback).
+- **Offline Query Persistence**: TanStack Query persists query caches to IndexedDB (`idb-keyval`), displaying an **Offline Mode** banner and **Offline Preview** tags when network connectivity drops.
+- **HTTPS / Secure Context Requirement**: Web browsers strictly require a secure origin (`https://` or `http://localhost`) to register the service worker, activate offline caching, and trigger the native `beforeinstallprompt` installation button. When deploying in production via Kubernetes Ingress, ensure TLS termination is enabled (e.g., using `cert-manager` with an Ingress controller such as NGINX, Traefik, or AWS ALB).
+
 ### Execution Artifact Housekeeping & Retention Lifecycle Engine
 
 The control plane includes an automated retention lifecycle worker and housekeeping subsystem:
