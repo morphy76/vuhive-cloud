@@ -286,30 +286,28 @@ func main() {
 
 	// Retention policy & Housekeeping service wiring
 	retentionPolicy := model.DefaultRetentionPolicy()
-	if v := os.Getenv("RETENTION_LOGS_DAYS"); v != "" {
-		if d, err := strconv.Atoi(v); err == nil && d >= 0 {
-			retentionPolicy.LogsTTLDays = d
+	parseEnvDays := func(envVar string) (int, bool) {
+		if v := os.Getenv(envVar); v != "" {
+			if val, err := strconv.ParseInt(v, 10, 32); err == nil && val >= 0 {
+				return int(val), true
+			}
 		}
+		return 0, false
 	}
-	if v := os.Getenv("RETENTION_REPORTS_DAYS"); v != "" {
-		if d, err := strconv.Atoi(v); err == nil && d >= 0 {
-			retentionPolicy.ReportsTTLDays = d
-		}
+	if d, ok := parseEnvDays("RETENTION_LOGS_DAYS"); ok {
+		retentionPolicy.LogsTTLDays = d
 	}
-	if v := os.Getenv("RETENTION_SOURCES_DAYS"); v != "" {
-		if d, err := strconv.Atoi(v); err == nil && d >= 0 {
-			retentionPolicy.SourcesTTLDays = d
-		}
+	if d, ok := parseEnvDays("RETENTION_REPORTS_DAYS"); ok {
+		retentionPolicy.ReportsTTLDays = d
 	}
-	if v := os.Getenv("RETENTION_BINARIES_DAYS"); v != "" {
-		if d, err := strconv.Atoi(v); err == nil && d >= 0 {
-			retentionPolicy.BinariesTTLDays = d
-		}
+	if d, ok := parseEnvDays("RETENTION_SOURCES_DAYS"); ok {
+		retentionPolicy.SourcesTTLDays = d
 	}
-	if v := os.Getenv("RETENTION_RUNS_DAYS"); v != "" {
-		if d, err := strconv.Atoi(v); err == nil && d >= 0 {
-			retentionPolicy.RunsTTLDays = d
-		}
+	if d, ok := parseEnvDays("RETENTION_BINARIES_DAYS"); ok {
+		retentionPolicy.BinariesTTLDays = d
+	}
+	if d, ok := parseEnvDays("RETENTION_RUNS_DAYS"); ok {
+		retentionPolicy.RunsTTLDays = d
 	}
 	if os.Getenv("RETENTION_ARCHIVE_ONLY") == "true" {
 		retentionPolicy.ArchiveOnly = true

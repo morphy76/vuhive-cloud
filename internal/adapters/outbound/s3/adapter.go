@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -368,6 +369,12 @@ func (a *Adapter) PutBucketLifecycleConfiguration(ctx context.Context, rules []o
 		if r.Enabled {
 			status = s3types.ExpirationStatusEnabled
 		}
+		var days int32
+		if r.ExpirationDays > 0 && r.ExpirationDays <= math.MaxInt32 {
+			days = int32(r.ExpirationDays)
+		} else if r.ExpirationDays > math.MaxInt32 {
+			days = math.MaxInt32
+		}
 		rule := s3types.LifecycleRule{
 			ID:     aws.String(r.ID),
 			Status: status,
@@ -375,7 +382,7 @@ func (a *Adapter) PutBucketLifecycleConfiguration(ctx context.Context, rules []o
 				Prefix: aws.String(r.Prefix),
 			},
 			Expiration: &s3types.LifecycleExpiration{
-				Days: aws.Int32(int32(r.ExpirationDays)),
+				Days: aws.Int32(days),
 			},
 		}
 		s3Rules = append(s3Rules, rule)
