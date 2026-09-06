@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -507,8 +508,18 @@ func (s *RunService) CompleteRun(ctx context.Context, cmd inbound.CompleteRunCom
 
 	run, err := s.runRepo.FindByID(ctx, runID)
 	if err != nil {
-		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run for completion")
-		return nil, err
+		if !errors.Is(err, model.ErrNotFound) {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run for completion")
+			return nil, err
+		}
+		// Fallback: runID may be a Kubernetes Job name sent by a CronJob-spawned pod
+		// (VUHIVE_RUN_ID resolves to the Job-name label, not a domain UUID).
+		log.Debug().Str("run_id", runID).Msg("run not found by UUID; retrying by k8s job name")
+		run, err = s.runRepo.FindByK8sJobName(ctx, runID)
+		if err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run by job name for completion")
+			return nil, err
+		}
 	}
 
 	if run.Status().IsTerminal() {

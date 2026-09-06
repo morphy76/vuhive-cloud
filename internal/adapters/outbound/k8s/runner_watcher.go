@@ -183,6 +183,7 @@ func (w *RunnerJobWatcher) SyncJob(ctx context.Context, job *batchv1.Job) error 
 		}
 
 		newRun.SetK8sJobName(job.Name)
+		newRun.SetK8sNamespace(job.Namespace)
 
 		if err := w.runRepo.Save(ctx, newRun); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed persisting new scheduled test run")

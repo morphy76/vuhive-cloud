@@ -149,6 +149,15 @@ To ensure callback requests succeed across different Kubernetes network setups:
 - **Cross-Namespace (`runner.namespace != Release.Namespace`)**: Standard Kubernetes pods have `ndots:5` in `/etc/resolv.conf`. Because `<service>.<namespace>.svc.cluster.local` has 4 dots, standard resolvers query host/DHCP upstream search domains first, which can cause connection failures if upstream wildcard DNS returns `127.0.0.1`. The chart mitigates this by generating a fully qualified domain name with a **trailing dot** (`http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete`), bypassing search lists and directing the query straight to CoreDNS.
 - **Custom Override**: You can override `apiCallbackUrl` explicitly with `--set apiCallbackUrl=...` if you route runner callbacks through custom gateways or ingresses.
 
+### CronJob Run Correlation
+
+When a `CronJob` fires a `batch/v1` Job:
+
+1. The runner pod's `VUHIVE_RUN_ID` is populated from `metadata.labels['batch.kubernetes.io/job-name']` (the **Job name**, e.g. `vuhive-sched-abc-28492020`), not from `metadata.name` (the pod name).
+2. The `RunnerJobWatcher` informer auto-creates a `TestRun` record linked to the schedule, and records both `k8s_job_name` and the **actual `k8s_namespace`** from `runner.namespace` (not a hard-coded default).
+3. When the runner-wrapper POSTs the completion callback with `run_id = <job-name>`, the control plane first attempts UUID lookup, then falls back to `k8s_job_name` correlation, ensuring the `TestRun` is correctly finalized with summary KPIs regardless of whether the run was dispatched ad-hoc or via a CronJob.
+
+
 ## Configuration Parameters
 
 | Parameter | Description | Default |
