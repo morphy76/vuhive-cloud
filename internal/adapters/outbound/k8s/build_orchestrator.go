@@ -38,6 +38,8 @@ func NewBuildOrchestrator(client kubernetes.Interface, cfg Config) *BuildOrchest
 }
 
 // DispatchBuildJob manifests and submits a compilation Job into Kubernetes.
+// If a stale Job from a previous (failed) attempt shares the same name, it is deleted
+// with background propagation before the new Job is created, allowing seamless retries.
 func (o *BuildOrchestrator) DispatchBuildJob(ctx context.Context, opts outbound.BuildJobOptions) (string, error) {
 	start := time.Now()
 	log := zerolog.Ctx(ctx).With().
@@ -52,6 +54,20 @@ func (o *BuildOrchestrator) DispatchBuildJob(ctx context.Context, opts outbound.
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed generating build job manifest")
 		return "", err
+	}
+
+	// Prune any stale Job from a previous failed attempt with the same canonical name.
+	_, getErr := o.client.BatchV1().Jobs(o.cfg.Namespace).Get(ctx, jobManifest.Name, metav1.GetOptions{})
+	if getErr == nil {
+		propagation := metav1.DeletePropagationBackground
+		if delErr := o.client.BatchV1().Jobs(o.cfg.Namespace).Delete(ctx, jobManifest.Name, metav1.DeleteOptions{
+			PropagationPolicy: &propagation,
+		}); delErr != nil {
+			mapped := MapK8sError(delErr)
+			log.Warn().Err(mapped).Str("job_name", jobManifest.Name).Msg("failed deleting stale build job; proceeding anyway")
+		} else {
+			log.Warn().Str("job_name", jobManifest.Name).Msg("pruned stale build job before re-dispatch")
+		}
 	}
 
 	createdJob, err := o.client.BatchV1().Jobs(o.cfg.Namespace).Create(ctx, jobManifest, metav1.CreateOptions{})

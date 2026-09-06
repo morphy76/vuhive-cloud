@@ -8,7 +8,7 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
 
 ## Key Features
 
-- 🛠 **Ephemeral Source-to-Binary Compilation**: Upload raw Go source archives (`go.mod` + scenario code); `vuhive-cloud` dynamically spins up isolated Kubernetes build jobs (`golang:1.26-alpine`) to cross-compile static binaries targeting `linux/amd64` or `linux/arm64`.
+- 🛠 **Ephemeral Source-to-Binary Compilation**: Upload raw Go source archives (`go.mod` + scenario code); `vuhive-cloud` dynamically spins up isolated Kubernetes build jobs (`golang:1.26-alpine`) to cross-compile static binaries targeting `linux/amd64` or `linux/arm64`. Failed compilations can be retried immediately by re-uploading corrected sources — the control plane automatically resets the artifact state and prunes the stale Kubernetes Job.
 - 🔒 **Hardened Execution Isolation**: Test runner pods comply with the Kubernetes **Restricted** Pod Security Standards (non-root UID `10001`, read-only root filesystems, all Linux capabilities dropped, zero host privilege).
 - 🧩 **Reusable Runner Profiles**: Decouple test scenario code from infrastructure scheduling. Define reusable profiles specifying CPU/memory requests and limits, node selectors, tolerations, and node affinities for targeted execution.
 - ⏰ **Native Kubernetes CronJob Scheduling**: Declarative scheduling mapped 1-to-1 to native Kubernetes `batch/v1` `CronJob`s with standard cron syntax (`0 2 * * *`), eliminating external scheduler dependencies.
@@ -189,6 +189,29 @@ make help
 ```
 
 ---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
+The control plane exposes its REST API at port `8080`. See [`api/openapi.yaml`](./api/openapi.yaml) for the full API reference.
+For detailed Helm configuration options, see the chart READMEs:
+- [`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md) — infrastructure (PostgreSQL + MinIO)
+- [`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md) — control plane (namespace management, RBAC modes, all parameters)
+
+## Documents in this Package
+
+1. **[ARCHITECTURE_SPEC.md](./ARCHITECTURE_SPEC.md)**
+   - **Executive Summary & System Vision**
+   - **System Architecture & Topology Diagram** (Control Plane, PostgreSQL, S3/MinIO, Ephemeral Build Jobs, Runner Pods, Node Affinities/Tolerations)
+   - **Hexagonal Architecture & Package Layout** (DDD Boundaries, Domain Aggregates, Inbound/Outbound Ports)
+   - **Detailed Execution Workflows** (Source Upload -> Pre-Build AST Static Analysis & Framework Enforcement -> Ephemeral Compilation -> S3 Storage -> K8s Runner Job / Native CronJob -> Ingestion)
+   - **PostgreSQL Database Schema (DDL)** (`test_suites`, `artifacts`, `configurations`, `runner_profiles`, `schedules`, `test_runs`)
+   - **REST API Contract & Endpoints**
+   - **Kubernetes Runner Pod Specification & Hardening** (Pod Security Standards restricted profile, Egress NetworkPolicies, Init-container artifact fetch, emptyDir mount, execution wrapper)
+   - **Roadmap & Epic Breakdown** (Direct references to GitHub Milestones and Issues)
+
+2. **[api/openapi.yaml](./api/openapi.yaml)**
+   - Full OpenAPI 3.0.3 specification for all REST API endpoints exposed by the control plane.
 
 ## Project Tracking & Roadmap
 

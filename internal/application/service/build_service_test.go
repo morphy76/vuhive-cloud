@@ -512,3 +512,69 @@ func TestBuildService_ImplementsUseCase(t *testing.T) {
 	assert.True(t, true)
 }
 
+func TestBuildService_TriggerBuild_RetryAfterFailure(t *testing.T) {
+	ctx := context.Background()
+	suiteID := "suite-retry-99"
+
+	t.Run("re-upload on FAILED artifact resets to PENDING and re-triggers build", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		suite, _ := model.NewTestSuite("Retry Suite", "desc")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		sourceContent := []byte("fixed tar.gz content")
+		storage.On("Upload", ctx, "suites/"+suiteID+"/sources/source.tar.gz",
+			mock.Anything, int64(len(sourceContent)), "application/gzip").Return(nil)
+
+		// Existing FAILED artifact for amd64
+		failedArtifact, err := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, failedArtifact.MarkFailed("syntax error in main.go", "s3://logs/build.log"))
+		require.Equal(t, model.ArtifactStatusFailed, failedArtifact.Status())
+
+		repo.On("ListBySuiteID", ctx, suiteID).Return([]*model.Artifact{failedArtifact}, nil)
+
+		// The service must call Save() to persist the PENDING reset before triggering the build
+		repo.On("Save", ctx, mock.MatchedBy(func(a *model.Artifact) bool {
+			return a.ID() == failedArtifact.ID() && a.Status() == model.ArtifactStatusPending
+		})).Return(nil).Once()
+
+		// Async build mocks
+		repo.On("FindByID", mock.Anything, failedArtifact.ID()).Return(func(ctx context.Context, id string) *model.Artifact {
+			return failedArtifact
+		}, nil).Maybe()
+		storage.On("Exists", mock.Anything, "suites/"+suiteID+"/sources/source.tar.gz").Return(true, nil).Maybe()
+		storage.On("PresignDownload", mock.Anything, mock.Anything, mock.Anything).Return("https://download", nil).Maybe()
+		storage.On("PresignUpload", mock.Anything, mock.Anything, mock.Anything).Return("https://upload", nil).Maybe()
+		orchestrator.On("DispatchBuildJob", mock.Anything, mock.Anything).Return("job-retry", nil).Maybe()
+		checksum := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		orchestrator.On("WaitForJob", mock.Anything, "job-retry").Return(&outbound.BuildJobExecution{
+			JobName: "job-retry", SHA256Checksum: checksum,
+			Logs: io.NopCloser(strings.NewReader("build ok")),
+		}, nil).Maybe()
+		storage.On("Upload", mock.Anything, mock.Anything, mock.Anything, mock.Anything, "text/plain").Return(nil).Maybe()
+		repo.On("Save", mock.Anything, mock.MatchedBy(func(a *model.Artifact) bool {
+			return a.Status() == model.ArtifactStatusBuilding || a.Status() == model.ArtifactStatusReady
+		})).Return(nil).Maybe()
+
+		svc := service.NewBuildService(suiteRepo, repo, storage, orchestrator)
+		platform := model.PlatformLinuxAmd64
+
+		artifacts, err := svc.TriggerBuild(ctx, suiteID, &platform, bytes.NewReader(sourceContent), int64(len(sourceContent)))
+		require.NoError(t, err)
+		require.Len(t, artifacts, 1)
+
+		// The returned artifact must be the reset (PENDING) one, not a brand-new artifact
+		assert.Equal(t, failedArtifact.ID(), artifacts[0].ID())
+		assert.Equal(t, model.ArtifactStatusPending, artifacts[0].Status())
+		assert.Empty(t, artifacts[0].ErrorMessage())
+
+		// Crucially: Save was called once with PENDING status (the retry reset)
+		repo.AssertCalled(t, "Save", ctx, mock.MatchedBy(func(a *model.Artifact) bool {
+			return a.ID() == failedArtifact.ID() && a.Status() == model.ArtifactStatusPending
+		}))
+	})
+}

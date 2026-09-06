@@ -120,6 +120,17 @@ func (s *BuildService) TriggerBuild(
 			}
 			artifacts = append(artifacts, newArt)
 		} else {
+			// Reset a previously FAILED artifact so it can be re-compiled.
+			if found.Status() == model.ArtifactStatusFailed {
+				if err := found.RetryBuild(); err != nil {
+					log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed resetting failed artifact for retry")
+					return nil, err
+				}
+				if err := s.artifactRepo.Save(ctx, found); err != nil {
+					log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed persisting artifact retry reset")
+					return nil, err
+				}
+			}
 			artifacts = append(artifacts, found)
 		}
 	}
@@ -339,6 +350,17 @@ func (s *BuildService) BuildSuite(ctx context.Context, suiteID string) ([]*model
 			}
 			artifactsToBuild = append(artifactsToBuild, newArt)
 		} else {
+			// Reset a previously FAILED artifact so it can be re-compiled.
+			if found.Status() == model.ArtifactStatusFailed {
+				if err := found.RetryBuild(); err != nil {
+					log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed resetting failed artifact for retry")
+					return nil, err
+				}
+				if err := s.artifactRepo.Save(ctx, found); err != nil {
+					log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed persisting artifact retry reset")
+					return nil, err
+				}
+			}
 			artifactsToBuild = append(artifactsToBuild, found)
 		}
 	}
