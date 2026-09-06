@@ -299,6 +299,16 @@ func (r *TestRun) SetK8sJobName(jobName string) {
 	r.k8sJobName = strings.TrimSpace(jobName)
 }
 
+// SetK8sNamespace sets the Kubernetes namespace where the run's Job executes.
+// Falls back to DefaultRunnerNamespace when the provided value is blank.
+func (r *TestRun) SetK8sNamespace(namespace string) {
+	ns := strings.TrimSpace(namespace)
+	if ns == "" {
+		ns = DefaultRunnerNamespace
+	}
+	r.k8sNamespace = ns
+}
+
 // Start transitions the run from QUEUED to RUNNING.
 func (r *TestRun) Start(jobName string, startTime time.Time) error {
 	if r.status.IsTerminal() {

@@ -1020,3 +1020,35 @@ func TestRunService_GetRunLogsURL(t *testing.T) {
 	assert.Contains(t, url, logsKey)
 }
 
+func TestRunService_CompleteRun_JobNameFallback(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, _, _, runRepo, _, storage, suite, artifact, profile := setupTestRunServiceWithStorage(t)
+
+	// Simulate a CronJob-spawned run that has k8s_job_name set but the runner-wrapper
+	// will POST with the job name as run_id (not the internal UUID).
+	run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+	require.NoError(t, err)
+	// Mark as RUNNING with a known Job name (the watcher sets this on CronJob runs)
+	jobName := "vuhive-sched-abc-28492020"
+	require.NoError(t, run.Start(jobName, time.Now().UTC()))
+	require.NoError(t, runRepo.Save(ctx, run))
+
+	// Prepare a summary report in storage under the expected report key
+	reportKey := "runs/" + run.ID() + "/summary.json"
+	summaryJSON := `{"total_iterations":100,"total_requests":500,"avg_tps":50.0,"p50_duration_ms":10.0,"p90_duration_ms":20.0,"p95_duration_ms":25.0,"p99_duration_ms":40.0,"error_rate_pct":0.0,"sla_passed":true}`
+	require.NoError(t, storage.Upload(ctx, reportKey, bytes.NewReader([]byte(summaryJSON)), int64(len(summaryJSON)), "application/json"))
+
+	// The runner-wrapper posts with run_id = job name (NOT the internal UUID)
+	cmd := inbound.CompleteRunCommand{
+		RunID:    jobName,
+		ExitCode: nil,
+	}
+
+	completed, err := svc.CompleteRun(ctx, cmd)
+	require.NoError(t, err)
+	require.NotNil(t, completed)
+
+	// The correct TestRun (identified by k8s_job_name) must be resolved and completed
+	assert.Equal(t, run.ID(), completed.ID())
+	assert.Equal(t, model.RunStatusCompleted, completed.Status())
+}

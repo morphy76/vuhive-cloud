@@ -301,3 +301,36 @@ func TestTestRun_DurationMs(t *testing.T) {
 	})
 }
 
+func TestTestRun_SetK8sNamespace(t *testing.T) {
+	t.Run("sets namespace correctly", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+
+		run.SetK8sNamespace("vuhive-smoke-12345")
+		assert.Equal(t, "vuhive-smoke-12345", run.K8sNamespace())
+	})
+
+	t.Run("trims whitespace from namespace", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+
+		run.SetK8sNamespace("  custom-ns  ")
+		assert.Equal(t, "custom-ns", run.K8sNamespace())
+	})
+
+	t.Run("falls back to DefaultRunnerNamespace when empty", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+
+		run.SetK8sNamespace("")
+		assert.Equal(t, model.DefaultRunnerNamespace, run.K8sNamespace())
+	})
+
+	t.Run("falls back to DefaultRunnerNamespace when whitespace only", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+
+		run.SetK8sNamespace("   ")
+		assert.Equal(t, model.DefaultRunnerNamespace, run.K8sNamespace())
+	})
+}

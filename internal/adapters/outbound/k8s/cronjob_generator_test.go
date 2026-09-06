@@ -162,6 +162,29 @@ func TestCronJobGenerator_GenerateCronJob(t *testing.T) {
 		assert.Equal(t, "1", runnerC.Resources.Limits.Cpu().String())
 		assert.Equal(t, "256Mi", runnerC.Resources.Requests.Memory().String())
 		assert.Equal(t, "512Mi", runnerC.Resources.Limits.Memory().String())
+
+		// VUHIVE_RUN_ID must use the job-name label so the runner-wrapper sends
+		// the Job name (not the pod name) in the completion callback, enabling
+		// correlation via k8s_job_name when FindByID misses.
+		runIDEnv := findEnv(runnerC.Env, "VUHIVE_RUN_ID")
+		require.NotNil(t, runIDEnv, "VUHIVE_RUN_ID env var must be present on runner container")
+		require.NotNil(t, runIDEnv.ValueFrom, "VUHIVE_RUN_ID must use ValueFrom (fieldRef)")
+		require.NotNil(t, runIDEnv.ValueFrom.FieldRef, "VUHIVE_RUN_ID must reference a pod field")
+		assert.Equal(t,
+			"metadata.labels['batch.kubernetes.io/job-name']",
+			runIDEnv.ValueFrom.FieldRef.FieldPath,
+			"VUHIVE_RUN_ID must resolve to the Kubernetes Job name, not the pod name",
+		)
+
+		// VUHIVE_SCHEDULE_ID must be set
+		schedIDEnv := findEnv(runnerC.Env, "VUHIVE_SCHEDULE_ID")
+		require.NotNil(t, schedIDEnv)
+		assert.Equal(t, schedule.ID(), schedIDEnv.Value)
+
+		// API_CALLBACK_URL must be set from config
+		callbackEnv := findEnv(runnerC.Env, "API_CALLBACK_URL")
+		require.NotNil(t, callbackEnv)
+		assert.Equal(t, cfg.APICallbackURL, callbackEnv.Value)
 	})
 
 	t.Run("validation errors on invalid inputs", func(t *testing.T) {
