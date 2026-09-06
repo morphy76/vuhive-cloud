@@ -28,6 +28,8 @@ type ControlPlaneClient interface {
 	GetRun(ctx context.Context, id string) (*RunDetail, error)
 	GetRunReportURL(ctx context.Context, id string) (string, error)
 	GetRunLogsURL(ctx context.Context, id string) (string, error)
+	ListRuns(ctx context.Context, status string, limit int) ([]RunDetail, error)
+	ListArtifacts(ctx context.Context, suiteID string) ([]ArtifactDetail, error)
 }
 
 // RunMetrics represents indexed performance KPIs returned by the control plane.
@@ -85,4 +87,17 @@ type ProfileSummary struct {
 	CPULimit    string `json:"cpu_limit"`
 	MemoryLimit string `json:"memory_limit"`
 	CreatedAt   string `json:"created_at"`
+}
+
+// ArtifactDetail models compiled binary artifact metadata returned by the control plane.
+type ArtifactDetail struct {
+	ID             string `json:"id"`
+	SuiteID        string `json:"suite_id"`
+	Platform       string `json:"platform"`
+	S3BinaryKey    string `json:"s3_binary_key,omitempty"`
+	SHA256Checksum string `json:"sha256_checksum,omitempty"`
+	BuildLogsS3Key string `json:"build_logs_s3_key,omitempty"`
+	Status         string `json:"status"`
+	ErrorMessage   string `json:"error_message,omitempty"`
+	CreatedAt      string `json:"created_at"`
 }

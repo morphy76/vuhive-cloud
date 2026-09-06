@@ -425,3 +425,117 @@ func TestClient_ArtifactPresignedURLs(t *testing.T) {
 		assert.Equal(t, "https://s3/run.log", url)
 	})
 }
+
+func TestClient_ListRuns(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successfully queries runs with status filter", func(t *testing.T) {
+		mockTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			assert.Equal(t, "/api/v1/runs", req.URL.Path)
+			assert.Equal(t, "RUNNING", req.URL.Query().Get("status"))
+			assert.Equal(t, "10", req.URL.Query().Get("limit"))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body: io.NopCloser(bytes.NewBufferString(`{
+					"runs": [
+						{
+							"id": "run-abc",
+							"suite_id": "suite-123",
+							"status": "RUNNING",
+							"created_at": "2026-09-06T22:00:00Z"
+						}
+					],
+					"count": 1,
+					"total": 1
+				}`)),
+				Header: make(http.Header),
+			}, nil
+		})
+
+		client := controlplane.NewClient(controlplane.Config{
+			BaseURL:    "http://controlplane",
+			HTTPClient: &http.Client{Transport: mockTransport},
+		})
+
+		runs, err := client.ListRuns(ctx, "RUNNING", 10)
+		require.NoError(t, err)
+		require.Len(t, runs, 1)
+		assert.Equal(t, "run-abc", runs[0].ID)
+		assert.Equal(t, "RUNNING", runs[0].Status)
+	})
+
+	t.Run("returns empty slice on 404", func(t *testing.T) {
+		mockTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString(`not found`)),
+				Header:     make(http.Header),
+			}, nil
+		})
+
+		client := controlplane.NewClient(controlplane.Config{
+			BaseURL:    "http://controlplane",
+			HTTPClient: &http.Client{Transport: mockTransport},
+		})
+
+		runs, err := client.ListRuns(ctx, "RUNNING", 10)
+		require.NoError(t, err)
+		assert.Empty(t, runs)
+	})
+}
+
+func TestClient_ListArtifacts(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successfully queries artifacts for suite", func(t *testing.T) {
+		mockTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			assert.Equal(t, "/api/v1/suites/suite-123/artifacts", req.URL.Path)
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body: io.NopCloser(bytes.NewBufferString(`{
+					"artifacts": [
+						{
+							"id": "art-1",
+							"suite_id": "suite-123",
+							"platform": "linux/amd64",
+							"status": "READY",
+							"created_at": "2026-09-06T22:00:00Z"
+						}
+					],
+					"count": 1
+				}`)),
+				Header: make(http.Header),
+			}, nil
+		})
+
+		client := controlplane.NewClient(controlplane.Config{
+			BaseURL:    "http://controlplane",
+			HTTPClient: &http.Client{Transport: mockTransport},
+		})
+
+		artifacts, err := client.ListArtifacts(ctx, "suite-123")
+		require.NoError(t, err)
+		require.Len(t, artifacts, 1)
+		assert.Equal(t, "art-1", artifacts[0].ID)
+		assert.Equal(t, "READY", artifacts[0].Status)
+	})
+
+	t.Run("returns empty slice on 404", func(t *testing.T) {
+		mockTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Body:       io.NopCloser(bytes.NewBufferString(`not found`)),
+				Header:     make(http.Header),
+			}, nil
+		})
+
+		client := controlplane.NewClient(controlplane.Config{
+			BaseURL:    "http://controlplane",
+			HTTPClient: &http.Client{Transport: mockTransport},
+		})
+
+		artifacts, err := client.ListArtifacts(ctx, "suite-not-found")
+		require.NoError(t, err)
+		assert.Empty(t, artifacts)
+	})
+}

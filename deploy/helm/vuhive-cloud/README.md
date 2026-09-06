@@ -204,11 +204,14 @@ The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway an
 
 - **Composite Aggregation (`/api/bff/v1/dashboard`)**: Concurrently aggregates system status, active run counts, recent suites, and runner profiles within a single sub-50ms HTTP request.
 - **Unified Run Detail (`/api/bff/v1/runs/{id}`)**: Enriches test run execution records with parsed summary KPIs and dynamically generated pre-signed S3 download URLs for `summary.json` and `run.log`.
+- **Live SSE Telemetry Stream (`/api/bff/v1/events`)**: Streams real-time Server-Sent Events (`text/event-stream`) for run state transitions (`run_status_changed`), compilation changes (`build_status_changed`), and periodic system heartbeats (`system_heartbeat`) without high-frequency browser polling.
 - **Transparent Reverse Proxying**: Routes under `/api/bff/v1/suites`, `/api/bff/v1/profiles`, `/api/bff/v1/schedules`, and `/api/bff/v1/runs` transparently proxy requests to the upstream control plane (`/api/v1/*`), handling HTTP header propagation (Bearer tokens, API keys) and connection pooling automatically.
 - **Service Configuration**: Configured via CLI flags or environment variables:
   - `--control-plane-url` / `CONTROL_PLANE_URL`: Upstream control plane address (e.g. `http://vuhive-vuhive-cloud:8080`).
   - `--control-plane-token` / `CONTROL_PLANE_TOKEN`: Bearer token or API key forwarded in upstream requests.
-  - `--control-plane-retries` / `CONTROL_PLANE_RETRIES`: Number of retry attempts on transient 5xx errors (default `3`).
+  - `--control-plane-retries` / `CONTROL_PLANE_RETRIES`: Number of retry attempts on transient 5xx errors (default `2`).
+  - `--sse-poll-interval` / `SSE_POLL_INTERVAL`: Frequency for polling upstream control plane state transitions (default `2s`).
+  - `--sse-heartbeat-interval` / `SSE_HEARTBEAT_INTERVAL`: Keep-alive heartbeat interval for active SSE connections (default `15s`).
   - `--port` / `PORT`: Listening HTTP port (default `8081`).
 
 ## Configuration Parameters

@@ -63,6 +63,25 @@ func (m *MockBFFService) GetRunDetail(ctx context.Context, id string) (*inbound.
 	return args.Get(0).(*inbound.RunDetailComposite), args.Error(1)
 }
 
+func (m *MockBFFService) SubscribeEvents(ctx context.Context) (<-chan model.ServerSentEvent, func(), error) {
+	args := m.Called(ctx)
+	ch := args.Get(0)
+	var outCh <-chan model.ServerSentEvent
+	if ch != nil {
+		if c, ok := ch.(<-chan model.ServerSentEvent); ok {
+			outCh = c
+		} else if c, ok := ch.(chan model.ServerSentEvent); ok {
+			outCh = c
+		}
+	}
+	return outCh, args.Get(1).(func()), args.Error(2)
+}
+
+func (m *MockBFFService) BroadcastEvent(ctx context.Context, event model.ServerSentEvent) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
 func TestRouter_Endpoints(t *testing.T) {
 	mockSvc := new(MockBFFService)
 	router := rest.SetupRouter(mockSvc, "0.1.0")
@@ -370,6 +389,73 @@ func TestRouter_TransparentProxy(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, rec.Code)
 		assert.Contains(t, rec.Body.String(), "run-spawned")
+	})
+}
+
+func TestRouter_Events(t *testing.T) {
+	mockSvc := new(MockBFFService)
+	router := rest.SetupRouter(mockSvc, "0.1.0")
+
+	t.Run("GET /api/bff/v1/events establishes stream and sends events", func(t *testing.T) {
+		eventsCh := make(chan model.ServerSentEvent, 2)
+		unsubCalled := false
+		unsub := func() {
+			unsubCalled = true
+		}
+
+		mockSvc.On("SubscribeEvents", mock.Anything).Return(eventsCh, unsub, nil).Once()
+
+		reqCtx, reqCancel := context.WithCancel(context.Background())
+		defer reqCancel()
+
+		req, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, "/api/bff/v1/events", nil)
+		rec := httptest.NewRecorder()
+
+		// Send an event into channel before cancel
+		now := time.Now().UTC()
+		ev, _ := model.NewSystemHeartbeatEvent("hb-1", model.SystemHeartbeatPayload{
+			Status:        "UP",
+			ActiveClients: 1,
+			ActiveRuns:    0,
+			Timestamp:     now,
+		})
+		eventsCh <- ev
+
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			reqCancel()
+		}()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+		assert.Equal(t, "no-cache", rec.Header().Get("Cache-Control"))
+		assert.Contains(t, rec.Body.String(), "id: hb-1\nevent: system_heartbeat\n")
+		assert.True(t, unsubCalled, "unsubscribe should be called on disconnect")
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("GET /api/v1/bff/events legacy alias works", func(t *testing.T) {
+		eventsCh := make(chan model.ServerSentEvent, 1)
+		unsub := func() {}
+
+		mockSvc.On("SubscribeEvents", mock.Anything).Return(eventsCh, unsub, nil).Once()
+
+		reqCtx, reqCancel := context.WithCancel(context.Background())
+		req, _ := http.NewRequestWithContext(reqCtx, http.MethodGet, "/api/v1/bff/events", nil)
+		rec := httptest.NewRecorder()
+
+		go func() {
+			time.Sleep(20 * time.Millisecond)
+			reqCancel()
+		}()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+		mockSvc.AssertExpectations(t)
 	})
 }
 

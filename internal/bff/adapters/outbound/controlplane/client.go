@@ -489,3 +489,106 @@ func (c *Client) GetRunLogsURL(ctx context.Context, id string) (string, error) {
 	return urlResp.DownloadURL, nil
 }
 
+// ListRuns queries test runs filtered by status and limited to count.
+func (c *Client) ListRuns(ctx context.Context, status string, limit int) ([]outbound.RunDetail, error) {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "ControlPlaneClient.ListRuns").
+		Str("status", status).
+		Int("limit", limit).
+		Logger()
+	log.Debug().Msg("listing test runs")
+
+	u := fmt.Sprintf("%s/api/v1/runs", c.baseURL)
+	var params []string
+	if status != "" {
+		params = append(params, "status="+url.QueryEscape(status))
+	}
+	if limit > 0 {
+		params = append(params, "limit="+strconv.Itoa(limit))
+	}
+	if len(params) > 0 {
+		u += "?" + strings.Join(params, "&")
+	}
+
+	resp, err := c.executeRequest(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed querying test runs")
+		return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return []outbound.RunDetail{}, nil
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		statusErr := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		log.Error().Err(statusErr).Dur("duration_ms", time.Since(start)).Msg("failed listing test runs")
+		return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, statusErr)
+	}
+
+	var runsWrapper struct {
+		Runs []outbound.RunDetail `json:"runs"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&runsWrapper); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed decoding runs response")
+		return nil, model.NewDomainError(model.ErrInternal, err)
+	}
+
+	log.Info().
+		Int("count", len(runsWrapper.Runs)).
+		Dur("duration_ms", time.Since(start)).
+		Msg("completed listing test runs")
+
+	return runsWrapper.Runs, nil
+}
+
+// ListArtifacts queries compiled binary artifacts for a given test suite.
+func (c *Client) ListArtifacts(ctx context.Context, suiteID string) ([]outbound.ArtifactDetail, error) {
+	start := time.Now()
+	suiteID = strings.TrimSpace(suiteID)
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "ControlPlaneClient.ListArtifacts").
+		Str("suite_id", suiteID).
+		Logger()
+	log.Debug().Msg("listing artifacts for suite")
+
+	if suiteID == "" {
+		return nil, model.NewDomainError(model.ErrInvalidParameter, errors.New("suite id cannot be empty"))
+	}
+
+	targetURL := fmt.Sprintf("%s/api/v1/suites/%s/artifacts", c.baseURL, url.PathEscape(suiteID))
+	resp, err := c.executeRequest(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed querying artifacts")
+		return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return []outbound.ArtifactDetail{}, nil
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		statusErr := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		log.Error().Err(statusErr).Dur("duration_ms", time.Since(start)).Msg("failed listing artifacts")
+		return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, statusErr)
+	}
+
+	var artifactsWrapper struct {
+		Artifacts []outbound.ArtifactDetail `json:"artifacts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&artifactsWrapper); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed decoding artifacts response")
+		return nil, model.NewDomainError(model.ErrInternal, err)
+	}
+
+	log.Info().
+		Int("count", len(artifactsWrapper.Artifacts)).
+		Dur("duration_ms", time.Since(start)).
+		Msg("completed listing artifacts")
+
+	return artifactsWrapper.Artifacts, nil
+}
+

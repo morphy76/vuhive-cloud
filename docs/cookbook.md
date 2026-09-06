@@ -28,7 +28,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
   - [Recipe 7: Synchronizing Distributed Multi-Pod Runs with Start Barrier](#recipe-7-synchronizing-distributed-multi-pod-runs-with-start-barrier)
     - [Recipe 8: Aborting & Cancelling In-Flight Test Runs on Demand](#recipe-8-aborting--cancelling-in-flight-test-runs-on-demand)
     - [Recipe 9: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-9-execution-diagnostics-log-inspection--troubleshooting)
-    - [Recipe 10: Adopting the BFF Gateway — Composite Dashboards, Unified Run Details & Reverse Proxying](#recipe-10-adopting-the-bff-gateway--composite-dashboards-unified-run-details--reverse-proxying)
+    - [Recipe 10: Adopting the BFF Gateway — Composite Dashboards, Unified Run Details, Reverse Proxying & Real-Time SSE Streaming](#recipe-10-adopting-the-bff-gateway--composite-dashboards-unified-run-details-reverse-proxying--real-time-sse-streaming)
     - [Recipe 11: Accessing the Embedded Web Dashboard, PWA Routing & Accessible Design System](#recipe-11-accessing-the-embedded-web-dashboard--pwa-routing)
     - [Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors)
     - [Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines](#recipe-13-inspecting-control-plane-version-metadata--health-in-automated-pipelines)
@@ -876,9 +876,9 @@ kubectl logs -n vuhive-runners pod/<pod-name> -c runner
 
 ---
 
-### Recipe 10: Adopting the BFF Gateway — Composite Dashboards, Unified Run Details & Reverse Proxying
+### Recipe 10: Adopting the BFF Gateway — Composite Dashboards, Unified Run Details, Reverse Proxying & Real-Time SSE Streaming
 
-The Backend-For-Frontend service (`cmd/bff`) acts as high-throughput presentation gateway for the web dashboard (`web/`) and automation clients. It decouples UI requirements from backend domain services by providing concurrent composite aggregation, enriched run detail responses with direct S3 artifact links, and transparent reverse proxying for entity CRUD operations.
+The Backend-For-Frontend service (`cmd/bff`) acts as high-throughput presentation gateway for the web dashboard (`web/`) and automation clients. It decouples UI requirements from backend domain services by providing concurrent composite aggregation, enriched run detail responses with direct S3 artifact links, real-time Server-Sent Events (SSE) telemetry streaming, and transparent reverse proxying for entity CRUD operations.
 
 #### 1. Fetching the Composite Dashboard Overview
 
@@ -1024,10 +1024,72 @@ curl -s -i -X POST http://localhost:8081/api/bff/v1/sessions \
 curl -s -i http://localhost:8081/api/bff/v1/sessions/sess-usr-12345
 ```
 
+#### 6. Streaming Real-Time Status Updates via Server-Sent Events (SSE)
+
+To eliminate high-frequency browser polling when monitoring in-flight load tests or asynchronous source-to-binary compilations, the BFF exposes a persistent Server-Sent Events (SSE) stream at `GET /api/bff/v1/events` (and legacy alias `GET /api/v1/bff/events`).
+
+##### A. Connecting with cURL
+
+Listen to real-time events from the command line using unbuffered streaming (`curl -N`):
+
+```bash
+curl -N -s -H "Accept: text/event-stream" http://localhost:8081/api/bff/v1/events
+```
+
+##### B. Connecting with JavaScript (Browser `EventSource`)
+
+Frontend applications establish real-time connectivity with browser-native `EventSource`:
+
+```javascript
+const evtSource = new EventSource('/api/bff/v1/events');
+
+// Listen for test run lifecycle transitions (QUEUED -> RUNNING -> COMPLETED/FAILED/ABORTED)
+evtSource.addEventListener('run_status_changed', (event) => {
+  const payload = JSON.parse(event.data);
+  console.log(`Run ${payload.run_id} transitioned: ${payload.previous_status || 'INIT'} -> ${payload.status}`);
+  if (payload.status === 'COMPLETED' && payload.metrics) {
+    console.log(`TPS: ${payload.metrics.avg_tps}, p95: ${payload.metrics.p95_duration_ms}ms`);
+  }
+});
+
+// Listen for build status changes (QUEUED -> BUILDING -> READY/FAILED)
+evtSource.addEventListener('build_status_changed', (event) => {
+  const payload = JSON.parse(event.data);
+  console.log(`Artifact ${payload.artifact_id} status: ${payload.status}`);
+});
+
+// Periodic keep-alive heartbeats with active cluster telemetry
+evtSource.addEventListener('system_heartbeat', (event) => {
+  const payload = JSON.parse(event.data);
+  console.log(`Heartbeat: BFF ${payload.status}, connected clients: ${payload.active_clients}, active runs: ${payload.active_runs}`);
+});
+
+evtSource.onerror = (err) => {
+  console.error('SSE connection error:', err);
+};
+```
+
+##### C. Event Schema Reference
+
+| Event Type | Description | Key Payload Attributes |
+|:---|:---|:---|
+| `run_status_changed` | Dispatched immediately when a test run changes execution phase (`QUEUED`, `RUNNING`, `COMPLETED`, `FAILED`, `ABORTED`). | `run_id`, `suite_id`, `status`, `previous_status`, `k8s_job_name`, `metrics`, `sla_passed` |
+| `build_status_changed` | Dispatched when ephemeral source compilation transitions (`QUEUED`, `BUILDING`, `READY`, `FAILED`). | `artifact_id`, `suite_id`, `platform`, `status`, `previous_status`, `sha256_checksum`, `error_message` |
+| `system_heartbeat` | Dispatched periodically (default every 15s) to prevent proxy/NAT timeouts and communicate cluster load. | `status`, `active_clients`, `active_runs`, `timestamp` |
+
+##### Example `run_status_changed` Frame:
+
+```text
+id: run-3fa85f64-1
+event: run_status_changed
+data: {"run_id":"3fa85f64-5717-4562-b3fc-2c963f66afa6","suite_id":"e8d665b1-2e67-4228-8ab6-79c5b248a31e","status":"COMPLETED","previous_status":"RUNNING","started_at":"2026-09-06T22:00:00Z","finished_at":"2026-09-06T22:05:00Z","duration_ms":300000,"exit_code":0,"sla_passed":true,"metrics":{"total_iterations":15000,"total_requests":45000,"avg_tps":750.5,"p50_duration_ms":12.4,"p90_duration_ms":25.1,"p95_duration_ms":38.6,"p99_duration_ms":85.2,"error_rate_pct":0.02},"timestamp":"2026-09-06T22:05:01Z"}
+```
+
 > [!NOTE]
 > All `/api/bff/v1/*` endpoints are also accessible via their backwards-compatible `/api/v1/bff/*` paths for legacy integrations.
 
 ---
+
 
 ### Recipe 11: Adopting the React 19 Web Interface & Embedded PWA
 
