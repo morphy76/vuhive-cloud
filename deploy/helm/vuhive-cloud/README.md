@@ -103,7 +103,7 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set runner.initImage=vuhive/runner-init:local
 ```
 
-For full details on local container building and troubleshooting `ImagePullBackOff` issues, see [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+For full details on local container building, BuildKit cache pruning (`make docker-prune`), and troubleshooting `ImagePullBackOff` / Kubelet ImageGC eviction issues, see [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 ### 5. Production Deployment (with External PostgreSQL & S3)
 

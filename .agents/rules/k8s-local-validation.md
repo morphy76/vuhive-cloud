@@ -69,6 +69,8 @@ When testing local code changes against Rancher Desktop:
     nerdctl --namespace k8s.io build -t vuhive/runner-init:local -f deploy/docker/runner-init.Dockerfile .
     ```
 - **Image Pull Policy:** Always set `imagePullPolicy: IfNotPresent` or `imagePullPolicy: Never` in Pod and Job manifests to guarantee Rancher Desktop uses the locally built daemon image without attempting to pull from external registries.
+- **BuildKit Disk Pressure & Kubelet ImageGC Pruning:**
+  Iterative builds accumulate BuildKit layer cache in the VM disk. If disk usage crosses Kubelet's `ImageGCHighThresholdPercent` (80%-85%), Kubelet triggers continuous ImageGC (`ImageGCFailed`), sweeping unreferenced `--load` images within ~60 seconds and causing `ErrImageNeverPull` or `ErrImagePull`. Run `make docker-prune` (or `docker builder prune -f`) to reclaim disk space and resolve the eviction loop.
 
 ## 5. Deployment & Health Verification Workflow
 

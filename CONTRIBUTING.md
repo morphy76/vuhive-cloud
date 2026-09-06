@@ -93,6 +93,9 @@ make docker-build-server
 
 # Build only the runner init/wrapper image (vuhive/runner-init:local)
 make docker-build-runner-init
+
+# Prune Docker BuildKit cache if disk pressure triggers ImageGC eviction
+make docker-prune
 ```
 
 You can customize the target tags via environment variables:
@@ -139,6 +142,26 @@ helm install vuhive deploy/helm/vuhive-cloud \
 
 > [!IMPORTANT]
 > Ensure `image.pullPolicy=IfNotPresent` (or `Never`) so Kubernetes does not attempt to pull the `:local` tag from an external registry.
+
+### Troubleshooting: Kubelet ImageGC Eviction & BuildKit Disk Pressure
+
+During local Kubernetes smoke testing on Rancher Desktop with Docker/containerd inside a Lima virtual machine:
+
+1. **Root Cause**: Docker BuildKit stores layer cache on the shared virtual machine disk. Across multiple iterative compile cycles, this cache can grow significantly (often reaching 60+ GB).
+2. **Kubelet Threshold Trigger**: When VM disk consumption crosses Kubelet's `ImageGCHighThresholdPercent` (typically 80%–85%), Kubelet enters continuous Image Garbage Collection mode (`ImageGCFailed: wanted to free ... bytes`).
+3. **Aggressive Image Eviction**: While under disk pressure, Kubelet sweeps any image from the local CRI store that is not currently pinned by an active, running container. Consequently, local images loaded via `make docker-build` (`vuhive/server:local`, `vuhive/runner-init:local`) can be evicted within ~60 seconds of compilation.
+4. **Observed Symptoms**:
+   - Helm pre-install migration Jobs or control plane Pods fail with `ErrImageNeverPull` or `ErrImagePull` (`pull access denied for vuhive/server:local`).
+   - Kubernetes node events report `ImageGCFailed` or repeated image deletions.
+5. **Resolution**:
+   Run the dedicated `docker-prune` target to flush the BuildKit layer cache and reclaim disk space:
+   ```bash
+   make docker-prune
+   # or directly:
+   docker builder prune -f
+   ```
+   Once disk space is reclaimed, re-run `make docker-build` to reload fresh images into the local CRI store.
+
 
 ### End-to-End Local Cluster Smoke Verification
 

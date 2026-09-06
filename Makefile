@@ -71,6 +71,11 @@ docker-build-runner-init: ## Build runner-init container image with --load
 		-t $(RUNNER_INIT_IMAGE) \
 		-f deploy/docker/runner-init.Dockerfile .
 
+.PHONY: docker-prune
+docker-prune: ## Prune Docker build cache to prevent Kubelet ImageGC eviction on local clusters
+	$(DOCKER) builder prune -f
+
+
 .PHONY: test
 test: ## Run unit tests
 	go test -v ./...
