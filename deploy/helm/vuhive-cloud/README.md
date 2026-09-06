@@ -17,7 +17,7 @@ Official Helm chart for the `vuhive-cloud` control plane.
 ### Architecture Components
 
 - **Control Plane (`cmd/server`)**: Core engine orchestrating ephemeral compilation jobs, runner profiles, `batch/v1` Jobs, native CronJobs, and KPI indexing.
-- **Backend-For-Frontend (`cmd/bff`)**: Lightweight gateway serving the embedded React 19 SPA web dashboard and PWA assets directly via Go `embed.FS`, managing client sessions, and aggregating API calls.
+- **Backend-For-Frontend (`cmd/bff`)**: High-throughput composite gateway serving the embedded React 19 SPA web dashboard and PWA assets directly via Go `embed.FS`, managing client sessions, providing sub-50ms parallel aggregation (`GET /api/bff/v1/dashboard`), unified run detail endpoints with presigned S3 links (`GET /api/bff/v1/runs/{id}`), and transparent reverse proxying for entity CRUD operations (`/api/bff/v1/suites`, `/api/bff/v1/profiles`, `/api/bff/v1/schedules`, `/api/bff/v1/runs`) to the upstream control plane.
 
 ## Prerequisites
 
@@ -188,6 +188,18 @@ When a `CronJob` fires a `batch/v1` Job:
 2. The `RunnerJobWatcher` informer auto-creates a `TestRun` record linked to the schedule, and records both `k8s_job_name` and the **actual `k8s_namespace`** from `runner.namespace` (not a hard-coded default).
 3. When the runner-wrapper POSTs the completion callback with `run_id = <job-name>`, the control plane first attempts UUID lookup, then falls back to `k8s_job_name` correlation, ensuring the `TestRun` is correctly finalized with summary KPIs regardless of whether the run was dispatched ad-hoc or via a CronJob.
 
+### Backend-For-Frontend (BFF) Gateway & Dashboard Routing
+
+The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway and SPA host for the control plane:
+
+- **Composite Aggregation (`/api/bff/v1/dashboard`)**: Concurrently aggregates system status, active run counts, recent suites, and runner profiles within a single sub-50ms HTTP request.
+- **Unified Run Detail (`/api/bff/v1/runs/{id}`)**: Enriches test run execution records with parsed summary KPIs and dynamically generated pre-signed S3 download URLs for `summary.json` and `run.log`.
+- **Transparent Reverse Proxying**: Routes under `/api/bff/v1/suites`, `/api/bff/v1/profiles`, `/api/bff/v1/schedules`, and `/api/bff/v1/runs` transparently proxy requests to the upstream control plane (`/api/v1/*`), handling HTTP header propagation (Bearer tokens, API keys) and connection pooling automatically.
+- **Service Configuration**: Configured via CLI flags or environment variables:
+  - `--control-plane-url` / `CONTROL_PLANE_URL`: Upstream control plane address (e.g. `http://vuhive-vuhive-cloud:8080`).
+  - `--control-plane-token` / `CONTROL_PLANE_TOKEN`: Bearer token or API key forwarded in upstream requests.
+  - `--control-plane-retries` / `CONTROL_PLANE_RETRIES`: Number of retry attempts on transient 5xx errors (default `3`).
+  - `--port` / `PORT`: Listening HTTP port (default `8081`).
 
 ## Configuration Parameters
 

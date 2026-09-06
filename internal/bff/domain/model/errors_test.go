@@ -34,6 +34,21 @@ func TestDomainErrors(t *testing.T) {
 			err:      model.ErrUnauthorized,
 			expected: "unauthorized request",
 		},
+		{
+			name:     "ErrRunNotFound",
+			err:      model.ErrRunNotFound,
+			expected: "test run not found",
+		},
+		{
+			name:     "ErrSuiteNotFound",
+			err:      model.ErrSuiteNotFound,
+			expected: "test suite not found",
+		},
+		{
+			name:     "ErrProfileNotFound",
+			err:      model.ErrProfileNotFound,
+			expected: "runner profile not found",
+		},
 	}
 
 	for _, tc := range tests {
