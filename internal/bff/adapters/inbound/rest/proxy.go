@@ -21,18 +21,17 @@ func NewControlPlaneProxy(targetBaseURL string, transport http.RoundTripper) gin
 
 	proxy := &httputil.ReverseProxy{
 		Transport: transport,
-		Director: func(req *http.Request) {
-			req.URL.Scheme = parsedURL.Scheme
-			req.URL.Host = parsedURL.Host
-			req.Host = parsedURL.Host
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(parsedURL)
 
 			// Rewrite /api/bff/v1/ prefix to /api/v1/
-			path := req.URL.Path
+			path := pr.Out.URL.Path
 			if strings.HasPrefix(path, "/api/bff/v1/") {
-				req.URL.Path = "/api/v1/" + strings.TrimPrefix(path, "/api/bff/v1/")
+				pr.Out.URL.Path = "/api/v1/" + strings.TrimPrefix(path, "/api/bff/v1/")
 			} else if path == "/api/bff/v1" {
-				req.URL.Path = "/api/v1"
+				pr.Out.URL.Path = "/api/v1"
 			}
+			pr.Out.Host = parsedURL.Host
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			log := zerolog.Ctx(r.Context()).With().

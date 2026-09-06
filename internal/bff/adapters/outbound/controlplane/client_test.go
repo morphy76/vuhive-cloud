@@ -214,11 +214,12 @@ func TestClient_GetActiveRunsCount(t *testing.T) {
 		mockTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 			status := req.URL.Query().Get("status")
 			var body string
-			if status == "RUNNING" {
+			switch status {
+			case "RUNNING":
 				body = `{"runs":[],"count":0,"total":3,"limit":1,"offset":0}`
-			} else if status == "QUEUED" {
+			case "QUEUED":
 				body = `{"runs":[],"count":0,"total":2,"limit":1,"offset":0}`
-			} else {
+			default:
 				body = `{"runs":[],"count":0,"total":0,"limit":1,"offset":0}`
 			}
 			return &http.Response{
