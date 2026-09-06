@@ -14,6 +14,7 @@ This chart bundles backing infrastructure dependencies for the `vuhive-cloud` co
 
 > **Documentation Navigation**:
 > - **System Architecture & Overview**: [`README.md`](../../README.md) and [`ARCHITECTURE_SPEC.md`](../../ARCHITECTURE_SPEC.md)
+> - **Developer & Contributor Guide**: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
 > - **Control Plane Helm Chart**: [`deploy/helm/vuhive-cloud/README.md`](../vuhive-cloud/README.md)
 > - **Adoption Guide & API Recipes**: [`docs/cookbook.md`](../../docs/cookbook.md)
 > - **REST API Reference**: [`api/openapi.yaml`](../../api/openapi.yaml)
