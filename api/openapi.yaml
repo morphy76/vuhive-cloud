@@ -515,7 +515,18 @@ paths:
   /api/v1/suites/{id}/builds:
     post:
       summary: Upload Go test source and trigger build Job
-      description: Ephemeral build job compiling Go source archive into static Linux binaries.
+      description: |
+        Accepts a multipart/form-data payload containing the Go test source archive
+        (`.tar.gz`) and triggers an ephemeral Kubernetes `batch/v1` Job to compile it
+        for the requested target platform. The response is returned immediately; the
+        build runs asynchronously.
+
+        **Retry semantics**: If a previous compilation attempt for the same suite and
+        platform resulted in a `FAILED` artifact, uploading corrected sources via this
+        endpoint automatically resets the artifact from `FAILED → PENDING` and prunes
+        the stale Kubernetes Job before dispatching a fresh one. No manual database or
+        cluster intervention is required — just re-upload and the control plane handles
+        the rest.
       operationId: uploadAndBuild
       tags:
         - Builds
