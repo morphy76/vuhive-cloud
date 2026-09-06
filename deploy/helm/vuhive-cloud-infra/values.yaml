@@ -43,6 +43,19 @@ openapiViewer:
     repository: swaggerapi/swagger-ui
     tag: v5.18.2
     pullPolicy: IfNotPresent
+  # specUrl specifies the target OpenAPI 3.1 specification URL loaded by Swagger UI.
+  # IMPORTANT: Swagger UI is a client-side Single Page Application (SPA) running directly inside
+  # the operator's desktop browser (not a server-side proxy inside the cluster). The browser itself
+  # must be able to resolve and reach this URL:
+  #   - Default ("http://vuhive-vuhive-cloud:8080/openapi.json"): Cluster-internal Service DNS name.
+  #     Resolves only within the Kubernetes pod network (e.g. from an in-cluster browser or proxy).
+  #   - Local Port-Forwarding (kubectl port-forward): Host desktop browsers cannot resolve cluster-internal
+  #     DNS names ("vuhive-vuhive-cloud"). When port-forwarding Swagger UI to localhost, configure:
+  #       specUrl: "http://localhost:8080/openapi.json"
+  #     and also port-forward the control plane service to localhost:8080.
+  #   - Ingress / Reverse Proxy: When Swagger UI and the control plane are exposed behind an Ingress
+  #     controller under the same hostname, configure a relative path:
+  #       specUrl: "/openapi.json"
   specUrl: "http://vuhive-vuhive-cloud:8080/openapi.json"
   resources:
     requests:

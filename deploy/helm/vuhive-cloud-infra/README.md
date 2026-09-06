@@ -55,18 +55,33 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --namespace vuhive-system \
   --create-namespace \
   --set openapiViewer.enabled=true \
+  --set openapiViewer.specUrl="http://localhost:8080/openapi.json" \
   --wait --timeout=180s
 ```
 
-Once deployed, access the OpenAPI viewer locally via port-forwarding:
+> [!IMPORTANT]
+> **Browser-Accessible `specUrl` Requirement**:
+> Swagger UI is a client-side Single Page Application (SPA) executed directly inside the operator's desktop browser (not a server-side proxy in the cluster). When loaded, the browser directly resolves and fetches the specification URL (`specUrl`).
+>
+> - **In-Cluster Default (`http://vuhive-vuhive-cloud:8080/openapi.json`)**: Resolves only inside the Kubernetes pod network. Desktop browsers accessing Swagger UI externally cannot resolve Kubernetes internal DNS names (`vuhive-vuhive-cloud`), causing `ERR_NAME_NOT_RESOLVED`.
+> - **Local Development via `kubectl port-forward`**: Configure `specUrl: "http://localhost:8080/openapi.json"` (as shown above) and port-forward both the viewer and the control plane to your local machine.
+> - **Ingress / Shared Domain**: When exposing Swagger UI and the control plane under the same ingress hostname, configure a relative path (e.g., `--set openapiViewer.specUrl="/openapi.json"`).
+
+#### Accessing Swagger UI via Port-Forwarding
+
+When running locally, port-forward both the OpenAPI viewer and the `vuhive-cloud` control plane:
 
 ```bash
+# 1. Port-forward the OpenAPI Swagger UI viewer (port 8081)
 kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openapi-viewer 8081:8080
+
+# 2. In a separate terminal, port-forward the control plane service (port 8080)
+kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080
 ```
 
-Then navigate to `http://localhost:8081` in your browser. The viewer fetches the control plane's machine-readable specification from `http://vuhive-vuhive-cloud:8080/openapi.json` (configurable via `openapiViewer.specUrl`).
+Then navigate to `http://localhost:8081` in your desktop browser. Swagger UI initiates a browser `fetch()` to `http://localhost:8080/openapi.json`.
 
-Because modern web browsers enforce the Same-Origin Policy when fetching resources across different ports or hostnames, the `vuhive-cloud` control plane includes built-in Cross-Origin Resource Sharing (CORS) middleware and responds to HTTP `OPTIONS` preflight requests with `204 No Content` and standard CORS headers (`Access-Control-Allow-Origin: *`), ensuring seamless API exploration without browser blocks.
+Because modern web browsers enforce the Same-Origin Policy when fetching resources across different ports or hostnames, the `vuhive-cloud` control plane includes built-in Cross-Origin Resource Sharing (CORS) middleware and responds to HTTP `OPTIONS` preflight requests with `204 No Content` and standard CORS headers (`Access-Control-Allow-Origin: *`), ensuring seamless API exploration and ad-hoc request testing without browser blocks.
 
 ## Configuration Parameters
 
@@ -84,7 +99,7 @@ Because modern web browsers enforce the Same-Origin Policy when fetching resourc
 | `openapiViewer.image.repository` | Container image repository for OpenAPI viewer | `swaggerapi/swagger-ui` |
 | `openapiViewer.image.tag` | Container image tag | `v5.18.2` |
 | `openapiViewer.image.pullPolicy` | Container image pull policy | `IfNotPresent` |
-| `openapiViewer.specUrl` | Target URL to control plane OpenAPI specification | `http://vuhive-vuhive-cloud:8080/openapi.json` |
+| `openapiViewer.specUrl` | Target URL to OpenAPI spec (fetched client-side by browser). Use `http://localhost:8080/openapi.json` for `kubectl port-forward` or `/openapi.json` for shared Ingress | `http://vuhive-vuhive-cloud:8080/openapi.json` |
 | `openapiViewer.service.type` | Kubernetes service type | `ClusterIP` |
 | `openapiViewer.service.port` | Kubernetes service port | `8080` |
 | `openapiViewer.ingress.enabled` | Enable Kubernetes Ingress for OpenAPI viewer | `false` |
