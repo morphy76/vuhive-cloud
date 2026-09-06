@@ -165,6 +165,15 @@ curl -i -X POST http://localhost:8080/api/v1/suites/suite-auth-checkout/builds \
 
 The control plane creates an ephemeral Kubernetes `batch/v1` `Job` running `golang:1.26-alpine` in the builder namespace (`vuhive-system`). The job compiles the Go source into a statically linked binary and uploads it to the configured S3 bucket.
 
+> [!TIP]
+> **In-Cluster & CI/CD Probe File Staging (Avoiding `kubectl cp` Tar Dependency)**:
+> When staging source packages from inside a Kubernetes cluster using an ephemeral probe or debug container (e.g. `curlimages/curl:latest`), standard `kubectl cp` will fail with `command terminated with exit code 3` because minimal curl images do not contain the `tar` binary.
+> To stage archives without container dependencies, stream the file via the Base64 stdin pipeline:
+> ```bash
+> base64 < test-suite.tar.gz | kubectl exec -i -n vuhive-system curl-test -- sh -c 'base64 -d > /tmp/test-suite.tar.gz'
+> ```
+> Alternatively, deploy an Alpine probe image with `tar` pre-installed (`alpine:3.20` with `apk add --no-cache curl tar`) to enable native `kubectl cp`.
+
 ---
 
 ### Recipe 2: Monitoring Build Status & Inspecting Artifacts
@@ -834,6 +843,7 @@ kubectl logs -n vuhive-runners pod/<pod-name> -c runner
 | `409 Conflict` | `test run is still in progress` | Report or logs queried while the runner pod is still running. | Await run completion before fetching reports/logs. |
 | `424 Failed Dependency` | `barrier rendezvous aborted` | Start barrier rendezvous was cancelled by a worker failure. | Inspect worker initialization logs and restart run. |
 | `422 Unprocessable Entity` | `unsupported target platform` | Platform is not `linux/amd64` or `linux/arm64`. | Specify valid platform architecture. |
+| CLI / `kubectl` | `command terminated with exit code 3` | `kubectl cp` executed against a minimal container lacking `tar` (e.g. `curlimages/curl:latest`). | Use Base64 stdin pipeline: `base64 < archive.tar.gz \| kubectl exec -i ... -- sh -c 'base64 -d > /tmp/archive.tar.gz'` or use an Alpine probe image with `tar`. |
 
 ---
 

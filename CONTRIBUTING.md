@@ -140,6 +140,59 @@ helm install vuhive deploy/helm/vuhive-cloud \
 > [!IMPORTANT]
 > Ensure `image.pullPolicy=IfNotPresent` (or `Never`) so Kubernetes does not attempt to pull the `:local` tag from an external registry.
 
+### End-to-End Local Cluster Smoke Verification
+
+For end-to-end integration validation on a local cluster (Rancher Desktop, Kind, or Minikube), test workflows require staging a Go source package into an in-cluster probe container to upload it to the build subsystem.
+
+#### 1. Launch In-Cluster Probe Pod
+You can launch an ephemeral probe container inside the test namespace:
+
+- **Option A (Default Minimal Probe)**:
+  ```bash
+  kubectl run curl-test -n vuhive-system --image=curlimages/curl:latest --restart=Never --command -- sleep 3600
+  kubectl wait --for=condition=Ready pod/curl-test -n vuhive-system --timeout=60s
+  ```
+- **Option B (Alpine Probe with Pre-Installed `tar`)**:
+  ```bash
+  kubectl run curl-test -n vuhive-system --image=alpine:3.20 --restart=Never --command -- sh -c "apk add --no-cache curl tar && sleep 3600"
+  kubectl wait --for=condition=Ready pod/curl-test -n vuhive-system --timeout=60s
+  ```
+
+#### 2. Staging Files Without Container Tar Dependency
+> [!WARNING]
+> **Why `kubectl cp` Fails on Minimal Images**: `kubectl cp` requires the `tar` binary inside the destination container. The minimal `curlimages/curl:latest` image does not contain `tar`, causing `kubectl cp` to terminate with exit code 3 (`tar: not found`).
+
+To stage archives reliably without container dependencies:
+- **Base64 Stdin Pipeline (Option A - Recommended)**:
+  Pipe the archive directly into the probe container using base64 encoding over stdin:
+  ```bash
+  base64 < test-suite.tar.gz | kubectl exec -i -n vuhive-system curl-test -- sh -c 'base64 -d > /tmp/test-suite.tar.gz'
+  ```
+- **Native `kubectl cp` (Option B)**:
+  If using Option B (Alpine with `tar`), copy directly:
+  ```bash
+  kubectl cp test-suite.tar.gz vuhive-system/curl-test:/tmp/test-suite.tar.gz
+  ```
+
+#### 3. Triggering In-Cluster Builds & Verifying Workloads
+From inside `curl-test`, upload the package to trigger ephemeral compilation and verify execution:
+```bash
+# Upload source archive to trigger build job
+kubectl exec -n vuhive-system curl-test -- \
+  curl -s -i -X POST "http://vuhive-vuhive-cloud:8080/api/v1/suites/${SUITE_ID}/builds" \
+  -F "source=@/tmp/test-suite.tar.gz" \
+  -F "platform=linux/arm64"
+
+# Wait for compilation Job completion
+kubectl wait -n vuhive-system --for=condition=complete job -l app.kubernetes.io/name=vuhive-builder --timeout=120s
+
+# Verify artifact is READY
+kubectl exec -n vuhive-system curl-test -- \
+  curl -s "http://vuhive-vuhive-cloud:8080/api/v1/suites/${SUITE_ID}/artifacts"
+```
+
+For the complete automated agent testing contract and teardown protocols, refer to [`.agents/rules/k8s-local-validation.md`](./.agents/rules/k8s-local-validation.md).
+
 ---
 
 ## Testing & Quality Assurance

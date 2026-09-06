@@ -118,8 +118,15 @@ kubectl --context rancher-desktop wait --namespace "${SMOKE_NS}" \
   --for=condition=ready pod -l app.kubernetes.io/name=vuhive-cloud --timeout=120s
 ```
 
-### Step 6: Endpoint Smoke Probing
-Deploy an in-cluster curl probe pod to verify HTTP endpoints:
+### Step 6: Endpoint Smoke Probing & File Staging Setup
+
+Deploy an in-cluster probe pod to verify HTTP endpoints and stage test packages. Choose between two supported probe patterns:
+
+#### Option A: Minimal Curl Probe (Default)
+Uses `curlimages/curl:latest` for a minimal, lightweight probe footprint.
+> [!WARNING]
+> **No `tar` Binary in Minimal Curl Image**: `curlimages/curl:latest` does NOT contain `tar`. Attempting to use `kubectl cp` will fail with `command terminated with exit code 3` (`tar: not found`). When using Option A, files MUST be staged into the container using the **Base64 Stdin Pipeline** in Step 7.
+
 ```bash
 kubectl --context rancher-desktop run curl-test -n "${SMOKE_NS}" --image=curlimages/curl:latest --restart=Never --command -- sleep 3600
 kubectl --context rancher-desktop wait --for=condition=Ready pod/curl-test -n "${SMOKE_NS}" --timeout=60s
@@ -129,22 +136,164 @@ kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -i 
 kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -i http://vuhive-vuhive-cloud:8080/version
 ```
 
+#### Option B: Alpine Utility Probe (Native `kubectl cp` Support)
+If native `kubectl cp` support is desired without base64 piping, spin up an Alpine probe pre-loaded with both `curl` and `tar`:
+
+```bash
+kubectl --context rancher-desktop run curl-test -n "${SMOKE_NS}" --image=alpine:3.20 --restart=Never --command -- sh -c "apk add --no-cache curl tar && sleep 3600"
+kubectl --context rancher-desktop wait --for=condition=Ready pod/curl-test -n "${SMOKE_NS}" --timeout=60s
+
+# Probe health and version
+kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -i http://vuhive-vuhive-cloud:8080/healthz
+kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -i http://vuhive-vuhive-cloud:8080/version
+```
+
 ### Step 7: End-to-End Build & Runner Job Verification
-1. **Create Active Test Suite & Runner Profile:**
-   - Verify `POST /api/v1/profiles` creates a runner profile.
-   - Insert an `ACTIVE` test suite into the database.
-2. **Build Subsystem Verification:**
-   - Package a valid Go test module (with `go.mod` and `main.go`).
-   - POST to `http://vuhive-vuhive-cloud:8080/api/v1/suites/{id}/builds` with `platform=linux/arm64`.
-   - Await completion of build job (`app.kubernetes.io/name=vuhive-builder`) and assert artifact status is `READY`.
-3. **Runner Job Completion Verification:**
-   - Create a test schedule (`POST /api/v1/schedules`) to instantiate a native Kubernetes `CronJob`.
-   - Dispatch an ad-hoc Job:
-     ```bash
-     kubectl --context rancher-desktop create job test-runner-exec --from=cronjob/<cronjob-name> -n "${SMOKE_NS}"
-     kubectl --context rancher-desktop wait --namespace "${SMOKE_NS}" --for=condition=complete job/test-runner-exec --timeout=120s
-     ```
-   - Verify exit status, log upload, and report upload in MinIO.
+
+Execute full end-to-end verification following this sequential workflow:
+
+#### 1. Create Active Test Suite & Runner Profile
+Create a reusable runner profile via the control plane REST API:
+```bash
+kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -i -X POST http://vuhive-vuhive-cloud:8080/api/v1/profiles \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "smoke-profile",
+    "description": "Smoke test runner profile",
+    "runner_image": "alpine:3.20",
+    "cpu_request": "100m",
+    "cpu_limit": "500m",
+    "memory_request": "128Mi",
+    "memory_limit": "512Mi"
+  }'
+```
+
+Insert an `ACTIVE` test suite into the database:
+```bash
+kubectl --context rancher-desktop exec -i -n "${SMOKE_NS}" vuhive-infra-postgresql-0 -- psql -U vuhive -d vuhive -c \
+  "INSERT INTO test_suites (id, name, description, status, created_at, updated_at) VALUES ('smoke-suite-01', 'Smoke Suite', 'Local validation test suite', 'ACTIVE', NOW(), NOW()) ON CONFLICT (id) DO NOTHING;"
+```
+
+#### 2. Build Subsystem Verification (File Staging & Ephemeral Compilation)
+
+Package a minimal Go load test module locally:
+```bash
+mkdir -p /tmp/smoke-test-module
+cat << 'EOF' > /tmp/smoke-test-module/main.go
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/morphy76/vuhive"
+)
+
+func main() {
+	scenario := vuhive.NewScenario("Smoke Test").
+		Step("Ping", func(ctx context.Context) error {
+			resp, err := http.Get("http://vuhive-vuhive-cloud:8080/healthz")
+			if err != nil || resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("ping failed: %w", err)
+			}
+			return nil
+		})
+
+	engine := vuhive.NewEngine(vuhive.EngineConfig{
+		DefaultDuration: 5 * time.Second,
+		DefaultVUs:      1,
+	})
+
+	if err := engine.Run(scenario); err != nil {
+		panic(err)
+	}
+}
+EOF
+
+cat << 'EOF' > /tmp/smoke-test-module/go.mod
+module smoke-test
+
+go 1.26
+
+require github.com/morphy76/vuhive v1.1.5
+EOF
+
+tar -czf /tmp/smoke-suite.tar.gz -C /tmp/smoke-test-module main.go go.mod
+```
+
+**Stage the archive into the probe container**:
+- **Option A (Base64 Stdin Pipeline - Preferred for `curlimages/curl:latest`)**:
+  Streams the archive over standard input and decodes it inside the probe without requiring `tar`:
+  ```bash
+  base64 < /tmp/smoke-suite.tar.gz | kubectl --context rancher-desktop exec -i -n "${SMOKE_NS}" curl-test -- sh -c 'base64 -d > /tmp/smoke-suite.tar.gz'
+  ```
+- **Option B (Native `kubectl cp` - When using Option B Alpine Probe)**:
+  ```bash
+  kubectl --context rancher-desktop cp /tmp/smoke-suite.tar.gz "${SMOKE_NS}"/curl-test:/tmp/smoke-suite.tar.gz
+  ```
+
+**Trigger asynchronous build compilation**:
+```bash
+# Target linux/arm64 for Apple Silicon Rancher Desktop, or linux/amd64 for x86_64
+kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
+  curl -s -i -X POST "http://vuhive-vuhive-cloud:8080/api/v1/suites/smoke-suite-01/builds" \
+  -F "source=@/tmp/smoke-suite.tar.gz" \
+  -F "platform=linux/arm64"
+```
+
+**Await completion of ephemeral build job and assert artifact status**:
+```bash
+# Wait for the compilation job to complete
+kubectl --context rancher-desktop wait --namespace "${SMOKE_NS}" \
+  --for=condition=complete job -l app.kubernetes.io/name=vuhive-builder --timeout=120s
+
+# Verify artifact is READY and checksum is populated
+kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
+  curl -s "http://vuhive-vuhive-cloud:8080/api/v1/suites/smoke-suite-01/artifacts"
+```
+
+#### 3. Runner Job Completion Verification
+
+Trigger an ad-hoc test run via REST API:
+```bash
+kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
+  curl -s -i -X POST "http://vuhive-vuhive-cloud:8080/api/v1/runs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "suite_id": "smoke-suite-01",
+    "profile_id": "smoke-profile"
+  }'
+```
+
+Alternatively, create a test schedule to verify native Kubernetes `CronJob` management:
+```bash
+kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
+  curl -s -i -X POST "http://vuhive-vuhive-cloud:8080/api/v1/schedules" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "suite_id": "smoke-suite-01",
+    "profile_id": "smoke-profile",
+    "cron_expression": "0 0 31 2 *"
+  }'
+
+# Dispatch manual execution from CronJob
+kubectl --context rancher-desktop create job test-runner-exec --from=cronjob/<cronjob-name> -n "${SMOKE_NS}"
+```
+
+**Wait for runner Job completion**:
+```bash
+kubectl --context rancher-desktop wait --namespace "${SMOKE_NS}" \
+  --for=condition=complete job -l app.kubernetes.io/managed-by=vuhive-cloud --timeout=120s
+```
+
+**Verify exit status, log upload, and report upload**:
+```bash
+# Fetch latest runs and verify status is COMPLETED
+kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
+  curl -s "http://vuhive-vuhive-cloud:8080/api/v1/runs?suite_id=smoke-suite-01"
+```
 
 ## 6. Failure Diagnostics Protocol (Dump Before Teardown)
 
