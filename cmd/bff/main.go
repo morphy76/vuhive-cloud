@@ -28,6 +28,8 @@ func main() {
 	cpURLFlag := flag.String("control-plane-url", "", "Upstream control plane URL (defaults to CONTROL_PLANE_URL env or http://localhost:8080)")
 	devProxyFlag := flag.String("dev-proxy-url", "", "Vite/frontend dev server proxy URL for live-reload (defaults to DEV_PROXY_URL env)")
 	staticDirFlag := flag.String("static-dir", "", "Local static directory for web assets (defaults to STATIC_DIR env, overrides embedded assets)")
+	tokenFlag := flag.String("control-plane-token", "", "Bearer token for control plane API (defaults to CONTROL_PLANE_TOKEN env)")
+	retriesFlag := flag.Int("control-plane-retries", 2, "Max retries for idempotent control plane requests")
 	flag.Parse()
 
 	if *showVersion {
@@ -55,6 +57,13 @@ func main() {
 		cpURL = "http://localhost:8080"
 	}
 
+	cpToken := *tokenFlag
+	if cpToken == "" {
+		cpToken = os.Getenv("CONTROL_PLANE_TOKEN")
+	}
+
+	maxRetries := *retriesFlag
+
 	devProxyURLStr := *devProxyFlag
 	if devProxyURLStr == "" {
 		devProxyURLStr = os.Getenv("DEV_PROXY_URL")
@@ -77,8 +86,10 @@ func main() {
 
 	// Initialize outbound adapters
 	cpClient := controlplane.NewClient(controlplane.Config{
-		BaseURL: cpURL,
-		Timeout: 5 * time.Second,
+		BaseURL:    cpURL,
+		Timeout:    5 * time.Second,
+		AuthToken:  cpToken,
+		MaxRetries: maxRetries,
 	})
 	cacheAdapter := cache.NewMemoryCache()
 
@@ -106,8 +117,8 @@ func main() {
 		log.Info().Msg("configured SPA file server with embedded production assets")
 	}
 
-	// Setup inbound REST router
-	router := rest.SetupRouter(bffService, version.Version, spaConfig)
+	// Setup inbound REST router with control plane transparent proxying
+	router := rest.SetupRouterWithProxy(bffService, version.Version, cpURL, nil, spaConfig)
 
 	server := &http.Server{
 		Addr:         ":" + port,

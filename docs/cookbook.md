@@ -28,7 +28,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
   - [Recipe 7: Synchronizing Distributed Multi-Pod Runs with Start Barrier](#recipe-7-synchronizing-distributed-multi-pod-runs-with-start-barrier)
     - [Recipe 8: Aborting & Cancelling In-Flight Test Runs on Demand](#recipe-8-aborting--cancelling-in-flight-test-runs-on-demand)
     - [Recipe 9: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-9-execution-diagnostics-log-inspection--troubleshooting)
-    - [Recipe 10: Inspecting BFF Gateway Status & Session Management](#recipe-10-inspecting-bff-gateway-status--session-management)
+    - [Recipe 10: Adopting the BFF Gateway — Composite Dashboards, Unified Run Details & Reverse Proxying](#recipe-10-adopting-the-bff-gateway--composite-dashboards-unified-run-details--reverse-proxying)
     - [Recipe 11: Accessing the Embedded Web Dashboard, PWA Routing & Accessible Design System](#recipe-11-accessing-the-embedded-web-dashboard--pwa-routing)
     - [Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors)
     - [Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines](#recipe-13-inspecting-control-plane-version-metadata--health-in-automated-pipelines)
@@ -876,14 +876,16 @@ kubectl logs -n vuhive-runners pod/<pod-name> -c runner
 
 ---
 
-### Recipe 10: Inspecting BFF Gateway Status & Session Management
+### Recipe 10: Adopting the BFF Gateway — Composite Dashboards, Unified Run Details & Reverse Proxying
 
-The Backend-For-Frontend service (`cmd/bff`) acts as the aggregator and API gateway for the web interface, exposing health status and managing client session state.
+The Backend-For-Frontend service (`cmd/bff`) acts as high-throughput presentation gateway for the web dashboard (`web/`) and automation clients. It decouples UI requirements from backend domain services by providing concurrent composite aggregation, enriched run detail responses with direct S3 artifact links, and transparent reverse proxying for entity CRUD operations.
 
-#### 1. Checking BFF Aggregated Health & Control Plane Connectivity:
+#### 1. Fetching the Composite Dashboard Overview
+
+The dashboard endpoint concurrently queries system health, active test runs count, recent test suites, and runner profiles within a single round-trip (<50ms):
 
 ```bash
-curl -s -i http://localhost:8081/api/v1/bff/status
+curl -s -i http://localhost:8081/api/bff/v1/dashboard
 ```
 
 Expected response (`200 OK`):
@@ -891,17 +893,123 @@ Expected response (`200 OK`):
 ```json
 {
   "bff_status": "UP",
-  "bff_version": "0.0.1",
+  "bff_version": "0.1.0",
   "control_plane_status": "UP",
   "control_plane_version": "0.0.1",
-  "timestamp": "2026-09-05T11:45:00Z"
+  "active_runs_count": 2,
+  "recent_suites": [
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "name": "checkout-stress-test",
+      "description": "End-to-end checkout flow load test",
+      "state": "ACTIVE",
+      "created_at": "2026-09-06T10:00:00Z",
+      "updated_at": "2026-09-06T10:05:00Z"
+    }
+  ],
+  "profiles_count": 1,
+  "profiles_summary": [
+    {
+      "id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+      "name": "standard-worker",
+      "description": "Standard load generator profile",
+      "runner_image": "vuhive/runner-default:v1.0.0",
+      "cpu_request": "1000m",
+      "cpu_limit": "2000m",
+      "memory_limit": "4Gi",
+      "created_at": "2026-09-06T09:00:00Z"
+    }
+  ],
+  "timestamp": "2026-09-06T12:00:00Z"
 }
 ```
 
-#### 2. Creating an Authenticated Client Session:
+#### 2. Querying Unified Run Details with Pre-Signed Artifact Links
+
+The unified run detail endpoint combines execution metadata, parsed performance KPIs, and direct pre-signed S3 download URLs for `summary.json` and `run.log`:
 
 ```bash
-curl -s -i -X POST http://localhost:8081/api/v1/bff/sessions \
+curl -s -i http://localhost:8081/api/bff/v1/runs/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
+```
+
+Expected response (`200 OK`):
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+  "suite_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "artifact_id": "c7a6e118-20ab-48d6-953b-e01140026e61",
+  "runner_profile_id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+  "status": "COMPLETED",
+  "k8s_job_name": "vuhive-run-a1b2c3d4",
+  "k8s_namespace": "vuhive-runners",
+  "duration_ms": 60000,
+  "exit_code": 0,
+  "sla_passed": true,
+  "metrics": {
+    "total_iterations": 15000,
+    "total_requests": 45000,
+    "avg_tps": 750.5,
+    "p50_duration_ms": 12.4,
+    "p90_duration_ms": 25.1,
+    "p95_duration_ms": 38.6,
+    "p99_duration_ms": 85.2,
+    "error_rate_pct": 0.02
+  },
+  "s3_report_key": "runs/a1b2c3d4/summary.json",
+  "s3_logs_key": "runs/a1b2c3d4/run.log",
+  "created_at": "2026-09-06T12:00:00Z",
+  "artifact_links": {
+    "report_url": "http://localhost:9000/vuhive-artifacts/runs/a1b2c3d4/summary.json?X-Amz-Signature=...",
+    "logs_url": "http://localhost:9000/vuhive-artifacts/runs/a1b2c3d4/run.log?X-Amz-Signature=..."
+  }
+}
+```
+
+#### 3. Transparent Entity CRUD Reverse Proxying
+
+The BFF acts as a transparent reverse proxy for entity operations, automatically forwarding requests to the upstream control plane (`/api/bff/v1/*` $\to$ `/api/v1/*`) while maintaining connection pooling, Bearer token propagation, and retries:
+
+```bash
+# List runner profiles via BFF proxy:
+curl -s -i http://localhost:8081/api/bff/v1/profiles
+
+# Dispatch an ad-hoc test run via BFF proxy:
+curl -s -i -X POST http://localhost:8081/api/bff/v1/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "suite_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "artifact_id": "c7a6e118-20ab-48d6-953b-e01140026e61",
+    "runner_profile_id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e"
+  }'
+
+# Abort an active run via BFF proxy:
+curl -s -i -X POST http://localhost:8081/api/bff/v1/runs/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d/abort
+```
+
+#### 4. Checking BFF Health & Aggregated Status:
+
+```bash
+curl -s -i http://localhost:8081/api/bff/v1/status
+```
+
+Expected response (`200 OK`):
+
+```json
+{
+  "bff_status": "UP",
+  "bff_version": "0.1.0",
+  "control_plane_status": "UP",
+  "control_plane_version": "0.0.1",
+  "timestamp": "2026-09-06T12:00:00Z"
+}
+```
+
+#### 5. Managing Client Sessions:
+
+```bash
+# Create client session:
+curl -s -i -X POST http://localhost:8081/api/bff/v1/sessions \
   -H "Content-Type: application/json" \
   -d '{
     "session_id": "sess-usr-12345",
@@ -911,27 +1019,13 @@ curl -s -i -X POST http://localhost:8081/api/v1/bff/sessions \
       "role": "admin"
     }
   }'
+
+# Retrieve active session context:
+curl -s -i http://localhost:8081/api/bff/v1/sessions/sess-usr-12345
 ```
 
-Expected response (`201 Created`):
-
-```json
-{
-  "id": "sess-usr-12345",
-  "user_id": "operator@vuhive.local",
-  "created_at": "2026-09-05T11:45:00Z",
-  "expires_at": "2026-09-05T12:45:00Z",
-  "metadata": {
-    "role": "admin"
-  }
-}
-```
-
-#### 3. Retrieving Active Session Context:
-
-```bash
-curl -s -i http://localhost:8081/api/v1/bff/sessions/sess-usr-12345
-```
+> [!NOTE]
+> All `/api/bff/v1/*` endpoints are also accessible via their backwards-compatible `/api/v1/bff/*` paths for legacy integrations.
 
 ---
 

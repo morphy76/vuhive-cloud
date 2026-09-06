@@ -37,6 +37,45 @@ func (m *MockControlPlaneClient) GetVersion(ctx context.Context) (*outbound.Cont
 	return args.Get(0).(*outbound.ControlPlaneVersion), args.Error(1)
 }
 
+func (m *MockControlPlaneClient) GetActiveRunsCount(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockControlPlaneClient) ListRecentSuites(ctx context.Context, limit int) ([]outbound.SuiteSummary, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]outbound.SuiteSummary), args.Error(1)
+}
+
+func (m *MockControlPlaneClient) ListProfiles(ctx context.Context) ([]outbound.ProfileSummary, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]outbound.ProfileSummary), args.Error(1)
+}
+
+func (m *MockControlPlaneClient) GetRun(ctx context.Context, id string) (*outbound.RunDetail, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*outbound.RunDetail), args.Error(1)
+}
+
+func (m *MockControlPlaneClient) GetRunReportURL(ctx context.Context, id string) (string, error) {
+	args := m.Called(ctx, id)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockControlPlaneClient) GetRunLogsURL(ctx context.Context, id string) (string, error) {
+	args := m.Called(ctx, id)
+	return args.String(0), args.Error(1)
+}
+
 // MockCache is a test mock satisfying outbound.CachePort.
 type MockCache struct {
 	mock.Mock
@@ -177,5 +216,132 @@ func TestBFFService_SessionLifecycle(t *testing.T) {
 
 		assert.ErrorIs(t, err, model.ErrSessionNotFound)
 		mockCache.AssertExpectations(t)
+	})
+}
+
+func TestBFFService_GetDashboard(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("concurrent retrieval aggregates all dashboard metrics", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		mockCache := new(MockCache)
+
+		mockCP.On("CheckHealth", mock.Anything).Return(&outbound.ControlPlaneHealth{
+			Status:    "UP",
+			Timestamp: time.Now(),
+		}, nil)
+		mockCP.On("GetVersion", mock.Anything).Return(&outbound.ControlPlaneVersion{
+			Version: "1.0.0",
+		}, nil)
+		mockCP.On("GetActiveRunsCount", mock.Anything).Return(int64(7), nil)
+		mockCP.On("ListRecentSuites", mock.Anything, 5).Return([]outbound.SuiteSummary{
+			{ID: "suite-1", Name: "Stress Test", State: "ACTIVE"},
+		}, nil)
+		mockCP.On("ListProfiles", mock.Anything).Return([]outbound.ProfileSummary{
+			{ID: "prof-1", Name: "Default Profile"},
+			{ID: "prof-2", Name: "High Memory"},
+		}, nil)
+
+		svc := service.NewBFFService(mockCP, mockCache, "0.2.0")
+
+		start := time.Now()
+		dashboard, err := svc.GetDashboard(ctx)
+		duration := time.Since(start)
+
+		require.NoError(t, err)
+		require.NotNil(t, dashboard)
+		assert.Equal(t, "UP", dashboard.BFFStatus)
+		assert.Equal(t, "0.2.0", dashboard.BFFVersion)
+		assert.Equal(t, "UP", dashboard.ControlPlaneStatus)
+		assert.Equal(t, "1.0.0", dashboard.ControlPlaneVersion)
+		assert.Equal(t, int64(7), dashboard.ActiveRunsCount)
+		assert.Len(t, dashboard.RecentSuites, 1)
+		assert.Equal(t, 2, dashboard.ProfilesCount)
+		assert.Len(t, dashboard.ProfilesSummary, 2)
+		assert.Less(t, duration, 50*time.Millisecond, "dashboard aggregation must respond under 50ms")
+		mockCP.AssertExpectations(t)
+	})
+
+	t.Run("partial degradation when some control plane queries fail", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		mockCache := new(MockCache)
+
+		mockCP.On("CheckHealth", mock.Anything).Return(&outbound.ControlPlaneHealth{
+			Status: "UP",
+		}, nil)
+		mockCP.On("GetVersion", mock.Anything).Return(nil, errors.New("version timeout"))
+		mockCP.On("GetActiveRunsCount", mock.Anything).Return(int64(0), errors.New("runs unreachable"))
+		mockCP.On("ListRecentSuites", mock.Anything, 5).Return(nil, errors.New("suites unreachable"))
+		mockCP.On("ListProfiles", mock.Anything).Return(nil, errors.New("profiles unreachable"))
+
+		svc := service.NewBFFService(mockCP, mockCache, "0.2.0")
+
+		dashboard, err := svc.GetDashboard(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, "UP", dashboard.BFFStatus)
+		assert.Equal(t, "UP", dashboard.ControlPlaneStatus)
+		assert.Equal(t, int64(0), dashboard.ActiveRunsCount)
+		assert.Empty(t, dashboard.RecentSuites)
+		assert.Equal(t, 0, dashboard.ProfilesCount)
+	})
+}
+
+func TestBFFService_GetRunDetail(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successfully retrieves run with artifact links", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		mockCache := new(MockCache)
+
+		runDetail := &outbound.RunDetail{
+			ID:          "run-42",
+			SuiteID:     "suite-1",
+			ArtifactID:  "art-1",
+			Status:      "COMPLETED",
+			S3ReportKey: "runs/run-42/summary.json",
+			S3LogsKey:   "runs/run-42/run.log",
+			Metrics: outbound.RunMetrics{
+				TotalRequests: 10000,
+				AvgTPS:        500.0,
+			},
+		}
+
+		mockCP.On("GetRun", mock.Anything, "run-42").Return(runDetail, nil)
+		mockCP.On("GetRunReportURL", mock.Anything, "run-42").Return("https://s3/summary.json?token=xyz", nil)
+		mockCP.On("GetRunLogsURL", mock.Anything, "run-42").Return("https://s3/run.log?token=xyz", nil)
+
+		svc := service.NewBFFService(mockCP, mockCache, "0.2.0")
+		detail, err := svc.GetRunDetail(ctx, "run-42")
+
+		require.NoError(t, err)
+		require.NotNil(t, detail)
+		assert.Equal(t, "run-42", detail.ID)
+		assert.Equal(t, "COMPLETED", detail.Status)
+		assert.Equal(t, 500.0, detail.Metrics.AvgTPS)
+		assert.Equal(t, "https://s3/summary.json?token=xyz", detail.ArtifactLinks.ReportURL)
+		assert.Equal(t, "https://s3/run.log?token=xyz", detail.ArtifactLinks.LogsURL)
+		mockCP.AssertExpectations(t)
+	})
+
+	t.Run("run not found maps to ErrRunNotFound", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		mockCache := new(MockCache)
+
+		mockCP.On("GetRun", mock.Anything, "missing-run").Return(nil, model.ErrRunNotFound)
+
+		svc := service.NewBFFService(mockCP, mockCache, "0.2.0")
+		_, err := svc.GetRunDetail(ctx, "missing-run")
+
+		assert.ErrorIs(t, err, model.ErrRunNotFound)
+	})
+
+	t.Run("empty run id returns ErrInvalidParameter", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		mockCache := new(MockCache)
+
+		svc := service.NewBFFService(mockCP, mockCache, "0.2.0")
+		_, err := svc.GetRunDetail(ctx, "   ")
+
+		assert.ErrorIs(t, err, model.ErrInvalidParameter)
 	})
 }

@@ -75,6 +75,185 @@ paths:
               schema:
                 type: object
 
+  /api/bff/v1/dashboard:
+    get:
+      summary: Aggregated composite dashboard overview
+      description: Returns an aggregated overview of system health/version, active test run count, recent test suites, and runner profiles concurrently.
+      tags:
+        - BFF
+      responses:
+        '200':
+          description: Aggregated dashboard metrics and summary overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+        '500':
+          description: Internal server error during dashboard aggregation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/bff/v1/runs/{id}:
+    get:
+      summary: Unified composite run detail
+      description: Retrieves unified test run details combining execution metadata, performance KPIs, and direct pre-signed download links to artifacts (report and logs).
+      tags:
+        - BFF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique test run identifier
+      responses:
+        '200':
+          description: Unified run detail with artifact links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDetailResponse'
+        '400':
+          description: Invalid run identifier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Upstream control plane unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/bff/v1/status:
+    get:
+      summary: Aggregated BFF and Control Plane status
+      description: Returns health and version metadata from both the BFF and upstream Control Plane.
+      tags:
+        - BFF
+      responses:
+        '200':
+          description: Aggregated system status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BFFStatusResponse'
+
+  /api/bff/v1/sessions:
+    post:
+      summary: Create client session
+      description: Establishes a cached client session in the BFF.
+      tags:
+        - BFF
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/bff/v1/sessions/{id}:
+    get:
+      summary: Retrieve client session
+      description: Returns session context for the given session identifier.
+      tags:
+        - BFF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique session identifier
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/bff/dashboard:
+    get:
+      summary: Aggregated composite dashboard overview (alias)
+      description: Backwards-compatible alias for /api/bff/v1/dashboard.
+      tags:
+        - BFF
+      responses:
+        '200':
+          description: Aggregated dashboard metrics and summary overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+        '500':
+          description: Internal server error during dashboard aggregation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/bff/runs/{id}:
+    get:
+      summary: Unified composite run detail (alias)
+      description: Backwards-compatible alias for /api/bff/v1/runs/{id}.
+      tags:
+        - BFF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique test run identifier
+      responses:
+        '200':
+          description: Unified run detail with artifact links
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunDetailResponse'
+        '404':
+          description: Test run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Upstream control plane unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/bff/status:
     get:
       summary: Aggregated BFF and Control Plane status
@@ -1627,3 +1806,252 @@ components:
           type: object
           additionalProperties:
             type: string
+
+    DashboardResponse:
+      type: object
+      required:
+        - bff_status
+        - bff_version
+        - control_plane_status
+        - active_runs_count
+        - recent_suites
+        - profiles_count
+        - profiles_summary
+        - timestamp
+      properties:
+        bff_status:
+          type: string
+          example: UP
+        bff_version:
+          type: string
+          example: 0.1.0
+        control_plane_status:
+          type: string
+          example: UP
+        control_plane_version:
+          type: string
+          example: 0.0.1
+        active_runs_count:
+          type: integer
+          format: int64
+          example: 2
+        recent_suites:
+          type: array
+          items:
+            $ref: '#/components/schemas/SuiteSummary'
+        profiles_count:
+          type: integer
+          example: 3
+        profiles_summary:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileSummary'
+        timestamp:
+          type: string
+          format: date-time
+
+    SuiteSummary:
+      type: object
+      required:
+        - id
+        - name
+        - state
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        name:
+          type: string
+          example: checkout-stress-test
+        description:
+          type: string
+          example: End-to-end checkout flow load test
+        state:
+          type: string
+          example: ACTIVE
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProfileSummary:
+      type: object
+      required:
+        - id
+        - name
+        - runner_image
+        - cpu_request
+        - cpu_limit
+        - memory_limit
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: e8d665b1-2e67-4228-8ab6-79c5b248a31e
+        name:
+          type: string
+          example: standard-worker
+        description:
+          type: string
+          example: 2 CPU, 4GB Memory worker profile
+        runner_image:
+          type: string
+          example: vuhive/runner-default:v1.0.0
+        cpu_request:
+          type: string
+          example: 1000m
+        cpu_limit:
+          type: string
+          example: 2000m
+        memory_limit:
+          type: string
+          example: 4Gi
+        created_at:
+          type: string
+          format: date-time
+
+    ArtifactLinks:
+      type: object
+      properties:
+        report_url:
+          type: string
+          format: uri
+          example: http://localhost:9000/vuhive-artifacts/runs/run-123/summary.json?X-Amz-Signature=...
+        logs_url:
+          type: string
+          format: uri
+          example: http://localhost:9000/vuhive-artifacts/runs/run-123/run.log?X-Amz-Signature=...
+
+    RunMetrics:
+      type: object
+      required:
+        - total_iterations
+        - total_requests
+        - avg_tps
+        - p50_duration_ms
+        - p90_duration_ms
+        - p95_duration_ms
+        - p99_duration_ms
+        - error_rate_pct
+      properties:
+        total_iterations:
+          type: integer
+          format: int64
+          example: 15000
+        total_requests:
+          type: integer
+          format: int64
+          example: 45000
+        avg_tps:
+          type: number
+          format: double
+          example: 750.5
+        p50_duration_ms:
+          type: number
+          format: double
+          example: 12.4
+        p90_duration_ms:
+          type: number
+          format: double
+          example: 25.1
+        p95_duration_ms:
+          type: number
+          format: double
+          example: 38.6
+        p99_duration_ms:
+          type: number
+          format: double
+          example: 85.2
+        error_rate_pct:
+          type: number
+          format: double
+          example: 0.02
+
+    RunDetailResponse:
+      type: object
+      required:
+        - id
+        - suite_id
+        - artifact_id
+        - runner_profile_id
+        - status
+        - created_at
+        - metrics
+        - artifact_links
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
+        suite_id:
+          type: string
+          format: uuid
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        artifact_id:
+          type: string
+          format: uuid
+          example: c7a6e118-20ab-48d6-953b-e01140026e61
+        configuration_id:
+          type: string
+          format: uuid
+          nullable: true
+          example: d1a85f64-5717-4562-b3fc-2c963f66afa7
+        runner_profile_id:
+          type: string
+          format: uuid
+          example: e8d665b1-2e67-4228-8ab6-79c5b248a31e
+        schedule_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          example: COMPLETED
+        k8s_job_name:
+          type: string
+          example: vuhive-run-a1b2c3d4
+        k8s_namespace:
+          type: string
+          example: vuhive-runners
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        duration_ms:
+          type: integer
+          format: int64
+          nullable: true
+          example: 60000
+        exit_code:
+          type: integer
+          nullable: true
+          example: 0
+        sla_passed:
+          type: boolean
+          nullable: true
+          example: true
+        metrics:
+          $ref: '#/components/schemas/RunMetrics'
+        s3_report_key:
+          type: string
+          example: runs/a1b2c3d4/summary.json
+        s3_logs_key:
+          type: string
+          example: runs/a1b2c3d4/run.log
+        abort_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        artifact_links:
+          $ref: '#/components/schemas/ArtifactLinks'

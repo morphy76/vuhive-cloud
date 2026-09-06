@@ -10,7 +10,10 @@ import (
 
 // MapDomainError inspects a domain error and translates it into an appropriate HTTP response.
 func MapDomainError(c *gin.Context, err error) {
-	if errors.Is(err, model.ErrSessionNotFound) {
+	if errors.Is(err, model.ErrSessionNotFound) ||
+		errors.Is(err, model.ErrRunNotFound) ||
+		errors.Is(err, model.ErrSuiteNotFound) ||
+		errors.Is(err, model.ErrProfileNotFound) {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: err.Error()})
 		return
 	}

@@ -18,6 +18,15 @@ var (
 	// ErrUnauthorized is returned when caller authentication or credentials are missing or invalid.
 	ErrUnauthorized = errors.New("unauthorized request")
 
+	// ErrRunNotFound is returned when a requested test run cannot be found.
+	ErrRunNotFound = errors.New("test run not found")
+
+	// ErrSuiteNotFound is returned when a requested test suite cannot be found.
+	ErrSuiteNotFound = errors.New("test suite not found")
+
+	// ErrProfileNotFound is returned when a requested runner profile cannot be found.
+	ErrProfileNotFound = errors.New("runner profile not found")
+
 	// ErrInternal is returned when an unexpected internal error occurs.
 	ErrInternal = errors.New("internal bff error")
 )
