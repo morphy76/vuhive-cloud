@@ -27,6 +27,18 @@ func SetupRouterWithBarrier(
 	runsUC inbound.RunsUseCase,
 	barrierUC inbound.BarrierUseCase,
 ) *gin.Engine {
+	return SetupRouterWithAll(buildsUC, profilesUC, schedulesUC, runsUC, barrierUC, nil)
+}
+
+// SetupRouterWithAll initializes and configures the Gin HTTP engine with all use cases including housekeeping.
+func SetupRouterWithAll(
+	buildsUC inbound.BuildsUseCase,
+	profilesUC inbound.ProfilesUseCase,
+	schedulesUC inbound.SchedulesUseCase,
+	runsUC inbound.RunsUseCase,
+	barrierUC inbound.BarrierUseCase,
+	housekeepingUC inbound.HousekeepingUseCase,
+) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
@@ -116,6 +128,15 @@ func SetupRouterWithBarrier(
 				runs.POST("/:id/barrier/await", barrierHandler.AwaitBarrier)
 				runs.POST("/:id/barrier/abort", barrierHandler.AbortBarrier)
 				runs.GET("/:id/barrier", barrierHandler.GetBarrier)
+			}
+		}
+
+		if housekeepingUC != nil {
+			hkHandler := NewHousekeepingHandler(housekeepingUC)
+			sys := v1.Group("/system")
+			{
+				sys.POST("/housekeeping", hkHandler.RunHousekeeping)
+				sys.GET("/housekeeping/policy", hkHandler.GetPolicy)
 			}
 		}
 	}

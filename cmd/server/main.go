@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -16,12 +17,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/morphy76/vuhive-cloud/internal/adapters/inbound/rest"
+	coordinatoradapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/coordinator"
 	k8sadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/k8s"
 	pgadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/postgres"
 	s3adapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/s3"
-	coordinatoradapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/coordinator"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/service"
+	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 	domainservice "github.com/morphy76/vuhive-cloud/internal/domain/service"
 	"github.com/morphy76/vuhive-cloud/internal/version"
 	"github.com/rs/zerolog"
@@ -282,8 +284,59 @@ func main() {
 	barrierCoordinator := coordinatoradapter.NewMemoryBarrierCoordinator()
 	barrierService := service.NewBarrierService(barrierCoordinator)
 
+	// Retention policy & Housekeeping service wiring
+	retentionPolicy := model.DefaultRetentionPolicy()
+	parseEnvDays := func(envVar string) (int, bool) {
+		if v := os.Getenv(envVar); v != "" {
+			if val, err := strconv.ParseInt(v, 10, 32); err == nil && val >= 0 {
+				return int(val), true
+			}
+		}
+		return 0, false
+	}
+	if d, ok := parseEnvDays("RETENTION_LOGS_DAYS"); ok {
+		retentionPolicy.LogsTTLDays = d
+	}
+	if d, ok := parseEnvDays("RETENTION_REPORTS_DAYS"); ok {
+		retentionPolicy.ReportsTTLDays = d
+	}
+	if d, ok := parseEnvDays("RETENTION_SOURCES_DAYS"); ok {
+		retentionPolicy.SourcesTTLDays = d
+	}
+	if d, ok := parseEnvDays("RETENTION_BINARIES_DAYS"); ok {
+		retentionPolicy.BinariesTTLDays = d
+	}
+	if d, ok := parseEnvDays("RETENTION_RUNS_DAYS"); ok {
+		retentionPolicy.RunsTTLDays = d
+	}
+	if os.Getenv("RETENTION_ARCHIVE_ONLY") == "true" {
+		retentionPolicy.ArchiveOnly = true
+	}
+
+	housekeepingService := service.NewHousekeepingService(suiteRepo, artifactRepo, runRepo, storageAdapter, retentionPolicy)
+
+	if os.Getenv("RETENTION_APPLY_S3_LIFECYCLE") != "false" && storageAdapter != nil {
+		if err := housekeepingService.ConfigureBucketLifecycle(ctx); err != nil {
+			log.Warn().Err(err).Msg("failed configuring storage bucket lifecycle rules")
+		}
+	}
+
+	if os.Getenv("HOUSEKEEPING_ENABLED") != "false" {
+		housekeepingInterval := 6 * time.Hour
+		if intervalStr := os.Getenv("HOUSEKEEPING_INTERVAL"); intervalStr != "" {
+			if parsedInterval, err := time.ParseDuration(intervalStr); err == nil && parsedInterval > 0 {
+				housekeepingInterval = parsedInterval
+			}
+		}
+		go func() {
+			if err := housekeepingService.StartBackgroundWorker(ctx, housekeepingInterval); err != nil && !errors.Is(err, context.Canceled) {
+				log.Error().Err(err).Msg("housekeeping background worker terminated with error")
+			}
+		}()
+	}
+
 	// Router setup
-	router := rest.SetupRouterWithBarrier(buildService, profileService, scheduleService, runService, barrierService)
+	router := rest.SetupRouterWithAll(buildService, profileService, scheduleService, runService, barrierService, housekeepingService)
 
 	server := &http.Server{
 		Addr:         ":" + port,

@@ -32,6 +32,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 11: Accessing the Embedded Web Dashboard, PWA Routing & Accessible Design System](#recipe-11-accessing-the-embedded-web-dashboard--pwa-routing)
     - [Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors)
     - [Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines](#recipe-13-inspecting-control-plane-version-metadata--health-in-automated-pipelines)
+    - [Recipe 14: Execution Artifact Housekeeping, Storage Retention Policies & Automated Pruning](#recipe-14-execution-artifact-housekeeping-storage-retention-policies--automated-pruning)
 
 ---
 
@@ -1379,6 +1380,115 @@ fi
 
 echo "Control plane preflight check succeeded. Proceeding with load test suite execution."
 ```
+
+---
+
+### Recipe 14: Execution Artifact Housekeeping, Storage Retention Policies & Automated Pruning
+
+Load testing generates substantial volumes of ephemeral data: stdout/stderr execution logs, deterministic raw JSON summary reports, compiled scenario binaries, and relational database execution records. Without automated lifecycle management, storage consumption and database indexes grow unbounded.
+
+`vuhive-cloud` includes an automated **Housekeeping and Retention Lifecycle Engine** to enforce independent retention policies across storage tiers while preserving historical KPI rollups for long-term trend analysis.
+
+#### 1. Retention Lifecycle Architecture
+
+The retention engine categorizes execution artifacts into four independent tiers:
+
+| Tier | Artifact Type | Default TTL | Description & Behavior |
+|---|---|---|---|
+| **Logs** | `runs/<run_id>/run.log` | `7 days` | Raw stdout/stderr execution streams in S3/MinIO. Once expired, the S3 object is permanently deleted and the database `s3_logs_key` is cleared (`NULL`). |
+| **Reports** | `runs/<run_id>/summary.json` | `30 days` | Raw execution summary JSON files in S3/MinIO. Once expired, the S3 object is purged and the database `s3_report_key` is cleared. |
+| **Runs** | `test_runs` rows | `90 days` | Relational execution records. In **Archive Mode** (`archive_only: true`), runs are transitioned to `ARCHIVED` status: raw unindexed JSON summaries (`summary_json`) are cleared to reclaim database storage, while core indexed KPI metrics ($p_{50}, p_{90}, p_{95}, p_{99}$, TPS, error count) remain queryable. In prune mode (`archive_only: false`), terminal rows older than the TTL are permanently hard-deleted. |
+| **Artifacts** | `artifacts/<id>/scenario` | `180 days` | Compiled Linux binaries in S3/MinIO. Orphaned artifacts (status `FAILED` or `CANCELLED` with zero referencing test runs) are deleted immediately. Expired binaries on completed runs have their S3 binary keys purged while retaining database metadata for historical auditability. |
+
+#### 2. Inspecting the Active System Retention Policy
+
+Query the control plane to view system-wide default retention thresholds:
+
+```bash
+curl -s -f http://localhost:8080/api/v1/system/housekeeping/policy | jq .
+```
+
+Example response:
+```json
+{
+  "logs_ttl_days": 7,
+  "reports_ttl_days": 30,
+  "runs_ttl_days": 90,
+  "artifacts_ttl_days": 180,
+  "archive_only": false
+}
+```
+
+#### 3. Simulating Cleanup with Dry-Run Mode
+
+Before executing live deletions, perform a dry-run sweep. In dry-run mode, the retention engine queries candidate records, calculates candidate counts and object keys, and outputs a diagnostic breakdown without modifying S3 objects or deleting database rows:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/system/housekeeping \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dry_run": true
+  }' | jq .
+```
+
+Example dry-run response:
+```json
+{
+  "logs_purged": 14,
+  "reports_purged": 6,
+  "runs_archived": 0,
+  "runs_deleted": 4,
+  "artifacts_cleaned": 2,
+  "s3_lifecycle_applied": false,
+  "dry_run": true,
+  "started_at": "2026-09-06T20:30:00Z",
+  "finished_at": "2026-09-06T20:30:00Z",
+  "duration_ms": 42
+}
+```
+
+#### 4. Triggering On-Demand Housekeeping Sweeps
+
+Operators or CI/CD maintenance jobs can trigger an immediate on-demand cleanup pass with custom override parameters:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/system/housekeeping \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dry_run": false,
+    "archive_only": true,
+    "logs_ttl_days": 14,
+    "reports_ttl_days": 60,
+    "runs_ttl_days": 120,
+    "apply_s3_lifecycle": true
+  }' | jq .
+```
+
+Response:
+```json
+{
+  "logs_purged": 14,
+  "reports_purged": 6,
+  "runs_archived": 4,
+  "runs_deleted": 0,
+  "artifacts_cleaned": 2,
+  "s3_lifecycle_applied": true,
+  "dry_run": false,
+  "started_at": "2026-09-06T20:31:00Z",
+  "finished_at": "2026-09-06T20:31:01Z",
+  "duration_ms": 1150
+}
+```
+
+#### 5. Native S3 / MinIO Bucket Lifecycle Rule Synchronization
+
+When `apply_s3_lifecycle` is set to `true` (or configured via `housekeeping.applyS3Lifecycle: true` in Helm), `vuhive-cloud` calls the AWS S3 SDK `PutBucketLifecycleConfiguration` API. This configures automated expiration rules directly on the S3 bucket:
+
+- **Logs Rule (`vuhive-runs-logs-retention`)**: Applies prefix filter `runs/` and targets objects containing `.log` with `Days: <logs_ttl_days>`.
+- **Reports Rule (`vuhive-runs-reports-retention`)**: Applies prefix filter `runs/` with `Days: <reports_ttl_days>`.
+- **Binaries Rule (`vuhive-artifacts-binaries-retention`)**: Applies prefix filter `artifacts/` with `Days: <artifacts_ttl_days>`.
+
+This ensures that object expiration occurs efficiently at the object storage layer, reducing control plane I/O while keeping database pointer references clean.
 
 ---
 

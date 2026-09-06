@@ -517,6 +517,130 @@
         ],
         "type": "object"
       },
+      "HousekeepingRequest": {
+        "properties": {
+          "apply_s3_lifecycle": {
+            "description": "When true, synchronizes native S3 bucket lifecycle configuration rules based on retention policy TTLs",
+            "example": false,
+            "type": "boolean"
+          },
+          "archive_only": {
+            "description": "When true, archives expired test runs instead of permanently deleting them",
+            "example": false,
+            "type": "boolean"
+          },
+          "artifacts_ttl_days": {
+            "description": "Override TTL in days for compiled scenario binaries in S3 storage (0 disables binary pruning)",
+            "example": 180,
+            "type": "integer"
+          },
+          "dry_run": {
+            "description": "When true, simulates cleanup actions and calculates purge candidates without modifying storage or database",
+            "example": false,
+            "type": "boolean"
+          },
+          "force": {
+            "description": "When true, forces execution regardless of safety guards",
+            "example": false,
+            "type": "boolean"
+          },
+          "logs_ttl_days": {
+            "description": "Override TTL in days for test run execution logs in S3 storage (0 disables log purging)",
+            "example": 7,
+            "type": "integer"
+          },
+          "reports_ttl_days": {
+            "description": "Override TTL in days for execution summary reports (0 disables report purging)",
+            "example": 30,
+            "type": "integer"
+          },
+          "runs_ttl_days": {
+            "description": "Override TTL in days for historical test run database records (0 disables run pruning)",
+            "example": 90,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "HousekeepingResponse": {
+        "properties": {
+          "artifacts_cleaned": {
+            "description": "Number of orphaned or expired build artifacts cleaned",
+            "example": 3,
+            "type": "integer"
+          },
+          "details": {
+            "description": "Additional granular details or dry-run candidate breakdown",
+            "type": "object"
+          },
+          "dry_run": {
+            "description": "Whether the housekeeping run was executed in dry-run simulation mode",
+            "example": false,
+            "type": "boolean"
+          },
+          "duration_ms": {
+            "description": "Execution duration in milliseconds",
+            "example": 1540,
+            "format": "int64",
+            "type": "integer"
+          },
+          "errors": {
+            "description": "Any non-fatal error messages encountered during execution",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finished_at": {
+            "description": "ISO 8601 timestamp when housekeeping execution finished",
+            "format": "date-time",
+            "type": "string"
+          },
+          "logs_purged": {
+            "description": "Number of expired S3 log objects purged",
+            "example": 42,
+            "type": "integer"
+          },
+          "reports_purged": {
+            "description": "Number of expired S3 report objects purged",
+            "example": 12,
+            "type": "integer"
+          },
+          "runs_archived": {
+            "description": "Number of test runs transitioned to ARCHIVED status",
+            "example": 10,
+            "type": "integer"
+          },
+          "runs_deleted": {
+            "description": "Number of historical test run records permanently deleted",
+            "example": 5,
+            "type": "integer"
+          },
+          "s3_lifecycle_applied": {
+            "description": "Whether native S3 bucket lifecycle configuration rules were successfully applied",
+            "example": true,
+            "type": "boolean"
+          },
+          "started_at": {
+            "description": "ISO 8601 timestamp when housekeeping execution started",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "logs_purged",
+          "reports_purged",
+          "runs_archived",
+          "runs_deleted",
+          "artifacts_cleaned",
+          "s3_lifecycle_applied",
+          "dry_run",
+          "started_at",
+          "finished_at",
+          "duration_ms"
+        ],
+        "type": "object"
+      },
       "NodeAffinityTermDTO": {
         "properties": {
           "key": {
@@ -678,6 +802,43 @@
           "cpu_limit",
           "memory_limit",
           "created_at"
+        ],
+        "type": "object"
+      },
+      "RetentionPolicyResponse": {
+        "properties": {
+          "archive_only": {
+            "description": "Whether expired test runs are archived rather than permanently deleted",
+            "example": false,
+            "type": "boolean"
+          },
+          "artifacts_ttl_days": {
+            "description": "Default TTL in days for compiled scenario binaries",
+            "example": 180,
+            "type": "integer"
+          },
+          "logs_ttl_days": {
+            "description": "Default TTL in days for test run execution logs",
+            "example": 7,
+            "type": "integer"
+          },
+          "reports_ttl_days": {
+            "description": "Default TTL in days for execution summary reports",
+            "example": 30,
+            "type": "integer"
+          },
+          "runs_ttl_days": {
+            "description": "Default TTL in days for historical test runs",
+            "example": 90,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "logs_ttl_days",
+          "reports_ttl_days",
+          "runs_ttl_days",
+          "artifacts_ttl_days",
+          "archive_only"
         ],
         "type": "object"
       },
@@ -3023,6 +3184,82 @@
         "summary": "Upload Go test source and trigger build Job",
         "tags": [
           "Builds"
+        ]
+      }
+    },
+    "/api/v1/system/housekeeping": {
+      "post": {
+        "description": "Executes on-demand housekeeping and retention lifecycle tasks:\npurging expired S3 logs, purging/archiving expired execution reports,\npruning historical test runs, cleaning orphaned and expired artifacts,\nand optionally applying native S3 bucket lifecycle rules. Supports dry-run mode.\n",
+        "operationId": "triggerHousekeeping",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HousekeepingRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HousekeepingResponse"
+                }
+              }
+            },
+            "description": "Housekeeping execution summary"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request payload"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Housekeeping execution failed"
+          }
+        },
+        "summary": "Trigger execution artifact housekeeping",
+        "tags": [
+          "System",
+          "Housekeeping"
+        ]
+      }
+    },
+    "/api/v1/system/housekeeping/policy": {
+      "get": {
+        "description": "Returns the default system-wide retention policy specifying TTL durations (in days)\nfor logs, reports, runs, and artifacts, as well as the archive-only policy flag.\n",
+        "operationId": "getSystemRetentionPolicy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetentionPolicyResponse"
+                }
+              }
+            },
+            "description": "Default system retention policy"
+          }
+        },
+        "summary": "Get default system retention policy",
+        "tags": [
+          "System",
+          "Housekeeping"
         ]
       }
     },

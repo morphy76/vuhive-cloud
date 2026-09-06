@@ -107,3 +107,30 @@ type ProfilesUseCase interface {
 	UpdateProfile(ctx context.Context, id string, cmd UpdateProfileCommand) (*model.RunnerProfile, error)
 	DeleteProfile(ctx context.Context, id string) error
 }
+
+// HousekeepingCommand encapsulates optional parameters for triggering a housekeeping run.
+type HousekeepingCommand struct {
+	SuiteID *string
+	DryRun  bool
+}
+
+// HousekeepingResult reports the audit counts of entities processed during a housekeeping run.
+type HousekeepingResult struct {
+	PurgedLogsCount      int64    `json:"purged_logs_count"`
+	PurgedReportsCount   int64    `json:"purged_reports_count"`
+	PurgedSourcesCount   int64    `json:"purged_sources_count"`
+	PurgedBinariesCount  int64    `json:"purged_binaries_count"`
+	PrunedRunsCount      int64    `json:"pruned_runs_count"`
+	ArchivedRunsCount    int64    `json:"archived_runs_count"`
+	PurgedArtifactsCount int64    `json:"purged_artifacts_count"`
+	DurationMs           int64    `json:"duration_ms"`
+	Errors               []string `json:"errors,omitempty"`
+}
+
+// HousekeepingUseCase defines driving use cases for artifact retention, cleanup, and database pruning.
+type HousekeepingUseCase interface {
+	RunHousekeeping(ctx context.Context, cmd HousekeepingCommand) (*HousekeepingResult, error)
+	GetGlobalPolicy(ctx context.Context) model.RetentionPolicy
+	ConfigureBucketLifecycle(ctx context.Context) error
+}
+

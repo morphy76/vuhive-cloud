@@ -1143,6 +1143,62 @@ paths:
         '204':
           description: Schedule deleted
 
+  /api/v1/system/housekeeping:
+    post:
+      summary: Trigger execution artifact housekeeping
+      description: |
+        Executes on-demand housekeeping and retention lifecycle tasks:
+        purging expired S3 logs, purging/archiving expired execution reports,
+        pruning historical test runs, cleaning orphaned and expired artifacts,
+        and optionally applying native S3 bucket lifecycle rules. Supports dry-run mode.
+      operationId: triggerHousekeeping
+      tags:
+        - System
+        - Housekeeping
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HousekeepingRequest'
+      responses:
+        '200':
+          description: Housekeeping execution summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HousekeepingResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Housekeeping execution failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/system/housekeeping/policy:
+    get:
+      summary: Get default system retention policy
+      description: |
+        Returns the default system-wide retention policy specifying TTL durations (in days)
+        for logs, reports, runs, and artifacts, as well as the archive-only policy flag.
+      operationId: getSystemRetentionPolicy
+      tags:
+        - System
+        - Housekeeping
+      responses:
+        '200':
+          description: Default system retention policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetentionPolicyResponse'
+
 components:
   schemas:
     ErrorResponse:
@@ -2099,6 +2155,136 @@ components:
         artifact_links:
           $ref: '#/components/schemas/ArtifactLinks'
 
+    HousekeepingRequest:
+      type: object
+      properties:
+        dry_run:
+          type: boolean
+          description: When true, simulates cleanup actions and calculates purge candidates without modifying storage or database
+          example: false
+        apply_s3_lifecycle:
+          type: boolean
+          description: When true, synchronizes native S3 bucket lifecycle configuration rules based on retention policy TTLs
+          example: false
+        force:
+          type: boolean
+          description: When true, forces execution regardless of safety guards
+          example: false
+        archive_only:
+          type: boolean
+          description: When true, archives expired test runs instead of permanently deleting them
+          example: false
+        logs_ttl_days:
+          type: integer
+          description: Override TTL in days for test run execution logs in S3 storage (0 disables log purging)
+          example: 7
+        reports_ttl_days:
+          type: integer
+          description: Override TTL in days for execution summary reports (0 disables report purging)
+          example: 30
+        runs_ttl_days:
+          type: integer
+          description: Override TTL in days for historical test run database records (0 disables run pruning)
+          example: 90
+        artifacts_ttl_days:
+          type: integer
+          description: Override TTL in days for compiled scenario binaries in S3 storage (0 disables binary pruning)
+          example: 180
+
+    HousekeepingResponse:
+      type: object
+      required:
+        - logs_purged
+        - reports_purged
+        - runs_archived
+        - runs_deleted
+        - artifacts_cleaned
+        - s3_lifecycle_applied
+        - dry_run
+        - started_at
+        - finished_at
+        - duration_ms
+      properties:
+        logs_purged:
+          type: integer
+          description: Number of expired S3 log objects purged
+          example: 42
+        reports_purged:
+          type: integer
+          description: Number of expired S3 report objects purged
+          example: 12
+        runs_archived:
+          type: integer
+          description: Number of test runs transitioned to ARCHIVED status
+          example: 10
+        runs_deleted:
+          type: integer
+          description: Number of historical test run records permanently deleted
+          example: 5
+        artifacts_cleaned:
+          type: integer
+          description: Number of orphaned or expired build artifacts cleaned
+          example: 3
+        s3_lifecycle_applied:
+          type: boolean
+          description: Whether native S3 bucket lifecycle configuration rules were successfully applied
+          example: true
+        dry_run:
+          type: boolean
+          description: Whether the housekeeping run was executed in dry-run simulation mode
+          example: false
+        started_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when housekeeping execution started
+        finished_at:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when housekeeping execution finished
+        duration_ms:
+          type: integer
+          format: int64
+          description: Execution duration in milliseconds
+          example: 1540
+        errors:
+          type: array
+          items:
+            type: string
+          description: Any non-fatal error messages encountered during execution
+        details:
+          type: object
+          description: Additional granular details or dry-run candidate breakdown
+
+    RetentionPolicyResponse:
+      type: object
+      required:
+        - logs_ttl_days
+        - reports_ttl_days
+        - runs_ttl_days
+        - artifacts_ttl_days
+        - archive_only
+      properties:
+        logs_ttl_days:
+          type: integer
+          description: Default TTL in days for test run execution logs
+          example: 7
+        reports_ttl_days:
+          type: integer
+          description: Default TTL in days for execution summary reports
+          example: 30
+        runs_ttl_days:
+          type: integer
+          description: Default TTL in days for historical test runs
+          example: 90
+        artifacts_ttl_days:
+          type: integer
+          description: Default TTL in days for compiled scenario binaries
+          example: 180
+        archive_only:
+          type: boolean
+          description: Whether expired test runs are archived rather than permanently deleted
+          example: false
+
     ServerSentEvent:
       type: object
       required:
@@ -2236,3 +2422,4 @@ components:
         timestamp:
           type: string
           format: date-time
+
