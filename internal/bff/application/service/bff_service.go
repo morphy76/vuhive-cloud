@@ -21,14 +21,20 @@ type BFFService struct {
 	controlPlane outbound.ControlPlaneClient
 	cache        outbound.CachePort
 	version      string
+	eventHub     outbound.EventStreamHub
 }
 
 // NewBFFService creates an instance of the BFF use case orchestrator.
-func NewBFFService(cp outbound.ControlPlaneClient, cache outbound.CachePort, version string) *BFFService {
+func NewBFFService(cp outbound.ControlPlaneClient, cache outbound.CachePort, version string, hub ...outbound.EventStreamHub) *BFFService {
+	var eventHub outbound.EventStreamHub
+	if len(hub) > 0 {
+		eventHub = hub[0]
+	}
 	return &BFFService{
 		controlPlane: cp,
 		cache:        cache,
 		version:      version,
+		eventHub:     eventHub,
 	}
 }
 
@@ -367,4 +373,51 @@ func (s *BFFService) GetRunDetail(ctx context.Context, id string) (*inbound.RunD
 		Msg("completed run detail composite aggregation")
 
 	return composite, nil
+}
+
+// SubscribeEvents registers a subscriber to the real-time event stream.
+func (s *BFFService) SubscribeEvents(ctx context.Context) (<-chan model.ServerSentEvent, func(), error) {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().Str("op", "BFFService.SubscribeEvents").Logger()
+	log.Debug().Msg("subscribing to real-time SSE stream")
+
+	if s.eventHub == nil {
+		err := fmt.Errorf("%w: event hub adapter not configured", model.ErrInternal)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed subscribing to events")
+		return nil, nil, err
+	}
+
+	ch, unsub, err := s.eventHub.Subscribe(ctx)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed subscribing to event hub")
+		return nil, nil, err
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("successfully subscribed to event hub")
+	return ch, unsub, nil
+}
+
+// BroadcastEvent publishes an event to all connected SSE clients.
+func (s *BFFService) BroadcastEvent(ctx context.Context, event model.ServerSentEvent) error {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "BFFService.BroadcastEvent").
+		Str("event_id", event.ID).
+		Str("event_type", event.Event).
+		Logger()
+	log.Debug().Msg("broadcasting SSE event")
+
+	if s.eventHub == nil {
+		err := fmt.Errorf("%w: event hub adapter not configured", model.ErrInternal)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed broadcasting event")
+		return err
+	}
+
+	if err := s.eventHub.Broadcast(ctx, event); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed broadcasting event to hub")
+		return err
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("successfully broadcasted event")
+	return nil
 }

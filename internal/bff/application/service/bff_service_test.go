@@ -76,6 +76,22 @@ func (m *MockControlPlaneClient) GetRunLogsURL(ctx context.Context, id string) (
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockControlPlaneClient) ListRuns(ctx context.Context, status string, limit int) ([]outbound.RunDetail, error) {
+	args := m.Called(ctx, status, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]outbound.RunDetail), args.Error(1)
+}
+
+func (m *MockControlPlaneClient) ListArtifacts(ctx context.Context, suiteID string) ([]outbound.ArtifactDetail, error) {
+	args := m.Called(ctx, suiteID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]outbound.ArtifactDetail), args.Error(1)
+}
+
 // MockCache is a test mock satisfying outbound.CachePort.
 type MockCache struct {
 	mock.Mock
@@ -343,5 +359,84 @@ func TestBFFService_GetRunDetail(t *testing.T) {
 		_, err := svc.GetRunDetail(ctx, "   ")
 
 		assert.ErrorIs(t, err, model.ErrInvalidParameter)
+	})
+}
+
+// MockEventStreamHub satisfies outbound.EventStreamHub for testing.
+type MockEventStreamHub struct {
+	mock.Mock
+}
+
+func (m *MockEventStreamHub) Broadcast(ctx context.Context, event model.ServerSentEvent) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *MockEventStreamHub) Subscribe(ctx context.Context) (<-chan model.ServerSentEvent, func(), error) {
+	args := m.Called(ctx)
+	ch := args.Get(0)
+	var outCh <-chan model.ServerSentEvent
+	if ch != nil {
+		if c, ok := ch.(<-chan model.ServerSentEvent); ok {
+			outCh = c
+		} else if c, ok := ch.(chan model.ServerSentEvent); ok {
+			outCh = c
+		}
+	}
+	return outCh, args.Get(1).(func()), args.Error(2)
+}
+
+func (m *MockEventStreamHub) ClientCount() int {
+	args := m.Called()
+	return args.Int(0)
+}
+
+func (m *MockEventStreamHub) Close() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func TestBFFService_Events(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("SubscribeEvents delegates to event hub", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		mockCache := new(MockCache)
+		mockHub := new(MockEventStreamHub)
+
+		ch := make(chan model.ServerSentEvent)
+		unsub := func() {}
+
+		mockHub.On("Subscribe", ctx).Return(ch, unsub, nil)
+
+		svc := service.NewBFFService(mockCP, mockCache, "0.2.0", mockHub)
+		subCh, subUnsub, err := svc.SubscribeEvents(ctx)
+		require.NoError(t, err)
+		assert.NotNil(t, subCh)
+		assert.NotNil(t, subUnsub)
+		mockHub.AssertExpectations(t)
+	})
+
+	t.Run("SubscribeEvents without hub returns error", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		mockCache := new(MockCache)
+
+		svc := service.NewBFFService(mockCP, mockCache, "0.2.0")
+		_, _, err := svc.SubscribeEvents(ctx)
+		assert.Error(t, err)
+	})
+
+	t.Run("BroadcastEvent delegates to event hub", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		mockCache := new(MockCache)
+		mockHub := new(MockEventStreamHub)
+
+		ev, _ := model.NewServerSentEvent("ev-1", model.EventSystemHeartbeat, []byte(`{}`), time.Now())
+		mockHub.On("Broadcast", ctx, ev).Return(nil)
+
+		svc := service.NewBFFService(mockCP, mockCache, "0.2.0", mockHub)
+		err := svc.BroadcastEvent(ctx, ev)
+		require.NoError(t, err)
+		mockHub.AssertExpectations(t)
 	})
 }

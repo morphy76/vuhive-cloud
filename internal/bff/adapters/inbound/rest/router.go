@@ -35,6 +35,7 @@ func SetupRouterWithProxy(bffService inbound.BFFService, version string, control
 		bffV1.GET("/status", handler.GetStatus)
 		bffV1.POST("/sessions", handler.CreateSession)
 		bffV1.GET("/sessions/:id", handler.GetSession)
+		bffV1.GET("/events", handler.Events)
 
 		// Transparent reverse proxy to control plane server for entity CRUD operations
 		if controlPlaneURL != "" {
@@ -68,6 +69,7 @@ func SetupRouterWithProxy(bffService inbound.BFFService, version string, control
 		v1.GET("/sessions/:id", handler.GetSession)
 		v1.GET("/dashboard", handler.GetDashboard)
 		v1.GET("/runs/:id", handler.GetRunDetail)
+		v1.GET("/events", handler.Events)
 	}
 
 	// SPA & Static file serving
