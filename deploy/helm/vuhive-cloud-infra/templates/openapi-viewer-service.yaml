@@ -1,0 +1,22 @@
+{{- if .Values.openapiViewer.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vuhive-cloud-infra.openapiViewer.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud-infra.openapiViewer.labels" . | nindent 4 }}
+  {{- with .Values.openapiViewer.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.openapiViewer.service.type }}
+  ports:
+    - port: {{ .Values.openapiViewer.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "vuhive-cloud-infra.openapiViewer.selectorLabels" . | nindent 4 }}
+{{- end }}
