@@ -59,7 +59,31 @@ helm install vuhive deploy/helm/vuhive-cloud \
 > [!NOTE]
 > When `s3.endpoint` is non-empty (as in the MinIO case above), `s3.usePathStyle` is automatically treated as `true` by the control plane server, runner-init, and runner-wrapper. Path-style addressing (`http://<endpoint>/<bucket>/`) is required for MinIO because virtual-hosted-style URLs (`http://<bucket>.<service>/`) depend on DNS wildcards unavailable for Kubernetes Service names.
 
-### 3. Local Cluster Testing with Locally Built Images
+### 3. Verify Health & Version Metadata
+
+Verify that the control plane deployment is healthy and inspect runtime compile-time metadata (`version`, `commit`, `build_time`):
+
+```bash
+# Port-forward the control plane service to localhost
+kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080
+
+# Check service health
+curl -i http://localhost:8080/healthz
+
+# Inspect runtime version and build metadata
+curl -i http://localhost:8080/version
+```
+
+Example `/version` response:
+```json
+{
+  "version": "0.1.0",
+  "commit": "aca4153",
+  "build_time": "2026-09-06T12:00:00Z"
+}
+```
+
+### 4. Local Cluster Testing with Locally Built Images
 
 When testing code changes against a local cluster (e.g. Rancher Desktop, Kind, Minikube), build container images using `make docker-build` (which applies `--load --provenance=false` so images are loaded directly into the local CRI store):
 
@@ -78,7 +102,7 @@ helm install vuhive deploy/helm/vuhive-cloud \
 
 For full details on local container building and troubleshooting `ImagePullBackOff` issues, see [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
-### 4. Production Deployment (with External PostgreSQL & S3)
+### 5. Production Deployment (with External PostgreSQL & S3)
 
 In production, backing services should be provisioned via managed cloud infrastructure (e.g., AWS Aurora PostgreSQL and AWS S3).
 
@@ -148,6 +172,10 @@ To ensure callback requests succeed across different Kubernetes network setups:
 - **Same Namespace (`runner.namespace == Release.Namespace`)**: The chart automatically configures `apiCallbackUrl` as `http://<fullname>:<port>/api/v1/runs/complete`. With 0 dots, standard Kubernetes pods resolve the service name directly via the local namespace search domain without traversing upstream search lists.
 - **Cross-Namespace (`runner.namespace != Release.Namespace`)**: Standard Kubernetes pods have `ndots:5` in `/etc/resolv.conf`. Because `<service>.<namespace>.svc.cluster.local` has 4 dots, standard resolvers query host/DHCP upstream search domains first, which can cause connection failures if upstream wildcard DNS returns `127.0.0.1`. The chart mitigates this by generating a fully qualified domain name with a **trailing dot** (`http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete`), bypassing search lists and directing the query straight to CoreDNS.
 - **Custom Override**: You can override `apiCallbackUrl` explicitly with `--set apiCallbackUrl=...` if you route runner callbacks through custom gateways or ingresses.
+
+### Ad-Hoc Test Run Dispatching
+
+In addition to scheduled runs, the control plane allows developers and CI/CD pipelines to dispatch ad-hoc test executions on demand via `POST /api/v1/runs`. The control plane manifests an ephemeral `batch/v1` `Job` directly in `runner.namespace` adhering to the specified `RunnerProfile` and `TestSuite` artifact. Runner pods execute within the target namespace under the Restricted Pod Security Standard and invoke the callback URL upon completion.
 
 ### CronJob Run Correlation
 

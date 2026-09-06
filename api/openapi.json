@@ -887,6 +887,40 @@
         ],
         "type": "object"
       },
+      "TriggerRunRequest": {
+        "properties": {
+          "artifact_id": {
+            "description": "Unique identifier of the compiled, READY Artifact",
+            "example": "c7a6e118-20ab-48d6-953b-e01140026e61",
+            "format": "uuid",
+            "type": "string"
+          },
+          "configuration_id": {
+            "description": "Optional identifier of the attached scenario configuration",
+            "example": "d1a85f64-5717-4562-b3fc-2c963f66afa7",
+            "format": "uuid",
+            "type": "string"
+          },
+          "runner_profile_id": {
+            "description": "Unique identifier of the RunnerProfile specifying execution resources",
+            "example": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+            "format": "uuid",
+            "type": "string"
+          },
+          "suite_id": {
+            "description": "Unique identifier of the target TestSuite",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "suite_id",
+          "artifact_id",
+          "runner_profile_id"
+        ],
+        "type": "object"
+      },
       "VersionResponse": {
         "properties": {
           "build_time": {
@@ -1289,6 +1323,66 @@
           }
         },
         "summary": "List and filter test runs",
+        "tags": [
+          "Runs"
+        ]
+      },
+      "post": {
+        "description": "Dispatches an immediate ad-hoc test run execution. Validates the test suite,\ncompiled artifact, and runner profile, creates a TestRun record in QUEUED status,\nand manifests an ephemeral Kubernetes batch/v1 Job in the runner namespace.\n",
+        "operationId": "triggerRun",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Test run created and Kubernetes Job dispatched"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request payload or validation failure"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Suite, artifact, configuration, or runner profile not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource state conflict (e.g. inactive suite or unready artifact)"
+          }
+        },
+        "summary": "Trigger an ad-hoc test run",
         "tags": [
           "Runs"
         ]

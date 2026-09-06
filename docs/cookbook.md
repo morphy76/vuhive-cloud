@@ -31,6 +31,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 10: Inspecting BFF Gateway Status & Session Management](#recipe-10-inspecting-bff-gateway-status--session-management)
     - [Recipe 11: Accessing the Embedded Web Dashboard, PWA Routing & Accessible Design System](#recipe-11-accessing-the-embedded-web-dashboard--pwa-routing)
     - [Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors)
+    - [Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines](#recipe-13-inspecting-control-plane-version-metadata--health-in-automated-pipelines)
 
 ---
 
@@ -387,9 +388,57 @@ Deletes both the database aggregate and the underlying Kubernetes `CronJob`.
 
 ### Recipe 5: Dispatching Ad-Hoc Test Executions & Job Lifecycle
 
-#### 1. Dispatching from a Configured Schedule Template:
+#### 1. Triggering Ad-Hoc Runs via REST API (`POST /api/v1/runs`):
 
-To run an immediate ad-hoc test execution using the pre-configured runner profile, artifact, and environment from a Schedule, instantiate a Job from the CronJob:
+To run an immediate ad-hoc test execution programmatically or from CI/CD pipelines, POST a run request to the control plane API. You must specify an active `TestSuite`, a compiled and `READY` `Artifact`, a `RunnerProfile`, and an optional scenario configuration:
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "suite_id": "suite-auth-checkout",
+    "artifact_id": "c7a6e118-20ab-48d6-953b-e01140026e61",
+    "runner_profile_id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+    "configuration_id": "d1a85f64-5717-4562-b3fc-2c963f66afa7"
+  }'
+```
+
+##### Response (`201 Created`):
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+  "suite_id": "suite-auth-checkout",
+  "artifact_id": "c7a6e118-20ab-48d6-953b-e01140026e61",
+  "configuration_id": "d1a85f64-5717-4562-b3fc-2c963f66afa7",
+  "runner_profile_id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+  "status": "QUEUED",
+  "k8s_job_name": "vuhive-run-a1b2c3d4",
+  "k8s_namespace": "vuhive-runners",
+  "metrics": {
+    "total_iterations": 0,
+    "total_requests": 0,
+    "avg_tps": 0,
+    "p50_duration_ms": 0,
+    "p90_duration_ms": 0,
+    "p95_duration_ms": 0,
+    "p99_duration_ms": 0,
+    "error_rate_pct": 0
+  },
+  "created_at": "2026-09-05T10:15:00Z"
+}
+```
+
+The control plane:
+1. Validates that the `TestSuite` is `ACTIVE`.
+2. Validates that the target `Artifact` is in `READY` status and belongs to the suite.
+3. Validates the `RunnerProfile` and resource limits.
+4. Creates a `TestRun` domain entity in `QUEUED` status and persists it in PostgreSQL.
+5. Dispatches an ephemeral Kubernetes `batch/v1` `Job` named `vuhive-run-<run_id>` in the runner namespace (`vuhive-runners`).
+
+#### 2. Dispatching from a Configured Schedule Template:
+
+To run an immediate ad-hoc test execution using the pre-configured runner profile, artifact, and environment from an existing Schedule, instantiate a Job directly from the CronJob:
 
 ```bash
 kubectl create job nightly-adhoc-manual-1 \
@@ -403,7 +452,7 @@ The control plane Informer Watcher (`RunnerJobWatcher`) detects the newly spawne
 
 > **Run Correlation for CronJob-spawned pods**: The runner pod's `VUHIVE_RUN_ID` environment variable is populated from `metadata.labels['batch.kubernetes.io/job-name']` — the Kubernetes Job name automatically injected onto every pod in the Job. When the runner-wrapper POSTs the completion callback with `run_id = <job-name>`, the control plane resolves the `TestRun` first by UUID lookup, then by `k8s_job_name` as a fallback, ensuring the completion report and KPIs are always correctly indexed.
 
-#### 2. Pod Lifecycle & Security Architecture:
+#### 3. Pod Lifecycle & Security Architecture:
 
 When the runner Job spawns:
 ```text
@@ -1078,6 +1127,62 @@ cors:
 ```
 
 When specific origins are specified, the control plane returns `Access-Control-Allow-Origin: <origin>` and `Vary: Origin` only for matching origins, rejecting unauthorized cross-origin requests.
+
+### Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines
+
+Before kicking off high-concurrency load testing suites or automated performance regressions in CI/CD pipelines (e.g. GitHub Actions, GitLab CI, Argo Workflows), pipeline jobs should assert that the target `vuhive-cloud` control plane is reachable and operating on the expected binary version and git commit hash.
+
+#### 1. Probing Health and Liveness
+
+Verify that the control plane is healthy and ready to process requests:
+
+```bash
+curl -f -s http://localhost:8080/healthz
+# Output: {"status":"ok"}
+```
+
+#### 2. Querying Compile-Time Version Metadata
+
+Retrieve the semantic version, git commit hash, and build timestamp injected via Go `ldflags`:
+
+```bash
+curl -f -s http://localhost:8080/version
+```
+
+Response payload:
+```json
+{
+  "version": "0.1.0",
+  "commit": "aca4153",
+  "build_time": "2026-09-06T12:00:00Z"
+}
+```
+
+#### 3. Automated Shell Preflight Assertion
+
+In automated deployment or test scripts, use `jq` to enforce version compatibility before dispatching tests:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENDPOINT="${VUHIVE_ENDPOINT:-http://localhost:8080}"
+EXPECTED_MIN_VERSION="0.1.0"
+
+echo "Pinging vuhive-cloud control plane at ${ENDPOINT}..."
+VERSION_JSON=$(curl -f -s "${ENDPOINT}/version")
+SERVER_VERSION=$(echo "${VERSION_JSON}" | jq -r '.version')
+COMMIT_HASH=$(echo "${VERSION_JSON}" | jq -r '.commit')
+BUILD_TIME=$(echo "${VERSION_JSON}" | jq -r '.build_time')
+
+echo "Connected to vuhive-cloud version: ${SERVER_VERSION} (commit: ${COMMIT_HASH}, built: ${BUILD_TIME})"
+
+if [ "${SERVER_VERSION}" == "dev" ]; then
+  echo "Warning: Running against development build."
+fi
+
+echo "Control plane preflight check succeeded. Proceeding with load test suite execution."
+```
 
 ---
 
