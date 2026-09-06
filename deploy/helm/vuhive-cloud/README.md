@@ -173,6 +173,10 @@ To ensure callback requests succeed across different Kubernetes network setups:
 - **Cross-Namespace (`runner.namespace != Release.Namespace`)**: Standard Kubernetes pods have `ndots:5` in `/etc/resolv.conf`. Because `<service>.<namespace>.svc.cluster.local` has 4 dots, standard resolvers query host/DHCP upstream search domains first, which can cause connection failures if upstream wildcard DNS returns `127.0.0.1`. The chart mitigates this by generating a fully qualified domain name with a **trailing dot** (`http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete`), bypassing search lists and directing the query straight to CoreDNS.
 - **Custom Override**: You can override `apiCallbackUrl` explicitly with `--set apiCallbackUrl=...` if you route runner callbacks through custom gateways or ingresses.
 
+### Ad-Hoc Test Run Dispatching
+
+In addition to scheduled runs, the control plane allows developers and CI/CD pipelines to dispatch ad-hoc test executions on demand via `POST /api/v1/runs`. The control plane manifests an ephemeral `batch/v1` `Job` directly in `runner.namespace` adhering to the specified `RunnerProfile` and `TestSuite` artifact. Runner pods execute within the target namespace under the Restricted Pod Security Standard and invoke the callback URL upon completion.
+
 ### CronJob Run Correlation
 
 When a `CronJob` fires a `batch/v1` Job:

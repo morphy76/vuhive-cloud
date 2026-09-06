@@ -586,3 +586,240 @@ func TestRunHandler_GetRunLogs(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, resp.Code)
 	})
 }
+
+func TestRunHandler_TriggerRun(t *testing.T) {
+	now := time.Now().UTC()
+	configID := "cfg-456"
+
+	queuedRun, err := model.NewTestRunWithID(
+		"run-999", "suite-100", "art-200", &configID, "prof-300", nil,
+		model.RunStatusQueued, "vuhive-job-999", "vuhive-runners",
+		nil, nil, nil, nil,
+		model.RunMetrics{}, "", "", nil, "", now,
+	)
+	require.NoError(t, err)
+
+	queuedRunNoConfig, err := model.NewTestRunWithID(
+		"run-1000", "suite-100", "art-200", nil, "prof-300", nil,
+		model.RunStatusQueued, "vuhive-job-1000", "vuhive-runners",
+		nil, nil, nil, nil,
+		model.RunMetrics{}, "", "", nil, "", now,
+	)
+	require.NoError(t, err)
+
+	t.Run("successful trigger run with all fields returns HTTP 201 Created", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			triggerRunFunc: func(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error) {
+				assert.Equal(t, "suite-100", cmd.SuiteID)
+				assert.Equal(t, "art-200", cmd.ArtifactID)
+				require.NotNil(t, cmd.ConfigurationID)
+				assert.Equal(t, "cfg-456", *cmd.ConfigurationID)
+				assert.Equal(t, "prof-300", cmd.RunnerProfileID)
+				return queuedRun, nil
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		reqBody := rest.TriggerRunRequest{
+			SuiteID:         "suite-100",
+			ArtifactID:      "art-200",
+			ConfigurationID: &configID,
+			RunnerProfileID: "prof-300",
+		}
+		raw, err := json.Marshal(reqBody)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusCreated, resp.Code)
+
+		var res rest.RunResponse
+		require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &res))
+		assert.Equal(t, "run-999", res.ID)
+		assert.Equal(t, "suite-100", res.SuiteID)
+		assert.Equal(t, "art-200", res.ArtifactID)
+		require.NotNil(t, res.ConfigurationID)
+		assert.Equal(t, "cfg-456", *res.ConfigurationID)
+		assert.Equal(t, "prof-300", res.RunnerProfileID)
+		assert.Equal(t, "QUEUED", res.Status)
+		assert.Equal(t, "vuhive-job-999", res.K8sJobName)
+	})
+
+	t.Run("successful trigger run without optional configuration_id returns HTTP 201 Created", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			triggerRunFunc: func(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error) {
+				assert.Equal(t, "suite-100", cmd.SuiteID)
+				assert.Equal(t, "art-200", cmd.ArtifactID)
+				assert.Nil(t, cmd.ConfigurationID)
+				assert.Equal(t, "prof-300", cmd.RunnerProfileID)
+				return queuedRunNoConfig, nil
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		body := map[string]interface{}{
+			"suite_id":          "suite-100",
+			"artifact_id":       "art-200",
+			"runner_profile_id": "prof-300",
+		}
+		raw, err := json.Marshal(body)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusCreated, resp.Code)
+
+		var res rest.RunResponse
+		require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &res))
+		assert.Equal(t, "run-1000", res.ID)
+		assert.Nil(t, res.ConfigurationID)
+		assert.Equal(t, "QUEUED", res.Status)
+	})
+
+	t.Run("missing required fields returns HTTP 400 Bad Request", func(t *testing.T) {
+		router := rest.SetupRouter(nil, nil, nil, &mockRunsUseCase{})
+
+		testCases := []struct {
+			name string
+			body map[string]interface{}
+		}{
+			{
+				name: "missing suite_id",
+				body: map[string]interface{}{
+					"artifact_id":       "art-200",
+					"runner_profile_id": "prof-300",
+				},
+			},
+			{
+				name: "missing artifact_id",
+				body: map[string]interface{}{
+					"suite_id":          "suite-100",
+					"runner_profile_id": "prof-300",
+				},
+			},
+			{
+				name: "missing runner_profile_id",
+				body: map[string]interface{}{
+					"suite_id":    "suite-100",
+					"artifact_id": "art-200",
+				},
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				raw, err := json.Marshal(tc.body)
+				require.NoError(t, err)
+
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/runs", bytes.NewReader(raw))
+				req.Header.Set("Content-Type", "application/json")
+				resp := httptest.NewRecorder()
+
+				router.ServeHTTP(resp, req)
+
+				assert.Equal(t, http.StatusBadRequest, resp.Code)
+				var errRes rest.ErrorResponse
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &errRes))
+				assert.NotEmpty(t, errRes.Error)
+			})
+		}
+	})
+
+	t.Run("malformed json payload returns HTTP 400 Bad Request", func(t *testing.T) {
+		router := rest.SetupRouter(nil, nil, nil, &mockRunsUseCase{})
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs", bytes.NewReader([]byte(`{not-valid-json`)))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("inactive suite returns HTTP 400 Bad Request", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			triggerRunFunc: func(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error) {
+				return nil, model.ErrInvalidStateTransition
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		reqBody := rest.TriggerRunRequest{
+			SuiteID:         "suite-100",
+			ArtifactID:      "art-200",
+			RunnerProfileID: "prof-300",
+		}
+		raw, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
+
+	t.Run("suite or artifact not found returns HTTP 404 Not Found", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			triggerRunFunc: func(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error) {
+				return nil, model.ErrNotFound
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		reqBody := rest.TriggerRunRequest{
+			SuiteID:         "suite-100",
+			ArtifactID:      "art-200",
+			RunnerProfileID: "prof-300",
+		}
+		raw, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusNotFound, resp.Code)
+	})
+
+	t.Run("conflict error returns HTTP 409 Conflict", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			triggerRunFunc: func(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error) {
+				return nil, model.ErrConflict
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		reqBody := rest.TriggerRunRequest{
+			SuiteID:         "suite-100",
+			ArtifactID:      "art-200",
+			RunnerProfileID: "prof-300",
+		}
+		raw, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusConflict, resp.Code)
+	})
+}
+

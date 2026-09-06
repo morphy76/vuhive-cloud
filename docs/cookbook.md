@@ -388,9 +388,57 @@ Deletes both the database aggregate and the underlying Kubernetes `CronJob`.
 
 ### Recipe 5: Dispatching Ad-Hoc Test Executions & Job Lifecycle
 
-#### 1. Dispatching from a Configured Schedule Template:
+#### 1. Triggering Ad-Hoc Runs via REST API (`POST /api/v1/runs`):
 
-To run an immediate ad-hoc test execution using the pre-configured runner profile, artifact, and environment from a Schedule, instantiate a Job from the CronJob:
+To run an immediate ad-hoc test execution programmatically or from CI/CD pipelines, POST a run request to the control plane API. You must specify an active `TestSuite`, a compiled and `READY` `Artifact`, a `RunnerProfile`, and an optional scenario configuration:
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/runs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "suite_id": "suite-auth-checkout",
+    "artifact_id": "c7a6e118-20ab-48d6-953b-e01140026e61",
+    "runner_profile_id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+    "configuration_id": "d1a85f64-5717-4562-b3fc-2c963f66afa7"
+  }'
+```
+
+##### Response (`201 Created`):
+
+```json
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+  "suite_id": "suite-auth-checkout",
+  "artifact_id": "c7a6e118-20ab-48d6-953b-e01140026e61",
+  "configuration_id": "d1a85f64-5717-4562-b3fc-2c963f66afa7",
+  "runner_profile_id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+  "status": "QUEUED",
+  "k8s_job_name": "vuhive-run-a1b2c3d4",
+  "k8s_namespace": "vuhive-runners",
+  "metrics": {
+    "total_iterations": 0,
+    "total_requests": 0,
+    "avg_tps": 0,
+    "p50_duration_ms": 0,
+    "p90_duration_ms": 0,
+    "p95_duration_ms": 0,
+    "p99_duration_ms": 0,
+    "error_rate_pct": 0
+  },
+  "created_at": "2026-09-05T10:15:00Z"
+}
+```
+
+The control plane:
+1. Validates that the `TestSuite` is `ACTIVE`.
+2. Validates that the target `Artifact` is in `READY` status and belongs to the suite.
+3. Validates the `RunnerProfile` and resource limits.
+4. Creates a `TestRun` domain entity in `QUEUED` status and persists it in PostgreSQL.
+5. Dispatches an ephemeral Kubernetes `batch/v1` `Job` named `vuhive-run-<run_id>` in the runner namespace (`vuhive-runners`).
+
+#### 2. Dispatching from a Configured Schedule Template:
+
+To run an immediate ad-hoc test execution using the pre-configured runner profile, artifact, and environment from an existing Schedule, instantiate a Job directly from the CronJob:
 
 ```bash
 kubectl create job nightly-adhoc-manual-1 \
@@ -404,7 +452,7 @@ The control plane Informer Watcher (`RunnerJobWatcher`) detects the newly spawne
 
 > **Run Correlation for CronJob-spawned pods**: The runner pod's `VUHIVE_RUN_ID` environment variable is populated from `metadata.labels['batch.kubernetes.io/job-name']` — the Kubernetes Job name automatically injected onto every pod in the Job. When the runner-wrapper POSTs the completion callback with `run_id = <job-name>`, the control plane resolves the `TestRun` first by UUID lookup, then by `k8s_job_name` as a fallback, ensuring the completion report and KPIs are always correctly indexed.
 
-#### 2. Pod Lifecycle & Security Architecture:
+#### 3. Pod Lifecycle & Security Architecture:
 
 When the runner Job spawns:
 ```text
