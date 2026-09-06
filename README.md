@@ -78,6 +78,7 @@ For complete details on our development methodology, human oversight model, and 
 | Document | Role & Audience |
 |---|---|
 | **[`README.md`](./README.md)** | **Introduction & Overview**: System capabilities, architectural topology, and project roadmap. |
+| **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** | **Developer & Contributor Guide**: Local environment setup, container builds with `--load`, local cluster validation, coding standards, and PR guidelines. |
 | **[`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md)** | **Development Philosophy & AI Disclosure**: Spec-Driven Development (SDD) paradigm, human vs. agent responsibility division, and quality gates. |
 | **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Installation**: Production Helm deployment guide, configuration values reference, external secrets, RBAC, and security hardening. |
 | **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation**: Quickstart backing services setup for evaluation (PostgreSQL + MinIO + optional OpenAPI Swagger UI viewer). |
@@ -176,6 +177,13 @@ make build
 # Build standalone BFF service binary
 make build-bff
 
+# Build container images with --load for local cluster testing (Rancher Desktop)
+make docker-build
+
+# Or build individual images
+make docker-build-server
+make docker-build-runner-init
+
 # Run unit tests
 make test
 
@@ -188,6 +196,8 @@ make lint
 # View all available targets
 make help
 ```
+
+For detailed instructions on local cluster validation, BuildKit containerd image loading, and coding standards, see **[`CONTRIBUTING.md`](./CONTRIBUTING.md)**.
 
 ### Running the Go BFF & Web Dashboard Locally
 

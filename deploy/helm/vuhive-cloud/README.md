@@ -8,6 +8,7 @@ Official Helm chart for the `vuhive-cloud` control plane.
 
 > **Documentation Navigation**:
 > - **System Architecture & Overview**: [`README.md`](../../README.md) and [`ARCHITECTURE_SPEC.md`](../../ARCHITECTURE_SPEC.md)
+> - **Developer & Contributor Guide**: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
 > - **Infrastructure Chart (PostgreSQL + MinIO + OpenAPI Viewer)**: [`deploy/helm/vuhive-cloud-infra/README.md`](../vuhive-cloud-infra/README.md)
 > - **Adoption Guide & API Recipes**: [`docs/cookbook.md`](../../docs/cookbook.md)
 > - **REST API Reference**: [`api/openapi.yaml`](../../api/openapi.yaml)
@@ -58,7 +59,26 @@ helm install vuhive deploy/helm/vuhive-cloud \
 > [!NOTE]
 > When `s3.endpoint` is non-empty (as in the MinIO case above), `s3.usePathStyle` is automatically treated as `true` by the control plane server, runner-init, and runner-wrapper. Path-style addressing (`http://<endpoint>/<bucket>/`) is required for MinIO because virtual-hosted-style URLs (`http://<bucket>.<service>/`) depend on DNS wildcards unavailable for Kubernetes Service names.
 
-### 2. Production Deployment (with External PostgreSQL & S3)
+### 3. Local Cluster Testing with Locally Built Images
+
+When testing code changes against a local cluster (e.g. Rancher Desktop, Kind, Minikube), build container images using `make docker-build` (which applies `--load --provenance=false` so images are loaded directly into the local CRI store):
+
+```bash
+# In repository root:
+make docker-build
+
+# Deploy with local image overrides:
+helm install vuhive deploy/helm/vuhive-cloud \
+  --namespace vuhive-system \
+  --set image.repository=vuhive/server \
+  --set image.tag=local \
+  --set image.pullPolicy=IfNotPresent \
+  --set runner.initImage=vuhive/runner-init:local
+```
+
+For full details on local container building and troubleshooting `ImagePullBackOff` issues, see [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
+
+### 4. Production Deployment (with External PostgreSQL & S3)
 
 In production, backing services should be provisioned via managed cloud infrastructure (e.g., AWS Aurora PostgreSQL and AWS S3).
 

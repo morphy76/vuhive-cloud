@@ -8,6 +8,10 @@ LDFLAGS := -s -w \
   -X '$(MODULE)/internal/version.Commit=$(COMMIT)' \
   -X '$(MODULE)/internal/version.BuildTime=$(BUILD_TIME)'
 
+DOCKER ?= docker
+SERVER_IMAGE ?= vuhive/server:local
+RUNNER_INIT_IMAGE ?= vuhive/runner-init:local
+
 .PHONY: all
 all: build test ## Build and run tests
 
@@ -37,6 +41,27 @@ build-runner-wrapper: ## Build runner wrapper binary
 build-runner-init: ## Build runner init binary
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/runner-init ./cmd/runner-init
+
+.PHONY: docker-build
+docker-build: docker-build-server docker-build-runner-init ## Build all container images with --load for local cluster testing
+
+.PHONY: docker-build-server
+docker-build-server: ## Build control plane server container image with --load
+	$(DOCKER) build --load --provenance=false \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(SERVER_IMAGE) \
+		-f deploy/docker/server.Dockerfile .
+
+.PHONY: docker-build-runner-init
+docker-build-runner-init: ## Build runner-init container image with --load
+	$(DOCKER) build --load --provenance=false \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(RUNNER_INIT_IMAGE) \
+		-f deploy/docker/runner-init.Dockerfile .
 
 .PHONY: test
 test: ## Run unit tests
