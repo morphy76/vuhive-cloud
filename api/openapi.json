@@ -1,0 +1,1955 @@
+{
+  "components": {
+    "schemas": {
+      "AbortRunRequest": {
+        "properties": {
+          "reason": {
+            "example": "high error rate detected",
+            "type": "string"
+          },
+          "requested_by": {
+            "example": "operator-alice",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AffinityDTO": {
+        "properties": {
+          "node_selector_terms": {
+            "items": {
+              "$ref": "#/components/schemas/NodeAffinityTermDTO"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ArtifactListResponse": {
+        "properties": {
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactResponse"
+            },
+            "type": "array"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "artifacts",
+          "count"
+        ],
+        "type": "object"
+      },
+      "ArtifactResponse": {
+        "properties": {
+          "build_logs_s3_key": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "s3_binary_key": {
+            "type": "string"
+          },
+          "sha256_checksum": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "suite_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "suite_id",
+          "platform",
+          "status",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "BarrierAbortRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "worker_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "BarrierAwaitRequest": {
+        "properties": {
+          "release_delay_ms": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "timeout_ms": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "total_workers": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "worker_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id",
+          "total_workers"
+        ],
+        "type": "object"
+      },
+      "BarrierParticipantResponse": {
+        "properties": {
+          "error_reason": {
+            "type": "string"
+          },
+          "joined_at": {
+            "type": "string"
+          },
+          "ready_at": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "worker_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id",
+          "status",
+          "joined_at"
+        ],
+        "type": "object"
+      },
+      "BarrierResponse": {
+        "properties": {
+          "abort_reason": {
+            "type": "string"
+          },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/BarrierParticipantResponse"
+            },
+            "type": "array"
+          },
+          "ready_workers": {
+            "type": "integer"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "start_in_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target_start_time": {
+            "nullable": true,
+            "type": "string"
+          },
+          "total_workers": {
+            "type": "integer"
+          },
+          "worker_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "total_workers",
+          "ready_workers"
+        ],
+        "type": "object"
+      },
+      "BuildTriggerResponse": {
+        "properties": {
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactResponse"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "artifacts"
+        ],
+        "type": "object"
+      },
+      "CompleteRunRequest": {
+        "properties": {
+          "exit_code": {
+            "example": 0,
+            "type": "integer"
+          },
+          "finished_at": {
+            "example": "2026-09-05T10:15:30Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "logs_key": {
+            "example": "runs/a1b2c3d4/run.log",
+            "type": "string"
+          },
+          "report_key": {
+            "example": "runs/a1b2c3d4/summary.json",
+            "type": "string"
+          },
+          "run_id": {
+            "example": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+            "type": "string"
+          },
+          "summary": {
+            "description": "Parsed summary metrics payload",
+            "type": "object"
+          },
+          "summary_json": {
+            "description": "Raw summary JSON report",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "CreateProfileRequest": {
+        "properties": {
+          "affinity": {
+            "$ref": "#/components/schemas/AffinityDTO"
+          },
+          "cpu_limit": {
+            "type": "string"
+          },
+          "cpu_request": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "memory_limit": {
+            "type": "string"
+          },
+          "memory_request": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "node_selector": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "runner_image": {
+            "type": "string"
+          },
+          "tolerations": {
+            "items": {
+              "$ref": "#/components/schemas/TolerationDTO"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "CreateScheduleRequest": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "configuration_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "cron_expression": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "runner_profile_id": {
+            "type": "string"
+          },
+          "suite_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "suite_id",
+          "artifact_id",
+          "runner_profile_id",
+          "name",
+          "cron_expression"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "example": "resource not found",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "NodeAffinityTermDTO": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "operator"
+        ],
+        "type": "object"
+      },
+      "PresignedURLResponse": {
+        "properties": {
+          "download_url": {
+            "example": "https://minio.vuhive.local/artifacts/runs/run-123/summary.json?X-Amz-Algorithm=...",
+            "type": "string"
+          },
+          "expires_in_seconds": {
+            "example": 900,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "download_url",
+          "expires_in_seconds"
+        ],
+        "type": "object"
+      },
+      "ProfileListResponse": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles",
+          "count"
+        ],
+        "type": "object"
+      },
+      "ProfileResponse": {
+        "properties": {
+          "affinity": {
+            "$ref": "#/components/schemas/AffinityDTO"
+          },
+          "cpu_limit": {
+            "type": "string"
+          },
+          "cpu_request": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "memory_limit": {
+            "type": "string"
+          },
+          "memory_request": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "node_selector": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "runner_image": {
+            "type": "string"
+          },
+          "tolerations": {
+            "items": {
+              "$ref": "#/components/schemas/TolerationDTO"
+            },
+            "type": "array"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "runner_image",
+          "cpu_request",
+          "cpu_limit",
+          "memory_request",
+          "memory_limit",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "RunListResponse": {
+        "properties": {
+          "count": {
+            "example": 10,
+            "type": "integer"
+          },
+          "limit": {
+            "example": 10,
+            "type": "integer"
+          },
+          "offset": {
+            "example": 0,
+            "type": "integer"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunResponse"
+            },
+            "type": "array"
+          },
+          "total": {
+            "example": 45,
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "runs",
+          "count",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "type": "object"
+      },
+      "RunMetricsDTO": {
+        "properties": {
+          "avg_tps": {
+            "example": 1666.67,
+            "format": "double",
+            "type": "number"
+          },
+          "error_rate_pct": {
+            "example": 0.02,
+            "format": "double",
+            "type": "number"
+          },
+          "p50_duration_ms": {
+            "example": 12.4,
+            "format": "double",
+            "type": "number"
+          },
+          "p90_duration_ms": {
+            "example": 28.1,
+            "format": "double",
+            "type": "number"
+          },
+          "p95_duration_ms": {
+            "example": 45.2,
+            "format": "double",
+            "type": "number"
+          },
+          "p99_duration_ms": {
+            "example": 89.6,
+            "format": "double",
+            "type": "number"
+          },
+          "total_iterations": {
+            "example": 50000,
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_requests": {
+            "example": 200000,
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_iterations",
+          "total_requests",
+          "avg_tps",
+          "p50_duration_ms",
+          "p90_duration_ms",
+          "p95_duration_ms",
+          "p99_duration_ms",
+          "error_rate_pct"
+        ],
+        "type": "object"
+      },
+      "RunResponse": {
+        "properties": {
+          "abort_reason": {
+            "example": "",
+            "type": "string"
+          },
+          "artifact_id": {
+            "example": "c7a6e118-20ab-48d6-953b-e01140026e61",
+            "format": "uuid",
+            "type": "string"
+          },
+          "configuration_id": {
+            "example": "cfg-ramp-up-stage",
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "example": "2026-09-05T10:14:25Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "duration_ms": {
+            "example": 60000,
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "exit_code": {
+            "example": 0,
+            "nullable": true,
+            "type": "integer"
+          },
+          "finished_at": {
+            "example": "2026-09-05T10:15:30Z",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "example": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
+            "format": "uuid",
+            "type": "string"
+          },
+          "k8s_job_name": {
+            "example": "vuhive-run-a1b2c3d4",
+            "type": "string"
+          },
+          "k8s_namespace": {
+            "example": "vuhive-runners",
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/RunMetricsDTO"
+          },
+          "runner_profile_id": {
+            "example": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+            "format": "uuid",
+            "type": "string"
+          },
+          "s3_logs_key": {
+            "example": "runs/a1b2c3d4/run.log",
+            "type": "string"
+          },
+          "s3_report_key": {
+            "example": "runs/a1b2c3d4/summary.json",
+            "type": "string"
+          },
+          "schedule_id": {
+            "example": "7fa1205c-d38e-4f51-b924-11883395bcf8",
+            "nullable": true,
+            "type": "string"
+          },
+          "sla_passed": {
+            "example": true,
+            "nullable": true,
+            "type": "boolean"
+          },
+          "started_at": {
+            "example": "2026-09-05T10:14:30Z",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "COMPLETED",
+              "FAILED",
+              "ABORTED"
+            ],
+            "example": "COMPLETED",
+            "type": "string"
+          },
+          "suite_id": {
+            "example": "suite-checkout-service",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "suite_id",
+          "artifact_id",
+          "runner_profile_id",
+          "status",
+          "metrics",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "ScheduleListResponse": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "schedules",
+          "count"
+        ],
+        "type": "object"
+      },
+      "ScheduleResponse": {
+        "properties": {
+          "artifact_id": {
+            "type": "string"
+          },
+          "configuration_id": {
+            "nullable": true,
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "cron_expression": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "k8s_cronjob_name": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "runner_profile_id": {
+            "type": "string"
+          },
+          "suite_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "suite_id",
+          "artifact_id",
+          "runner_profile_id",
+          "name",
+          "cron_expression",
+          "k8s_cronjob_name",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "TolerationDTO": {
+        "properties": {
+          "effect": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "toleration_seconds": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateProfileRequest": {
+        "properties": {
+          "affinity": {
+            "$ref": "#/components/schemas/AffinityDTO"
+          },
+          "cpu_limit": {
+            "type": "string"
+          },
+          "cpu_request": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "memory_limit": {
+            "type": "string"
+          },
+          "memory_request": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "node_selector": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "runner_image": {
+            "type": "string"
+          },
+          "tolerations": {
+            "items": {
+              "$ref": "#/components/schemas/TolerationDTO"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "UpdateScheduleRequest": {
+        "properties": {
+          "cron_expression": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cron_expression"
+        ],
+        "type": "object"
+      },
+      "VersionResponse": {
+        "properties": {
+          "build_time": {
+            "example": "2026-09-05T11:00:00Z",
+            "type": "string"
+          },
+          "commit": {
+            "example": "9b0665a",
+            "type": "string"
+          },
+          "version": {
+            "example": "0.1.0",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Cloud-native orchestration engine for distributed high-throughput load testing workloads on Kubernetes.\nProvides APIs for test suite compilation, runner profiles, scheduled execution (CronJobs),\nad-hoc execution, start barrier synchronization, and historical telemetry / report query.\n",
+    "title": "vuhive-cloud Control Plane REST API",
+    "version": "0.0.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "description": "Returns API health status.",
+        "operationId": "apiHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "API is operational"
+          }
+        },
+        "summary": "API health status"
+      }
+    },
+    "/api/v1/profiles": {
+      "get": {
+        "description": "Retrieves all registered runner scheduling and resource profiles.",
+        "operationId": "listProfiles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileListResponse"
+                }
+              }
+            },
+            "description": "List of runner profiles"
+          }
+        },
+        "summary": "List runner profiles",
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "post": {
+        "description": "Registers a new runner resource, affinity, and toleration profile.",
+        "operationId": "createProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponse"
+                }
+              }
+            },
+            "description": "Profile successfully created"
+          }
+        },
+        "summary": "Create runner profile",
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/profiles/{id}": {
+      "delete": {
+        "operationId": "deleteProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Profile deleted"
+          }
+        },
+        "summary": "Delete runner profile",
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "get": {
+        "description": "Retrieves details of a specific runner profile.",
+        "operationId": "getProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponse"
+                }
+              }
+            },
+            "description": "Runner profile details"
+          },
+          "404": {
+            "description": "Profile not found"
+          }
+        },
+        "summary": "Get runner profile",
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "put": {
+        "description": "Updates resource constraints and affinity rules of an existing profile.",
+        "operationId": "updateProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponse"
+                }
+              }
+            },
+            "description": "Profile updated"
+          }
+        },
+        "summary": "Update runner profile",
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "description": "Queries historical test executions with filtering by test suite, execution status,\noriginating schedule, and timestamp range. Supports limit/offset pagination and sorts\nresults by creation timestamp descending.\n",
+        "operationId": "listRuns",
+        "parameters": [
+          {
+            "description": "Filter by parent Test Suite ID",
+            "in": "query",
+            "name": "suite_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by execution status",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "enum": [
+                "QUEUED",
+                "RUNNING",
+                "COMPLETED",
+                "FAILED",
+                "ABORTED"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter by recurring Schedule ID",
+            "in": "query",
+            "name": "schedule_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter test runs created at or after timestamp (RFC 3339)",
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "example": "2026-09-01T00:00:00Z",
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter test runs created at or before timestamp (RFC 3339)",
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "example": "2026-09-05T23:59:59Z",
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of runs to return (default 20, max 100)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Number of records to skip for pagination",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunListResponse"
+                }
+              }
+            },
+            "description": "Paginated list of test executions"
+          }
+        },
+        "summary": "List and filter test runs",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/api/v1/runs/complete": {
+      "post": {
+        "description": "Internal runner callback endpoint invoked upon test completion where run_id is supplied\nin the request body payload.\n",
+        "operationId": "completeRunFromBody",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Test run successfully finalized"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed payload or validation error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run already in terminal state"
+          }
+        },
+        "summary": "Finalize test run execution and ingest summary report (callback without path ID)",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}": {
+      "get": {
+        "description": "Returns complete metadata, execution timestamps, duration in milliseconds, exit code,\nSLA compliance, and indexed summary metrics directly from PostgreSQL without reading S3.\n",
+        "operationId": "getRun",
+        "parameters": [
+          {
+            "description": "Unique identifier of the test run",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Test execution details and performance KPIs"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run not found"
+          }
+        },
+        "summary": "Retrieve test run details and performance KPIs",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}/abort": {
+      "parameters": [
+        {
+          "description": "Unique TestRun UUID to abort",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "description": "Stops and cancels an active (QUEUED or RUNNING) test run on demand.\nDeletes the underlying Kubernetes batch/v1 Job and terminates associated runner pods\nwith SIGTERM signal propagation, allowing the runner wrapper to flush partial execution\nlogs before pod eviction. Transitions the aggregate state to ABORTED and records audit metadata.\nRejects abort requests on already finalized runs with 409 Conflict.\n",
+        "operationId": "abortRun",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbortRunRequest"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Test execution successfully aborted."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed or invalid request payload"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Run is already in a terminal status (COMPLETED, FAILED, or ABORTED)"
+          }
+        },
+        "summary": "Abort in-flight test run",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}/barrier": {
+      "get": {
+        "description": "Inspects current participant readiness and target start time for a distributed test run.",
+        "operationId": "getBarrier",
+        "parameters": [
+          {
+            "description": "Unique identifier of the test run",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarrierResponse"
+                }
+              }
+            },
+            "description": "Barrier session status"
+          }
+        },
+        "summary": "Query barrier status",
+        "tags": [
+          "Barrier"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}/barrier/abort": {
+      "post": {
+        "description": "Signals an abort to release all waiting workers due to initialization failure.",
+        "operationId": "abortBarrier",
+        "parameters": [
+          {
+            "description": "Unique identifier of the test run",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BarrierAbortRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarrierResponse"
+                }
+              }
+            },
+            "description": "Barrier rendezvous successfully aborted"
+          }
+        },
+        "summary": "Abort start barrier rendezvous",
+        "tags": [
+          "Barrier"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}/barrier/await": {
+      "post": {
+        "description": "Participates in a distributed start barrier synchronization for multi-pod load tests.",
+        "operationId": "awaitBarrier",
+        "parameters": [
+          {
+            "description": "Unique identifier of the test run",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BarrierAwaitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarrierResponse"
+                }
+              }
+            },
+            "description": "Barrier rendezvous released"
+          },
+          "408": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Barrier rendezvous timed out waiting for all participants"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Barrier rendezvous was aborted by another participant"
+          }
+        },
+        "summary": "Await start barrier rendezvous",
+        "tags": [
+          "Barrier"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}/complete": {
+      "post": {
+        "description": "Internal runner callback endpoint invoked upon test completion to upload summary metrics,\nrecord exit status, SLA evaluation, and transition the test run lifecycle state.\n",
+        "operationId": "completeRun",
+        "parameters": [
+          {
+            "description": "Unique identifier of the test run",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Test run successfully finalized"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed payload or validation error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run already in terminal state"
+          }
+        },
+        "summary": "Finalize test run execution and ingest summary report",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}/logs": {
+      "get": {
+        "description": "Streams or returns the raw container execution log output (run.log) stored in object storage.\nIf presign=true, returns a secure presigned S3 download URL.\n",
+        "operationId": "getRunLogs",
+        "parameters": [
+          {
+            "description": "Unique identifier of the test run",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "When true, returns a presigned S3 download URL instead of streaming content",
+            "in": "query",
+            "name": "presign",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignedURLResponse"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Raw text log stream or presigned URL response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run or execution log not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run is still in-flight; logs not yet finalized"
+          }
+        },
+        "summary": "Retrieve execution logs (run.log)",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}/report": {
+      "get": {
+        "description": "Fetches and returns the full raw summary.json artifact stored in object storage (or indexed in PostgreSQL).\nIf presign=true, returns a secure presigned S3 download URL.\n",
+        "operationId": "getRunReport",
+        "parameters": [
+          {
+            "description": "Unique identifier of the test run",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "When true, returns a presigned S3 download URL instead of streaming content",
+            "in": "query",
+            "name": "presign",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "description": "Raw summary JSON report",
+                      "type": "object"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PresignedURLResponse"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Raw summary.json content or presigned URL response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run or report artifact not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run is still in-flight (QUEUED or RUNNING); report not yet generated"
+          }
+        },
+        "summary": "Download full summary.json report",
+        "tags": [
+          "Runs"
+        ]
+      }
+    },
+    "/api/v1/schedules": {
+      "get": {
+        "description": "Returns all active schedules and their associated Kubernetes CronJobs.",
+        "operationId": "listSchedules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleListResponse"
+                }
+              }
+            },
+            "description": "List of active schedules"
+          }
+        },
+        "summary": "List active test schedules",
+        "tags": [
+          "Schedules"
+        ]
+      },
+      "post": {
+        "description": "Registers a recurring schedule and manifests a native batch/v1 CronJob in Kubernetes.",
+        "operationId": "createSchedule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponse"
+                }
+              }
+            },
+            "description": "Schedule created and CronJob manifested"
+          }
+        },
+        "summary": "Create scheduled test execution",
+        "tags": [
+          "Schedules"
+        ]
+      }
+    },
+    "/api/v1/schedules/{id}": {
+      "delete": {
+        "description": "Deletes schedule record and terminates underlying Kubernetes CronJob.",
+        "operationId": "deleteSchedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Schedule deleted"
+          }
+        },
+        "summary": "Delete schedule",
+        "tags": [
+          "Schedules"
+        ]
+      },
+      "get": {
+        "operationId": "getSchedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponse"
+                }
+              }
+            },
+            "description": "Schedule details"
+          }
+        },
+        "summary": "Get test schedule",
+        "tags": [
+          "Schedules"
+        ]
+      },
+      "put": {
+        "operationId": "updateSchedule",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScheduleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponse"
+                }
+              }
+            },
+            "description": "Schedule updated"
+          }
+        },
+        "summary": "Update schedule cadence",
+        "tags": [
+          "Schedules"
+        ]
+      }
+    },
+    "/api/v1/suites/{id}/artifacts": {
+      "get": {
+        "description": "Returns all compiled binary artifacts associated with a test suite.",
+        "operationId": "listArtifacts",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactListResponse"
+                }
+              }
+            },
+            "description": "List of compiled artifacts"
+          }
+        },
+        "summary": "List compiled artifacts",
+        "tags": [
+          "Builds"
+        ]
+      }
+    },
+    "/api/v1/suites/{id}/builds": {
+      "post": {
+        "description": "Accepts a multipart/form-data payload containing the Go test source archive\n(`.tar.gz`) and triggers an ephemeral Kubernetes `batch/v1` Job to compile it\nfor the requested target platform. The response is returned immediately; the\nbuild runs asynchronously.\n\n**Retry semantics**: If a previous compilation attempt for the same suite and\nplatform resulted in a `FAILED` artifact, uploading corrected sources via this\nendpoint automatically resets the artifact from `FAILED → PENDING` and prunes\nthe stale Kubernetes Job before dispatching a fresh one. No manual database or\ncluster intervention is required — just re-upload and the control plane handles\nthe rest.\n",
+        "operationId": "uploadAndBuild",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "platform": {
+                    "default": "linux/amd64",
+                    "description": "Target architecture (linux/amd64, linux/arm64, or all)",
+                    "type": "string"
+                  },
+                  "source": {
+                    "description": "Test scenario archive (.tar.gz or .zip)",
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "source"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildTriggerResponse"
+                }
+              }
+            },
+            "description": "Compilation build job accepted"
+          }
+        },
+        "summary": "Upload Go test source and trigger build Job",
+        "tags": [
+          "Builds"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "description": "Returns service health status for Kubernetes probes.",
+        "operationId": "healthz",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "example": "ok",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Service is healthy and ready to accept requests"
+          }
+        },
+        "summary": "Liveness / Readiness probe"
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "description": "Returns raw OpenAPI 3.1 specification definition in JSON format.",
+        "operationId": "getOpenAPISpecJSON",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OpenAPI 3.1 JSON specification"
+          }
+        },
+        "summary": "OpenAPI 3.1 JSON specification"
+      }
+    },
+    "/openapi.yaml": {
+      "get": {
+        "description": "Returns raw OpenAPI 3.1 specification definition in YAML format.",
+        "operationId": "getOpenAPISpecYAML",
+        "responses": {
+          "200": {
+            "content": {
+              "application/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OpenAPI 3.1 YAML specification"
+          }
+        },
+        "summary": "OpenAPI 3.1 YAML specification"
+      }
+    },
+    "/version": {
+      "get": {
+        "description": "Returns semantic version, git commit hash, and build timestamp.",
+        "operationId": "getVersion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionResponse"
+                }
+              }
+            },
+            "description": "Build version details."
+          }
+        },
+        "summary": "Component version"
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Local port-forwarded control plane",
+      "url": "http://localhost:8080"
+    },
+    {
+      "description": "In-cluster Kubernetes service",
+      "url": "http://vuhive-cloud.vuhive-system.svc.cluster.local:8080"
+    }
+  ]
+}

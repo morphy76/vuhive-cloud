@@ -17,7 +17,7 @@ The `vuhive-cloud-infra` umbrella chart bundles community-proven Helm subcharts:
 > - **System Architecture & Overview**: [`README.md`](../../README.md) and [`ARCHITECTURE_SPEC.md`](../../ARCHITECTURE_SPEC.md)
 > - **Control Plane Helm Chart**: [`deploy/helm/vuhive-cloud/README.md`](../vuhive-cloud/README.md)
 > - **Adoption Guide & API Recipes**: [`docs/cookbook.md`](../../docs/cookbook.md)
-> - **REST API Reference**: [`api/openapi.yaml`](../../api/openapi.yaml)
+> - **REST API Reference**: [OpenAPI 3.1 Specification (`api/openapi.yaml`)](../../api/openapi.yaml) (served live at `GET /openapi.yaml` and `GET /openapi.json`)
 > - **Engineering Philosophy**: [`AI_DISCLOSURE.md`](../../AI_DISCLOSURE.md)
 
 ## Prerequisites

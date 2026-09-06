@@ -511,3 +511,11 @@ func ToBarrierResponse(s *model.BarrierSession) BarrierResponse {
 		Participants:    participants,
 	}
 }
+
+// VersionResponse represents the response payload for /version.
+type VersionResponse struct {
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildTime string `json:"build_time"`
+}
+

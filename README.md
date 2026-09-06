@@ -13,7 +13,7 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
 - 🧩 **Reusable Runner Profiles**: Decouple test scenario code from infrastructure scheduling. Define reusable profiles specifying CPU/memory requests and limits, node selectors, tolerations, and node affinities for targeted execution.
 - ⏰ **Native Kubernetes CronJob Scheduling**: Declarative scheduling mapped 1-to-1 to native Kubernetes `batch/v1` `CronJob`s with standard cron syntax (`0 2 * * *`), eliminating external scheduler dependencies.
 - 📊 **Automated KPI Indexing & SLA Verification**: Automatically parses deterministic execution reports (`summary.json`), extracting and indexing latency percentiles ($p_{50}$, $p_{90}$, $p_{95}$, $p_{99}$), throughput (TPS), error rates, and SLA pass/fail status into PostgreSQL.
-- 📈 **Execution Reports, Logs & Metrics Query API**: Query and filter historical runs by suite, schedule, status, and date range. Fetch indexed performance KPIs, full deterministic execution reports (`summary.json`), and runner stdout/stderr logs directly or as presigned S3 download URLs. Fully documented via [OpenAPI 3.0.3](./api/openapi.yaml).
+- 📈 **Execution Reports, Logs & Metrics Query API**: Query and filter historical runs by suite, schedule, status, and date range. Fetch indexed performance KPIs, full deterministic execution reports (`summary.json`), and runner stdout/stderr logs directly or as presigned S3 download URLs. Fully documented via [OpenAPI 3.1](./api/openapi.yaml) and served directly by the control plane (`GET /openapi.yaml` and `GET /openapi.json`).
 - 📦 **Pluggable Object Storage**: Integrates seamlessly with AWS S3 or MinIO for long-term retention of source packages, compiled binaries, full execution logs, and detailed performance summaries.
 - ⏱ **Distributed Start Barrier Synchronization**: Built-in rendezvous coordinator guarantees multi-pod distributed load generators synchronize and fire simultaneously without clock skew.
 - 🛑 **Execution Lifecycle Control & Graceful Abort**: Monitor active runs in real time and abort executions on demand (`POST /api/v1/runs/{id}/abort`), instantly tearing down Kubernetes workloads while propagating SIGTERM for partial log flush, updating state to `ABORTED` with audited cancellation metadata, and reclaiming cluster resources.
@@ -74,15 +74,15 @@ For complete details on our development methodology, human oversight model, and 
 
 ## Documentation Ecosystem & Navigation
 
-| Document | Role & Audience |
-|---|---|
-| **[`README.md`](./README.md)** | **Introduction & Overview**: System capabilities, architectural topology, and project roadmap. |
-| **[`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md)** | **Development Philosophy & AI Disclosure**: Spec-Driven Development (SDD) paradigm, human vs. agent responsibility division, and quality gates. |
-| **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Installation**: Production Helm deployment guide, configuration values reference, external secrets, RBAC, and security hardening. |
-| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation**: Quickstart backing services setup for evaluation (PostgreSQL + MinIO). |
-| **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & API Recipes**: End-to-end recipes for packaging test suites, configuring runner profiles, scheduling CronJobs, dispatching runs, and querying KPIs. |
-| **[`api/openapi.yaml`](./api/openapi.yaml)** | **REST API Reference**: Full OpenAPI 3.0.3 specification covering all control plane endpoints, schemas, and abort lifecycle APIs. |
-| **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | **Architectural Specification**: Bounded contexts, DDD domain aggregates, database schema (DDL), and security postures. |
+| Document | Role & Audience | Focus & Boundary |
+|---|---|---|
+| **[`README.md`](./README.md)** | **Introduction & Overview** | Introduces system capabilities, architectural topology, and project roadmap. |
+| **[`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md)** | **Engineering Philosophy & AI Disclosure** | Spec-Driven Development (SDD) paradigm, human vs. agent responsibility division, and quality gates. |
+| **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Installation** | Installs control plane on Kubernetes; configuration values, external secrets, RBAC, and security hardening. |
+| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation** | Installs backing evaluation services (PostgreSQL + MinIO). |
+| **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & Recipes** | Dedicated to `vuhive-cloud` adoption: end-to-end recipes for packaging test suites, profiles, schedules, and runs. |
+| **[`api/openapi.yaml`](./api/openapi.yaml)** | **REST API Reference** | Documents the APIs: complete OpenAPI 3.1 contract served live by control plane (`GET /openapi.yaml`, `GET /openapi.json`). |
+| **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | **Architectural Specification** | Bounded contexts, DDD domain aggregates, database schema (DDL), and security postures. |
 
 ---
 
@@ -120,21 +120,29 @@ helm install vuhive deploy/helm/vuhive-cloud \
 
 > **MinIO Note**: Setting `s3.endpoint` automatically enables path-style S3 addressing in the control plane server, runner-init, and runner-wrapper — no extra flag needed. See the [Control Plane Helm Installation Guide (`deploy/helm/vuhive-cloud/README.md`)](./deploy/helm/vuhive-cloud/README.md) for full configuration reference and production deployment options.
 
-### 3. Verify Health & Explore Adoption Recipes
-
+### 3. Verify Health, Version & OpenAPI Endpoints
+ 
 Port-forward the control plane service:
 
 ```bash
 kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080
 ```
 
-Verify service liveness:
+Verify service liveness, version, and OpenAPI specifications:
 
 ```bash
+# Check service health
 curl -i http://localhost:8080/healthz
+
+# Inspect runtime version
+curl -i http://localhost:8080/version
+
+# Fetch machine-readable OpenAPI 3.1 specification
+curl -i http://localhost:8080/openapi.json
+curl -i http://localhost:8080/openapi.yaml
 ```
 
-To create your first runner profile, upload test suites, and trigger runs, follow the **[Adoption Cookbook (`docs/cookbook.md`)](./docs/cookbook.md)**. For full REST API endpoint specifications, refer to the **[OpenAPI Reference (`api/openapi.yaml`)](./api/openapi.yaml)**.
+To create your first runner profile, upload test suites, and trigger runs, follow the **[Adoption Cookbook (`docs/cookbook.md`)](./docs/cookbook.md)**. For full REST API endpoint specifications, refer to the **[OpenAPI Reference (`api/openapi.yaml`)](./api/openapi.yaml)** or fetch it live at `/openapi.yaml` / `/openapi.json`.
 
 ---
 
@@ -143,7 +151,9 @@ To create your first runner profile, upload test suites, and trigger runs, follo
 ```text
 .
 ├── api/
-│   └── openapi.yaml            # OpenAPI 3.0.3 REST API specification
+│   ├── openapi.yaml            # OpenAPI 3.1 REST API specification (YAML)
+│   ├── openapi.json            # OpenAPI 3.1 REST API specification (JSON)
+│   └── spec.go                 # Embedded specification assets (embed.FS)
 ├── cmd/
 │   ├── bff/                    # Backend-For-Frontend service (React 19 PWA aggregation & API gateway)
 │   ├── server/                 # Control plane REST server & migration entrypoint
@@ -211,7 +221,7 @@ For detailed Helm configuration options, see the chart READMEs:
    - **Roadmap & Epic Breakdown** (Direct references to GitHub Milestones and Issues)
 
 2. **[api/openapi.yaml](./api/openapi.yaml)**
-   - Full OpenAPI 3.0.3 specification for all REST API endpoints exposed by the control plane.
+   - Full OpenAPI 3.1 specification for all REST API endpoints exposed by the control plane (served live at `/openapi.yaml` and `/openapi.json`).
 
 ## Project Tracking & Roadmap
 

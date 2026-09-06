@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
   title: vuhive-cloud Control Plane REST API
   description: |
@@ -43,6 +43,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/VersionResponse'
 
+  /openapi.yaml:
+    get:
+      summary: OpenAPI 3.1 YAML specification
+      description: Returns raw OpenAPI 3.1 specification definition in YAML format.
+      operationId: getOpenAPISpecYAML
+      responses:
+        '200':
+          description: OpenAPI 3.1 YAML specification
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /openapi.json:
+    get:
+      summary: OpenAPI 3.1 JSON specification
+      description: Returns raw OpenAPI 3.1 specification definition in JSON format.
+      operationId: getOpenAPISpecJSON
+      responses:
+        '200':
+          description: OpenAPI 3.1 JSON specification
+          content:
+            application/json:
+              schema:
+                type: object
 
   /api/v1/health:
     get:
@@ -321,6 +346,47 @@ paths:
           description: Unique identifier of the test run
           schema:
             type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteRunRequest'
+      responses:
+        '200':
+          description: Test run successfully finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '400':
+          description: Malformed payload or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Test run already in terminal state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/runs/complete:
+    post:
+      summary: Finalize test run execution and ingest summary report (callback without path ID)
+      description: |
+        Internal runner callback endpoint invoked upon test completion where run_id is supplied
+        in the request body payload.
+      operationId: completeRunFromBody
+      tags:
+        - Runs
       requestBody:
         required: true
         content:
