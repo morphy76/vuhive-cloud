@@ -20,7 +20,15 @@ help: ## Display this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: build
-build: build-server build-runner-wrapper build-runner-init build-bff ## Build all binaries
+build: build-web build-server build-runner-wrapper build-runner-init build-bff ## Build all binaries and web assets
+
+.PHONY: build-web
+build-web: ## Build web SPA static assets with pnpm
+	pnpm --dir web build
+
+.PHONY: test-web
+test-web: ## Run web unit and component tests
+	pnpm --dir web test
 
 .PHONY: build-server
 build-server: ## Build control plane server binary

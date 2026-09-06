@@ -847,74 +847,109 @@ curl -s -i http://localhost:8081/api/v1/bff/sessions/sess-usr-12345
 
 ---
 
-### Recipe 11: Accessing the Embedded Web Dashboard & PWA Routing
+### Recipe 11: Adopting the React 19 Web Interface & Embedded PWA
 
-The Go Backend-For-Frontend (`cmd/bff`) embeds the compiled React 19 single-page application (SPA) and progressive web app (PWA) assets using Go's `embed.FS`. It serves the production bundle directly without requiring an auxiliary Nginx reverse proxy.
+Milestone 1.5 introduces the official web dashboard under `web/`. Built with **React 19**, **Vite 6**, **TypeScript**, and **Tailwind CSS v4**, the interface delivers an adaptive, fluid responsive shell across mobile devices (375px), tablets, and desktop workstations, with zero-overhead binary packaging via the Go BFF (`cmd/bff`).
 
-#### 1. Loading the Web Dashboard Root (`index.html`)
+#### 1. Architecture & Responsive Shell Layout
 
-Requests to `/` return the SPA shell with no-cache directives to ensure users always receive the latest release:
+The web application adapts dynamically across three primary viewport tiers:
+
+- **Desktop ($\ge 1024\text{px}$)**:
+  - Fixed, collapsible left sidebar navigation with brand identity and primary routes (`Dashboard`, `Suites`, `Runs`, `Schedules`).
+  - Toggle button to collapse sidebar into a compact icon-only rail (`w-20`) or expand to full text (`w-64`).
+  - Sticky top header bar displaying dynamic breadcrumbs, real-time control plane connection badge, OpenAPI specification link, and dark/light theme switch.
+- **Tablet ($768\text{px} - 1023\text{px}$)**:
+  - Slide-out navigation drawer with smooth transitions and backdrop blur overlay.
+  - Touch gesture support: swipe left ($\ge 50\text{px}$) or press `Escape` to dismiss.
+  - Header bar with hamburger menu toggle button.
+- **Mobile ($< 768\text{px}$)**:
+  - Fixed bottom navigation bar with safe-area padding (`pb-safe`) for iOS and Android notch devices.
+  - Instant one-tap navigation between the 4 primary views with minimum 44px touch targets.
+  - Zero horizontal overflow (`overflow-x-hidden`) guaranteed across all viewport widths.
+
+#### 2. Local Frontend Development with Fast HMR
+
+To develop against the web client locally with Vite's instant Hot Module Replacement (HMR):
 
 ```bash
+# In repository root:
+pnpm --dir web dev
+```
+
+Vite starts the local dev server on `http://localhost:5173`.
+
+#### 3. Full-Stack Local Development via Go BFF Dev Proxy
+
+During development, start the Go BFF service with `--dev-proxy-url` pointing to your running Vite server. The BFF transparently forwards all static assets and SPA routes to Vite while serving its own REST endpoints (`/api/v1/bff/*`):
+
+```bash
+# Terminal 1: Vite dev server
+pnpm --dir web dev
+
+# Terminal 2: Go BFF pointing to local control plane and Vite dev proxy
+./bin/bff --port=8081 \
+  --control-plane-url=http://localhost:8080 \
+  --dev-proxy-url=http://localhost:5173
+```
+
+Now access the complete application at `http://localhost:8081`. You get instantaneous React 19 live-reloading coupled with live backend API responses.
+
+#### 4. Dark & Light Mode Theme Support
+
+The application includes built-in theme switching with zero runtime CSS overhead:
+- Configured via Tailwind CSS v4 `@custom-variant dark (&:where(.dark, .dark *));`.
+- Respects system preferences (`prefers-color-scheme`) by default.
+- Persists user preferences (`light` vs. `dark`) in browser `localStorage` (`vuhive-theme`).
+- Accessible theme toggle button available in the top header and tablet navigation drawer.
+
+#### 5. Production Build, Asset Chunking & Immutable Caching
+
+When compiling the frontend for production, Vite outputs optimized bundles into `web/dist`:
+
+```bash
+# Build production bundle:
+make build-web
+# or:
+pnpm --dir web build
+```
+
+The build pipeline enforces static content best practices:
+- **Cryptographic Content Hashing**: Output files use `[name]-[hash]` (e.g. `assets/index-B-4ef818.js`, `assets/index-DHWqHAGt.css`).
+- **Vendor Code Splitting (`manualChunks`)**:
+  - `vendor-react-[hash].js`: React 19 core runtime (`react`, `react-dom`). Rarely changes across releases, maximizing long-term browser cache hits.
+  - `vendor-ui-[hash].js`: Icon and class utility libraries (`lucide-react`, `clsx`, `tailwind-merge`).
+  - `index-[hash].js`: Lightweight application domain logic and views.
+- **BFF Immutable Caching**: The Go BFF serves all `/assets/*` files with `Cache-Control: public, max-age=31536000, immutable`.
+- **Unhashed Entry Points**: `index.html`, `sw.js`, and `manifest.webmanifest` are served with `Cache-Control: no-cache, no-store, must-revalidate`, guaranteeing instant cache invalidation upon releasing new versions.
+
+#### 6. Verifying Production Assets with Go embed.FS
+
+Verify embedded assets and BFF fallback routing directly:
+
+```bash
+# 1. Root index.html: returns no-cache headers
 curl -s -i http://localhost:8081/
-```
 
-Key headers returned:
-- `HTTP/1.1 200 OK`
-- `Content-Type: text/html; charset=utf-8`
-- `Cache-Control: no-cache, no-store, must-revalidate`
+# 2. Deep client route fallback: returns index.html for client routing
+curl -s -i http://localhost:8081/suites/suite-123/runs
 
-#### 2. Deep Client-Side SPA Route Fallback
-
-When navigating directly to deep client-side routes (e.g. `/suites/123/runs` or `/schedules`), the BFF resolves non-API routes back to `index.html`, allowing the client-side router to handle the view:
-
-```bash
-curl -s -i http://localhost:8081/suites/suite-abc-123/runs
-```
-
-Expected output:
-- Returns `index.html` with HTTP 200 and `Cache-Control: no-cache, no-store, must-revalidate`.
-
-> [!NOTE]
-> Non-existent API paths (e.g. `GET /api/v1/bff/unknown`) return `404 Not Found` with a JSON payload (`{"error": "endpoint not found"}`) and **never** fall back to `index.html`.
-
-#### 3. Static & Hashed Asset Delivery (Immutable Caching)
-
-Production bundle assets (e.g. `/assets/*.js`, `/assets/*.css`) are cached immutably for 1 year:
-
-```bash
-curl -s -i http://localhost:8081/assets/index.js
-```
-
-Key headers returned:
-- `HTTP/1.1 200 OK`
-- `Content-Type: application/javascript`
-- `Cache-Control: public, max-age=31536000, immutable`
-
-#### 4. PWA Manifest & Service Worker Verification
-
-The BFF provides proper MIME types and cache headers for PWA installation:
-
-```bash
-# Verify Web App Manifest
+# 3. PWA Web App Manifest:
 curl -s -i http://localhost:8081/manifest.webmanifest
-# Returns: Content-Type: application/manifest+json, Cache-Control: no-cache, no-store, must-revalidate
 
-# Verify Service Worker
+# 4. Service Worker:
 curl -s -i http://localhost:8081/sw.js
-# Returns: Content-Type: application/javascript, Cache-Control: no-cache, no-store, must-revalidate
-
-# Verify Vector Favicon
-curl -s -i http://localhost:8081/favicon.svg
-# Returns: Content-Type: image/svg+xml
 ```
 
-#### 5. Local Frontend Development with Vite Live-Reloading (HMR)
+#### 7. Automated Testing (Vitest & Testing Library)
 
-During frontend development (e.g. running Vite on port `5173`), start the Go BFF with `--dev-proxy-url` to transparently forward non-API requests to Vite while keeping BFF API endpoints active:
+Execute unit and component tests for responsive layouts, navigation switching, and theme toggling:
 
 ```bash
-./bin/bff --port=8081 --control-plane-url=http://localhost:8080 --dev-proxy-url=http://localhost:5173
+# Run Vitest test suite:
+make test-web
+# or:
+pnpm --dir web test
 ```
 
 ### Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)

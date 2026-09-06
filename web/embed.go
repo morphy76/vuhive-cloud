@@ -7,9 +7,9 @@ import (
 
 // DistFS embeds the production static frontend assets from the dist directory.
 //
-// NOTE: Until Issue #61 scaffolds the full React 19 / Vite application,
-// this directory contains temporary placeholder assets to enable and verify
-// Go BFF embed.FS packaging, caching headers, and SPA routing.
+// Scaffolding provided in Issue #61 packages the React 19 / Vite application,
+// Tailwind CSS v4 styling, vendor-split chunks, and PWA assets for zero-overhead
+// delivery by the Go BFF service.
 //
 //go:embed all:dist
 var DistFS embed.FS

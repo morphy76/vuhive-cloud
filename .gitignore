@@ -33,3 +33,11 @@ go.work.sum
 
 bin/
 
+# Frontend / Node
+node_modules/
+.pnpm-store/
+.vite/
+coverage/
+web/coverage/
+*.tsbuildinfo
+
