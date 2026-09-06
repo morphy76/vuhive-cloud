@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/inbound/rest"
 	"github.com/morphy76/vuhive-cloud/internal/bff/application/ports/inbound"
+	"github.com/morphy76/vuhive-cloud/internal/bff/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/bff/domain/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -43,6 +45,22 @@ func (m *MockBFFService) GetSession(ctx context.Context, id model.SessionID) (*m
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*model.ClientSession), args.Error(1)
+}
+
+func (m *MockBFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOverview, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*inbound.DashboardOverview), args.Error(1)
+}
+
+func (m *MockBFFService) GetRunDetail(ctx context.Context, id string) (*inbound.RunDetailComposite, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*inbound.RunDetailComposite), args.Error(1)
 }
 
 func TestRouter_Endpoints(t *testing.T) {
@@ -173,4 +191,185 @@ func TestRouter_Endpoints(t *testing.T) {
 		assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
 		assert.Contains(t, rec.Body.String(), "vuhive-cloud Web Dashboard")
 	})
+
+	t.Run("GET /api/bff/v1/dashboard returns 200 with aggregated dashboard", func(t *testing.T) {
+		mockSvc.On("GetDashboard", mock.Anything).Return(&inbound.DashboardOverview{
+			BFFStatus:           "UP",
+			BFFVersion:          "0.1.0",
+			ControlPlaneStatus:  "UP",
+			ControlPlaneVersion: "0.0.1",
+			ActiveRunsCount:     3,
+			RecentSuites: []outbound.SuiteSummary{
+				{ID: "suite-1", Name: "Perf Suite", State: "ACTIVE"},
+			},
+			ProfilesCount: 1,
+			ProfilesSummary: []outbound.ProfileSummary{
+				{ID: "prof-1", Name: "Small Runner"},
+			},
+			Timestamp: time.Now().UTC(),
+		}, nil).Once()
+
+		req, _ := http.NewRequest(http.MethodGet, "/api/bff/v1/dashboard", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var resp rest.DashboardResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, "UP", resp.BFFStatus)
+		assert.Equal(t, int64(3), resp.ActiveRunsCount)
+		assert.Len(t, resp.RecentSuites, 1)
+		assert.Equal(t, "Perf Suite", resp.RecentSuites[0].Name)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("GET /api/bff/v1/runs/:id returns 200 with composite run detail", func(t *testing.T) {
+		mockSvc.On("GetRunDetail", mock.Anything, "run-888").Return(&inbound.RunDetailComposite{
+			RunDetail: outbound.RunDetail{
+				ID:          "run-888",
+				SuiteID:     "suite-1",
+				ArtifactID:  "art-1",
+				Status:      "COMPLETED",
+				S3ReportKey: "runs/run-888/summary.json",
+				S3LogsKey:   "runs/run-888/run.log",
+				Metrics: outbound.RunMetrics{
+					TotalIterations: 500,
+					AvgTPS:          120.4,
+				},
+			},
+			ArtifactLinks: inbound.ArtifactLinks{
+				ReportURL: "https://s3/report.json",
+				LogsURL:   "https://s3/run.log",
+			},
+		}, nil).Once()
+
+		req, _ := http.NewRequest(http.MethodGet, "/api/bff/v1/runs/run-888", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var resp rest.RunDetailResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, "run-888", resp.ID)
+		assert.Equal(t, "COMPLETED", resp.Status)
+		assert.Equal(t, 120.4, resp.Metrics.AvgTPS)
+		assert.Equal(t, "https://s3/report.json", resp.ArtifactLinks.ReportURL)
+		assert.Equal(t, "https://s3/run.log", resp.ArtifactLinks.LogsURL)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("GET /api/bff/v1/runs/:id returns 404 when run not found", func(t *testing.T) {
+		mockSvc.On("GetRunDetail", mock.Anything, "non-existent").Return(nil, model.ErrRunNotFound).Once()
+
+		req, _ := http.NewRequest(http.MethodGet, "/api/bff/v1/runs/non-existent", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		mockSvc.AssertExpectations(t)
+	})
 }
+
+type proxyRoundTripFunc func(req *http.Request) (*http.Response, error)
+
+func (f proxyRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestRouter_TransparentProxy(t *testing.T) {
+	mockTransport := proxyRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		switch req.URL.Path {
+		case "/api/v1/suites":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewBufferString(`{"suites":[{"id":"suite-proxy","name":"Proxy Suite"}]}`)),
+				Request:    req,
+			}, nil
+		case "/api/v1/profiles":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewBufferString(`{"profiles":[{"id":"prof-proxy","name":"Proxy Profile"}]}`)),
+				Request:    req,
+			}, nil
+		case "/api/v1/schedules":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewBufferString(`{"schedules":[{"id":"sched-proxy","name":"Proxy Schedule"}]}`)),
+				Request:    req,
+			}, nil
+		case "/api/v1/runs":
+			if req.Method == http.MethodPost {
+				return &http.Response{
+					StatusCode: http.StatusCreated,
+					Status:     "201 Created",
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(bytes.NewBufferString(`{"id":"run-spawned","status":"QUEUED"}`)),
+					Request:    req,
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewBufferString(`{"runs":[],"total":0}`)),
+				Request:    req,
+			}, nil
+		default:
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Status:     "404 Not Found",
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(`{"error":"not found"}`)),
+				Request:    req,
+			}, nil
+		}
+	})
+
+	mockSvc := new(MockBFFService)
+	router := rest.SetupRouterWithProxy(mockSvc, "0.1.0", "http://controlplane", mockTransport)
+
+	t.Run("proxies GET /api/bff/v1/suites to /api/v1/suites", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/api/bff/v1/suites", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), "suite-proxy")
+	})
+
+	t.Run("proxies GET /api/bff/v1/profiles to /api/v1/profiles", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/api/bff/v1/profiles", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), "prof-proxy")
+	})
+
+	t.Run("proxies GET /api/bff/v1/schedules to /api/v1/schedules", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/api/bff/v1/schedules", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), "sched-proxy")
+	})
+
+	t.Run("proxies POST /api/bff/v1/runs to /api/v1/runs", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodPost, "/api/bff/v1/runs", bytes.NewBufferString(`{"suite_id":"suite-1"}`))
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusCreated, rec.Code)
+		assert.Contains(t, rec.Body.String(), "run-spawned")
+	})
+}
+

@@ -96,3 +96,33 @@ func (h *Handler) GetSession(c *gin.Context) {
 
 	c.JSON(http.StatusOK, ToSessionResponse(session))
 }
+
+// GetDashboard handles GET /api/bff/v1/dashboard.
+func (h *Handler) GetDashboard(c *gin.Context) {
+	ctx := c.Request.Context()
+	dashboard, err := h.bffService.GetDashboard(ctx)
+	if err != nil {
+		MapDomainError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, ToDashboardResponse(dashboard))
+}
+
+// GetRunDetail handles GET /api/bff/v1/runs/:id.
+func (h *Handler) GetRunDetail(c *gin.Context) {
+	ctx := c.Request.Context()
+	runID := strings.TrimSpace(c.Param("id"))
+	if runID == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "run id is required"})
+		return
+	}
+
+	runDetail, err := h.bffService.GetRunDetail(ctx, runID)
+	if err != nil {
+		MapDomainError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, ToRunDetailResponse(runDetail))
+}
+

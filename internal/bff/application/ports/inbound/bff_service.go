@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/morphy76/vuhive-cloud/internal/bff/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/bff/domain/model"
 )
 
@@ -25,9 +26,36 @@ type CreateSessionCommand struct {
 	Metadata  map[string]string
 }
 
+// DashboardOverview represents the composite telemetry and overview for the dashboard view.
+type DashboardOverview struct {
+	BFFStatus           string                    `json:"bff_status"`
+	BFFVersion          string                    `json:"bff_version"`
+	ControlPlaneStatus  string                    `json:"control_plane_status"`
+	ControlPlaneVersion string                    `json:"control_plane_version,omitempty"`
+	ActiveRunsCount     int64                     `json:"active_runs_count"`
+	RecentSuites        []outbound.SuiteSummary   `json:"recent_suites"`
+	ProfilesCount       int                       `json:"profiles_count"`
+	ProfilesSummary     []outbound.ProfileSummary `json:"profiles_summary"`
+	Timestamp           time.Time                 `json:"timestamp"`
+}
+
+// ArtifactLinks contains direct download links to run reports and logs.
+type ArtifactLinks struct {
+	ReportURL string `json:"report_url,omitempty"`
+	LogsURL   string `json:"logs_url,omitempty"`
+}
+
+// RunDetailComposite combines run entity metadata, KPIs, and direct links to S3 artifacts.
+type RunDetailComposite struct {
+	outbound.RunDetail
+	ArtifactLinks ArtifactLinks `json:"artifact_links"`
+}
+
 // BFFService defines the driving inbound port for BFF use cases.
 type BFFService interface {
 	GetStatus(ctx context.Context) (*SystemStatus, error)
 	CreateSession(ctx context.Context, cmd CreateSessionCommand) (*model.ClientSession, error)
 	GetSession(ctx context.Context, id model.SessionID) (*model.ClientSession, error)
+	GetDashboard(ctx context.Context) (*DashboardOverview, error)
+	GetRunDetail(ctx context.Context, id string) (*RunDetailComposite, error)
 }

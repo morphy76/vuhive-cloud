@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/morphy76/vuhive-cloud/internal/bff/application/ports/inbound"
@@ -161,4 +163,208 @@ func (s *BFFService) GetSession(ctx context.Context, id model.SessionID) (*model
 		Msg("completed session lookup")
 
 	return &session, nil
+}
+
+// GetDashboard aggregates telemetry across control plane APIs concurrently to build the dashboard overview.
+func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOverview, error) {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().Str("op", "GetDashboard").Logger()
+	log.Debug().Msg("starting dashboard composite aggregation")
+
+	overview := &inbound.DashboardOverview{
+		BFFStatus:           "UP",
+		BFFVersion:          s.version,
+		ControlPlaneStatus:  "UNKNOWN",
+		ControlPlaneVersion: "",
+		ActiveRunsCount:     0,
+		RecentSuites:        []outbound.SuiteSummary{},
+		ProfilesSummary:     []outbound.ProfileSummary{},
+		Timestamp:           time.Now().UTC(),
+	}
+
+	if s.controlPlane == nil {
+		overview.ControlPlaneStatus = "DOWN"
+		log.Warn().Dur("duration_ms", time.Since(start)).Msg("control plane client not configured")
+		return overview, nil
+	}
+
+	var (
+		wg              sync.WaitGroup
+		mu              sync.Mutex
+		cpStatus        = "UP"
+		cpVersion       = ""
+		activeRunsCount int64
+		recentSuites    []outbound.SuiteSummary
+		profilesSummary []outbound.ProfileSummary
+	)
+
+	// 1. Health & Version check
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		health, err := s.controlPlane.CheckHealth(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("control plane health check failed")
+			mu.Lock()
+			cpStatus = "DOWN"
+			mu.Unlock()
+			return
+		}
+		if health != nil {
+			mu.Lock()
+			cpStatus = health.Status
+			mu.Unlock()
+		}
+
+		ver, err := s.controlPlane.GetVersion(ctx)
+		if err == nil && ver != nil {
+			mu.Lock()
+			cpVersion = ver.Version
+			mu.Unlock()
+		}
+	}()
+
+	// 2. Active runs count
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		count, err := s.controlPlane.GetActiveRunsCount(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed querying active runs count")
+			return
+		}
+		mu.Lock()
+		activeRunsCount = count
+		mu.Unlock()
+	}()
+
+	// 3. Recent test suites
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		suites, err := s.controlPlane.ListRecentSuites(ctx, 5)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed querying recent suites")
+			return
+		}
+		if suites != nil {
+			mu.Lock()
+			recentSuites = suites
+			mu.Unlock()
+		}
+	}()
+
+	// 4. Runner profiles
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		profiles, err := s.controlPlane.ListProfiles(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed querying runner profiles")
+			return
+		}
+		if profiles != nil {
+			mu.Lock()
+			profilesSummary = profiles
+			mu.Unlock()
+		}
+	}()
+
+	wg.Wait()
+
+	overview.ControlPlaneStatus = cpStatus
+	overview.ControlPlaneVersion = cpVersion
+	overview.ActiveRunsCount = activeRunsCount
+	if recentSuites != nil {
+		overview.RecentSuites = recentSuites
+	}
+	if profilesSummary != nil {
+		overview.ProfilesSummary = profilesSummary
+		overview.ProfilesCount = len(profilesSummary)
+	}
+
+	log.Info().
+		Str("control_plane_status", overview.ControlPlaneStatus).
+		Int64("active_runs", overview.ActiveRunsCount).
+		Int("suites_count", len(overview.RecentSuites)).
+		Int("profiles_count", overview.ProfilesCount).
+		Dur("duration_ms", time.Since(start)).
+		Msg("completed dashboard composite aggregation")
+
+	return overview, nil
+}
+
+// GetRunDetail aggregates run metadata, indexed KPIs, and direct presigned S3 artifact links.
+func (s *BFFService) GetRunDetail(ctx context.Context, id string) (*inbound.RunDetailComposite, error) {
+	start := time.Now()
+	runID := strings.TrimSpace(id)
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "GetRunDetail").
+		Str("run_id", runID).
+		Logger()
+	log.Debug().Msg("starting run detail composite aggregation")
+
+	if runID == "" {
+		err := fmt.Errorf("%w: run id cannot be empty", model.ErrInvalidParameter)
+		log.Warn().Err(err).Msg("invalid run id argument")
+		return nil, err
+	}
+
+	if s.controlPlane == nil {
+		log.Error().Dur("duration_ms", time.Since(start)).Msg("control plane client not configured")
+		return nil, model.ErrControlPlaneUnavailable
+	}
+
+	run, err := s.controlPlane.GetRun(ctx, runID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed retrieving run detail")
+		return nil, err
+	}
+
+	var (
+		wg        sync.WaitGroup
+		reportURL string
+		logsURL   string
+	)
+
+	// Fetch artifact presigned URLs concurrently
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		u, err := s.controlPlane.GetRunReportURL(ctx, runID)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed retrieving presigned report URL")
+			return
+		}
+		reportURL = u
+	}()
+
+	go func() {
+		defer wg.Done()
+		u, err := s.controlPlane.GetRunLogsURL(ctx, runID)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed retrieving presigned logs URL")
+			return
+		}
+		logsURL = u
+	}()
+
+	wg.Wait()
+
+	composite := &inbound.RunDetailComposite{
+		RunDetail: *run,
+		ArtifactLinks: inbound.ArtifactLinks{
+			ReportURL: reportURL,
+			LogsURL:   logsURL,
+		},
+	}
+
+	log.Info().
+		Str("status", composite.Status).
+		Bool("has_report_url", composite.ArtifactLinks.ReportURL != "").
+		Bool("has_logs_url", composite.ArtifactLinks.LogsURL != "").
+		Dur("duration_ms", time.Since(start)).
+		Msg("completed run detail composite aggregation")
+
+	return composite, nil
 }
