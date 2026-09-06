@@ -334,3 +334,66 @@ func TestTestRun_SetK8sNamespace(t *testing.T) {
 		assert.Equal(t, model.DefaultRunnerNamespace, run.K8sNamespace())
 	})
 }
+
+func TestTestRun_Archive(t *testing.T) {
+	now := time.Now().UTC()
+	metrics := model.RunMetrics{
+		TotalIterations: 1000,
+		TotalRequests:   5000,
+		AvgTPS:          500.0,
+	}
+
+	t.Run("archive completed run clears summaryJSON and transitions to ARCHIVED", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-1", now))
+		finish := now.Add(time.Minute)
+		require.NoError(t, run.Complete(metrics, "s3://rep", "s3://log", []byte(`{"data":"large"}`), true, finish))
+
+		archiveTime := finish.Add(24 * time.Hour)
+		err = run.Archive(archiveTime)
+		require.NoError(t, err)
+
+		assert.Equal(t, model.RunStatusArchived, run.Status())
+		assert.True(t, run.Status().IsTerminal())
+		assert.Nil(t, run.SummaryJSON())
+		assert.Equal(t, metrics, run.Metrics())
+		assert.Equal(t, &finish, run.FinishedAt())
+	})
+
+	t.Run("archive non-terminal run fails", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+
+		err = run.Archive(now)
+		assert.ErrorIs(t, err, model.ErrInvalidStateTransition)
+	})
+
+	t.Run("archive already archived run fails with terminal state error", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-1", now))
+		require.NoError(t, run.Complete(metrics, "s3://rep", "s3://log", []byte(`{}`), true, now.Add(time.Minute)))
+
+		require.NoError(t, run.Archive(now.Add(time.Hour)))
+		err = run.Archive(now.Add(2 * time.Hour))
+		assert.ErrorIs(t, err, model.ErrTerminalState)
+	})
+}
+
+func TestTestRun_ClearS3Keys(t *testing.T) {
+	now := time.Now().UTC()
+	run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+	require.NoError(t, err)
+	require.NoError(t, run.Start("job-1", now))
+	require.NoError(t, run.Complete(model.RunMetrics{}, "s3://rep", "s3://log", []byte(`{}`), true, now.Add(time.Minute)))
+
+	assert.Equal(t, "s3://log", run.S3LogsKey())
+	run.ClearS3LogsKey()
+	assert.Empty(t, run.S3LogsKey())
+
+	assert.Equal(t, "s3://rep", run.S3ReportKey())
+	run.ClearS3ReportKey()
+	assert.Empty(t, run.S3ReportKey())
+}
+

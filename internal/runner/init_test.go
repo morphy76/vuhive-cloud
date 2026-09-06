@@ -66,6 +66,14 @@ func (m *mockStoragePort) EnsureBucket(ctx context.Context) error {
 	return nil
 }
 
+func (m *mockStoragePort) ListObjects(ctx context.Context, prefix string) ([]outbound.ObjectInfo, error) {
+	return nil, nil
+}
+
+func (m *mockStoragePort) PutBucketLifecycleConfiguration(ctx context.Context, rules []outbound.LifecycleRule) error {
+	return nil
+}
+
 func TestRunnerInitializer_Success(t *testing.T) {
 	tempDir := t.TempDir()
 	sharedDir := filepath.Join(tempDir, "shared")

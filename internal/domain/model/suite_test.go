@@ -146,3 +146,20 @@ func TestNewTestSuiteWithID(t *testing.T) {
 		assert.ErrorIs(t, err, model.ErrInvalidStateTransition)
 	})
 }
+
+func TestTestSuite_RetentionPolicy(t *testing.T) {
+	suite, err := model.NewTestSuite("suite-1", "desc")
+	require.NoError(t, err)
+	assert.Nil(t, suite.RetentionPolicy())
+
+	policy := &model.RetentionPolicy{
+		LogsTTLDays:     5,
+		ReportsTTLDays:  20,
+		SourcesTTLDays:  10,
+		BinariesTTLDays: 10,
+		RunsTTLDays:     40,
+	}
+	suite.SetRetentionPolicy(policy)
+	assert.Equal(t, policy, suite.RetentionPolicy())
+}
+

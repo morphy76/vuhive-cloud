@@ -102,6 +102,58 @@ func (r *inMemoryRunRepo) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+func (r *inMemoryRunRepo) ListExpiredRunsForLogs(_ context.Context, _ time.Time, _ *string, _ int) ([]*model.TestRun, error) {
+	return nil, nil
+}
+
+func (r *inMemoryRunRepo) ListExpiredRunsForReports(_ context.Context, _ time.Time, _ *string, _ int) ([]*model.TestRun, error) {
+	return nil, nil
+}
+
+func (r *inMemoryRunRepo) ListExpiredRunsForPrune(_ context.Context, _ time.Time, _ *string, _ int) ([]*model.TestRun, error) {
+	return nil, nil
+}
+
+func (r *inMemoryRunRepo) ClearLogsKey(_ context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if run, ok := r.runs[id]; ok {
+		run.ClearS3LogsKey()
+	}
+	return nil
+}
+
+func (r *inMemoryRunRepo) ClearReportKey(_ context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if run, ok := r.runs[id]; ok {
+		run.ClearS3ReportKey()
+	}
+	return nil
+}
+
+func (r *inMemoryRunRepo) ArchiveRun(_ context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if run, ok := r.runs[id]; ok {
+		return run.Archive(time.Now())
+	}
+	return nil
+}
+
+func (r *inMemoryRunRepo) DeleteBatch(_ context.Context, ids []string) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var count int64
+	for _, id := range ids {
+		if _, ok := r.runs[id]; ok {
+			delete(r.runs, id)
+			count++
+		}
+	}
+	return count, nil
+}
+
 type inMemoryScheduleRepo struct {
 	mu        sync.Mutex
 	schedules map[string]*model.Schedule

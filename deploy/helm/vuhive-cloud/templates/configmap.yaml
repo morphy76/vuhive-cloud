@@ -18,3 +18,14 @@ data:
   BUILDER_NAMESPACE: {{ .Values.builder.namespace | quote }}
   BUILDER_IMAGE: {{ .Values.builder.image | quote }}
   API_CALLBACK_URL: {{ include "vuhive-cloud.apiCallbackUrl" . | quote }}
+  HOUSEKEEPING_ENABLED: {{ (default (dict) .Values.housekeeping).enabled | default true | toString | quote }}
+  HOUSEKEEPING_INTERVAL: {{ (default (dict) .Values.housekeeping).interval | default "6h" | quote }}
+  HOUSEKEEPING_DRY_RUN: {{ (default (dict) .Values.housekeeping).dryRun | default false | toString | quote }}
+  RETENTION_APPLY_S3_LIFECYCLE: {{ (default (dict) .Values.housekeeping).applyS3Lifecycle | default true | toString | quote }}
+  RETENTION_LOGS_DAYS: {{ (default (dict) (default (dict) .Values.housekeeping).retention).logsDays | default 14 | toString | quote }}
+  RETENTION_REPORTS_DAYS: {{ (default (dict) (default (dict) .Values.housekeeping).retention).reportsDays | default 90 | toString | quote }}
+  RETENTION_SOURCES_DAYS: {{ (default (dict) (default (dict) .Values.housekeeping).retention).sourcesDays | default 30 | toString | quote }}
+  RETENTION_BINARIES_DAYS: {{ (default (dict) (default (dict) .Values.housekeeping).retention).binariesDays | default 30 | toString | quote }}
+  RETENTION_RUNS_DAYS: {{ (default (dict) (default (dict) .Values.housekeeping).retention).runsDays | default 180 | toString | quote }}
+  RETENTION_ARCHIVE_ONLY: {{ (default (dict) (default (dict) .Values.housekeeping).retention).archiveOnly | default false | toString | quote }}
+

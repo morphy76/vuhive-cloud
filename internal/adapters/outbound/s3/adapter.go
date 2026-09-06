@@ -299,5 +299,105 @@ func (a *Adapter) PresignUpload(ctx context.Context, key string, lifetime time.D
 	return req.URL, nil
 }
 
+// ListObjects returns metadata for all objects matching the specified prefix.
+func (a *Adapter) ListObjects(ctx context.Context, prefix string) ([]outbound.ObjectInfo, error) {
+	start := time.Now()
+	trimmedPrefix := strings.TrimSpace(prefix)
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "StorageAdapter.ListObjects").
+		Str("bucket", a.bucket).
+		Str("prefix", trimmedPrefix).
+		Logger()
+	log.Debug().Msg("starting listing objects from storage")
+
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(a.bucket),
+	}
+	if trimmedPrefix != "" {
+		input.Prefix = aws.String(trimmedPrefix)
+	}
+
+	paginator := s3.NewListObjectsV2Paginator(a.client, input)
+	var objects []outbound.ObjectInfo
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to list objects from storage")
+			return nil, MapError(err)
+		}
+		for _, obj := range page.Contents {
+			var key string
+			if obj.Key != nil {
+				key = *obj.Key
+			}
+			var size int64
+			if obj.Size != nil {
+				size = *obj.Size
+			}
+			var modTime time.Time
+			if obj.LastModified != nil {
+				modTime = *obj.LastModified
+			}
+			objects = append(objects, outbound.ObjectInfo{
+				Key:          key,
+				Size:         size,
+				LastModified: modTime,
+			})
+		}
+	}
+
+	log.Info().Int("count", len(objects)).Dur("duration_ms", time.Since(start)).Msg("completed listing objects from storage")
+	return objects, nil
+}
+
+// PutBucketLifecycleConfiguration applies native lifecycle expiration rules to the storage bucket.
+func (a *Adapter) PutBucketLifecycleConfiguration(ctx context.Context, rules []outbound.LifecycleRule) error {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "StorageAdapter.PutBucketLifecycleConfiguration").
+		Str("bucket", a.bucket).
+		Int("rules_count", len(rules)).
+		Logger()
+	log.Debug().Msg("starting configuring bucket lifecycle")
+
+	var s3Rules []s3types.LifecycleRule
+	for _, r := range rules {
+		status := s3types.ExpirationStatusDisabled
+		if r.Enabled {
+			status = s3types.ExpirationStatusEnabled
+		}
+		rule := s3types.LifecycleRule{
+			ID:     aws.String(r.ID),
+			Status: status,
+			Filter: &s3types.LifecycleRuleFilter{
+				Prefix: aws.String(r.Prefix),
+			},
+			Expiration: &s3types.LifecycleExpiration{
+				Days: aws.Int32(int32(r.ExpirationDays)),
+			},
+		}
+		s3Rules = append(s3Rules, rule)
+	}
+
+	input := &s3.PutBucketLifecycleConfigurationInput{
+		Bucket: aws.String(a.bucket),
+		LifecycleConfiguration: &s3types.BucketLifecycleConfiguration{
+			Rules: s3Rules,
+		},
+	}
+
+	_, err := a.client.PutBucketLifecycleConfiguration(ctx, input)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed configuring bucket lifecycle")
+		return MapError(err)
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed configuring bucket lifecycle")
+	return nil
+}
+
 // Static compile-time interface assertion
 var _ outbound.StoragePort = (*Adapter)(nil)
+

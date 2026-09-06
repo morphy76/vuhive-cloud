@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/morphy76/vuhive-cloud/internal/application/ports/inbound"
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 )
 
@@ -526,4 +527,64 @@ type VersionResponse struct {
 	Commit    string `json:"commit"`
 	BuildTime string `json:"build_time"`
 }
+
+// HousekeepingRequest represents optional request parameters for triggering manual housekeeping.
+type HousekeepingRequest struct {
+	SuiteID *string `json:"suite_id,omitempty"`
+	DryRun  bool    `json:"dry_run,omitempty"`
+}
+
+// HousekeepingResponse represents the outcome of a housekeeping execution cycle.
+type HousekeepingResponse struct {
+	PurgedLogsCount      int64    `json:"purged_logs_count"`
+	PurgedReportsCount   int64    `json:"purged_reports_count"`
+	PurgedSourcesCount   int64    `json:"purged_sources_count"`
+	PurgedBinariesCount  int64    `json:"purged_binaries_count"`
+	PrunedRunsCount      int64    `json:"pruned_runs_count"`
+	ArchivedRunsCount    int64    `json:"archived_runs_count"`
+	PurgedArtifactsCount int64    `json:"purged_artifacts_count"`
+	DurationMs           int64    `json:"duration_ms"`
+	Errors               []string `json:"errors,omitempty"`
+}
+
+// RetentionPolicyResponse represents retention policy settings.
+type RetentionPolicyResponse struct {
+	LogsTTLDays     int  `json:"logs_ttl_days"`
+	ReportsTTLDays  int  `json:"reports_ttl_days"`
+	SourcesTTLDays  int  `json:"sources_ttl_days"`
+	BinariesTTLDays int  `json:"binaries_ttl_days"`
+	RunsTTLDays     int  `json:"runs_ttl_days"`
+	ArchiveOnly     bool `json:"archive_only"`
+}
+
+// ToHousekeepingResponse converts an inbound.HousekeepingResult into a HousekeepingResponse DTO.
+func ToHousekeepingResponse(res *inbound.HousekeepingResult) HousekeepingResponse {
+	if res == nil {
+		return HousekeepingResponse{}
+	}
+	return HousekeepingResponse{
+		PurgedLogsCount:      res.PurgedLogsCount,
+		PurgedReportsCount:   res.PurgedReportsCount,
+		PurgedSourcesCount:   res.PurgedSourcesCount,
+		PurgedBinariesCount:  res.PurgedBinariesCount,
+		PrunedRunsCount:      res.PrunedRunsCount,
+		ArchivedRunsCount:    res.ArchivedRunsCount,
+		PurgedArtifactsCount: res.PurgedArtifactsCount,
+		DurationMs:           res.DurationMs,
+		Errors:               res.Errors,
+	}
+}
+
+// ToRetentionPolicyResponse converts a domain model.RetentionPolicy into a RetentionPolicyResponse DTO.
+func ToRetentionPolicyResponse(p model.RetentionPolicy) RetentionPolicyResponse {
+	return RetentionPolicyResponse{
+		LogsTTLDays:     p.LogsTTLDays,
+		ReportsTTLDays:  p.ReportsTTLDays,
+		SourcesTTLDays:  p.SourcesTTLDays,
+		BinariesTTLDays: p.BinariesTTLDays,
+		RunsTTLDays:     p.RunsTTLDays,
+		ArchiveOnly:     p.ArchiveOnly,
+	}
+}
+
 

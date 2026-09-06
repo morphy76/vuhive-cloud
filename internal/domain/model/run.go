@@ -11,17 +11,18 @@ import (
 type RunStatus string
 
 const (
-	RunStatusQueued    RunStatus = "QUEUED"
-	RunStatusRunning   RunStatus = "RUNNING"
+	RunStatusQueued   RunStatus = "QUEUED"
+	RunStatusRunning  RunStatus = "RUNNING"
 	RunStatusCompleted RunStatus = "COMPLETED"
-	RunStatusFailed    RunStatus = "FAILED"
-	RunStatusAborted   RunStatus = "ABORTED"
+	RunStatusFailed   RunStatus = "FAILED"
+	RunStatusAborted  RunStatus = "ABORTED"
+	RunStatusArchived RunStatus = "ARCHIVED"
 )
 
 // IsValid checks whether the RunStatus is a recognized status.
 func (s RunStatus) IsValid() bool {
 	switch s {
-	case RunStatusQueued, RunStatusRunning, RunStatusCompleted, RunStatusFailed, RunStatusAborted:
+	case RunStatusQueued, RunStatusRunning, RunStatusCompleted, RunStatusFailed, RunStatusAborted, RunStatusArchived:
 		return true
 	default:
 		return false
@@ -31,7 +32,7 @@ func (s RunStatus) IsValid() bool {
 // IsTerminal returns true if the status represents a final, unalterable state.
 func (s RunStatus) IsTerminal() bool {
 	switch s {
-	case RunStatusCompleted, RunStatusFailed, RunStatusAborted:
+	case RunStatusCompleted, RunStatusFailed, RunStatusAborted, RunStatusArchived:
 		return true
 	default:
 		return false
@@ -408,6 +409,30 @@ func (r *TestRun) Abort(reason string, abortTime time.Time) error {
 	r.finishedAt = &abortTime
 	r.status = RunStatusAborted
 	return nil
+}
+
+// Archive transitions a terminal run to ARCHIVED, nulling heavy summaryJSON while preserving KPI metrics.
+func (r *TestRun) Archive(archiveTime time.Time) error {
+	if r.status == RunStatusArchived {
+		return ErrTerminalState
+	}
+	if !r.status.IsTerminal() {
+		return ErrInvalidStateTransition
+	}
+
+	r.summaryJSON = nil
+	r.status = RunStatusArchived
+	return nil
+}
+
+// ClearS3LogsKey clears the S3 logs key after logs have been purged.
+func (r *TestRun) ClearS3LogsKey() {
+	r.s3LogsKey = ""
+}
+
+// ClearS3ReportKey clears the S3 report key after reports have been purged.
+func (r *TestRun) ClearS3ReportKey() {
+	r.s3ReportKey = ""
 }
 
 // Compile-time interface assertions

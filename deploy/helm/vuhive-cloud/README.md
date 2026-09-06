@@ -211,6 +211,17 @@ The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway an
   - `--control-plane-retries` / `CONTROL_PLANE_RETRIES`: Number of retry attempts on transient 5xx errors (default `3`).
   - `--port` / `PORT`: Listening HTTP port (default `8081`).
 
+### Execution Artifact Housekeeping & Retention Lifecycle Engine
+
+The control plane includes an automated retention lifecycle worker and housekeeping subsystem:
+- **Background Periodic Cleanup**: A dedicated background worker executes retention passes at configurable intervals (`housekeeping.interval`, default `1h`).
+- **Independent Retention Windows**: System-wide TTLs govern execution stdout/stderr logs (`housekeeping.logsTtlDays`, default `7d`), deterministic summary reports (`housekeeping.reportsTtlDays`, default `30d`), compiled scenario binaries (`housekeeping.artifactsTtlDays`, default `180d`), and historical database test run records (`housekeeping.runsTtlDays`, default `90d`).
+- **Per-Suite Policy Overrides**: Test suites can declare fine-grained retention policies stored as JSONB metadata, overriding system defaults.
+- **Safe Run Archiving vs. Pruning**: Expired runs can be transitioned to `ARCHIVED` status (`housekeeping.archiveOnly: true`), stripping bulky raw execution JSON while preserving indexed latency percentiles ($p_{50}\dots p_{99}$), throughput, and error KPIs for longitudinal telemetry.
+- **Orphaned & Expired Artifact Cleanup**: Abandoned or failed builds with no referring test runs are automatically purged, and expired binaries are dereferenced safely without violating foreign key constraints.
+- **Native S3 Bucket Lifecycle Synchronization**: When `housekeeping.applyS3Lifecycle: true`, the control plane configures native S3 bucket lifecycle rules on startup and during housekeeping cycles, delegating automated object expiration directly to the storage subsystem (AWS S3 or MinIO).
+- **On-Demand API Triggers**: Operators can trigger immediate ad-hoc housekeeping sweeps or test dry-run simulations via `POST /api/v1/system/housekeeping` and inspect active policies via `GET /api/v1/system/housekeeping/policy`.
+
 ## Configuration Parameters
 
 | Parameter | Description | Default |
@@ -252,3 +263,13 @@ The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway an
 | `builder.image` | Builder container image | `golang:1.26-alpine` |
 | `apiCallbackUrl` | Callback URL for runner jobs. Auto-computed with path `/api/v1/runs/complete`: unqualified service name in same namespace, or trailing-dot FQDN in cross-namespace mode to prevent `ndots:5` search leaks. | Auto-computed |
 | `cors.allowedOrigins` | Allowed cross-origin domains for browser clients and Swagger UI (comma-separated origins or `*`) | `*` |
+| `housekeeping.enabled` | Enable background housekeeping worker and retention lifecycle engine | `true` |
+| `housekeeping.interval` | Periodic interval between background housekeeping passes | `1h` |
+| `housekeeping.dryRun` | Simulate cleanup without deleting storage objects or database records | `false` |
+| `housekeeping.applyS3Lifecycle` | Automatically configure native S3 bucket lifecycle rules for prefix-based object expiration | `true` |
+| `housekeeping.logsTtlDays` | Retention window (days) for test run execution stdout/stderr logs (`0` disables log purging) | `7` |
+| `housekeeping.reportsTtlDays` | Retention window (days) for execution summary reports (`0` disables report purging) | `30` |
+| `housekeeping.runsTtlDays` | Retention window (days) for historical test run database records (`0` disables run pruning) | `90` |
+| `housekeeping.artifactsTtlDays` | Retention window (days) for compiled scenario binaries in S3 (`0` disables binary pruning) | `180` |
+| `housekeeping.archiveOnly` | When true, transitions expired runs to `ARCHIVED` status instead of permanently deleting rows | `false` |
+

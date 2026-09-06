@@ -2,6 +2,7 @@ package outbound
 
 import (
 	"context"
+	"time"
 
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 )
@@ -21,6 +22,9 @@ type ArtifactRepository interface {
 	FindByID(ctx context.Context, id string) (*model.Artifact, error)
 	ListBySuiteID(ctx context.Context, suiteID string) ([]*model.Artifact, error)
 	Delete(ctx context.Context, id string) error
+	ListOrphanedArtifacts(ctx context.Context, before time.Time, limit int) ([]*model.Artifact, error)
+	ListExpiredArtifacts(ctx context.Context, before time.Time, suiteID *string, limit int) ([]*model.Artifact, error)
+	ClearBinaryKeys(ctx context.Context, id string) error
 }
 
 // ConfigurationRepository defines the driven persistence port for Configuration entities.
@@ -48,6 +52,13 @@ type TestRunRepository interface {
 	List(ctx context.Context, suiteID string, status model.RunStatus) ([]*model.TestRun, error)
 	ListFiltered(ctx context.Context, filter model.RunFilter) ([]*model.TestRun, int64, error)
 	Delete(ctx context.Context, id string) error
+	ListExpiredRunsForLogs(ctx context.Context, before time.Time, suiteID *string, limit int) ([]*model.TestRun, error)
+	ListExpiredRunsForReports(ctx context.Context, before time.Time, suiteID *string, limit int) ([]*model.TestRun, error)
+	ListExpiredRunsForPrune(ctx context.Context, before time.Time, suiteID *string, limit int) ([]*model.TestRun, error)
+	ClearLogsKey(ctx context.Context, id string) error
+	ClearReportKey(ctx context.Context, id string) error
+	ArchiveRun(ctx context.Context, id string) error
+	DeleteBatch(ctx context.Context, ids []string) (int64, error)
 }
 
 // ScheduleRepository defines the driven persistence port for Schedule aggregates.

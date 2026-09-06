@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -26,13 +27,26 @@ func (r *TestSuiteRepository) Save(ctx context.Context, suite *model.TestSuite) 
 	log := zerolog.Ctx(ctx).With().Str("op", "TestSuiteRepository.Save").Str("suite_id", suite.ID()).Logger()
 	log.Debug().Msg("saving test suite")
 
+	var policyBytes []byte
+	if p := suite.RetentionPolicy(); p != nil {
+		var err error
+		policyBytes, err = json.Marshal(p)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to marshal retention policy")
+			return err
+		}
+	} else {
+		policyBytes = []byte("{}")
+	}
+
 	query := `
-		INSERT INTO test_suites (id, name, description, state, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO test_suites (id, name, description, state, retention_policy, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			description = EXCLUDED.description,
 			state = EXCLUDED.state,
+			retention_policy = EXCLUDED.retention_policy,
 			updated_at = EXCLUDED.updated_at
 	`
 	_, err := r.pool.Exec(ctx, query,
@@ -40,6 +54,7 @@ func (r *TestSuiteRepository) Save(ctx context.Context, suite *model.TestSuite) 
 		suite.Name(),
 		suite.Description(),
 		string(suite.State()),
+		policyBytes,
 		suite.CreatedAt(),
 		suite.UpdatedAt(),
 	)
@@ -59,7 +74,7 @@ func (r *TestSuiteRepository) FindByID(ctx context.Context, id string) (*model.T
 	log.Debug().Msg("finding test suite by id")
 
 	query := `
-		SELECT id, name, description, state, created_at, updated_at
+		SELECT id, name, description, state, retention_policy, created_at, updated_at
 		FROM test_suites
 		WHERE id = $1
 	`
@@ -68,10 +83,11 @@ func (r *TestSuiteRepository) FindByID(ctx context.Context, id string) (*model.T
 		name        string
 		description string
 		state       string
+		policyBytes []byte
 		createdAt   time.Time
 		updatedAt   time.Time
 	)
-	err := r.pool.QueryRow(ctx, query, id).Scan(&suiteID, &name, &description, &state, &createdAt, &updatedAt)
+	err := r.pool.QueryRow(ctx, query, id).Scan(&suiteID, &name, &description, &state, &policyBytes, &createdAt, &updatedAt)
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to find test suite by id")
 		return nil, MapError(err)
@@ -81,6 +97,12 @@ func (r *TestSuiteRepository) FindByID(ctx context.Context, id string) (*model.T
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to reconstitute test suite")
 		return nil, err
+	}
+	if len(policyBytes) > 0 && string(policyBytes) != "{}" && string(policyBytes) != "null" {
+		var p model.RetentionPolicy
+		if err := json.Unmarshal(policyBytes, &p); err == nil && (p.LogsTTLDays > 0 || p.ReportsTTLDays > 0 || p.SourcesTTLDays > 0 || p.BinariesTTLDays > 0 || p.RunsTTLDays > 0) {
+			suite.SetRetentionPolicy(&p)
+		}
 	}
 
 	log.Info().Dur("duration_ms", time.Since(start)).Msg("successfully found test suite by id")
@@ -94,7 +116,7 @@ func (r *TestSuiteRepository) FindByName(ctx context.Context, name string) (*mod
 	log.Debug().Msg("finding test suite by name")
 
 	query := `
-		SELECT id, name, description, state, created_at, updated_at
+		SELECT id, name, description, state, retention_policy, created_at, updated_at
 		FROM test_suites
 		WHERE name = $1
 	`
@@ -103,10 +125,11 @@ func (r *TestSuiteRepository) FindByName(ctx context.Context, name string) (*mod
 		suiteName   string
 		description string
 		state       string
+		policyBytes []byte
 		createdAt   time.Time
 		updatedAt   time.Time
 	)
-	err := r.pool.QueryRow(ctx, query, name).Scan(&suiteID, &suiteName, &description, &state, &createdAt, &updatedAt)
+	err := r.pool.QueryRow(ctx, query, name).Scan(&suiteID, &suiteName, &description, &state, &policyBytes, &createdAt, &updatedAt)
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to find test suite by name")
 		return nil, MapError(err)
@@ -116,6 +139,12 @@ func (r *TestSuiteRepository) FindByName(ctx context.Context, name string) (*mod
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to reconstitute test suite")
 		return nil, err
+	}
+	if len(policyBytes) > 0 && string(policyBytes) != "{}" && string(policyBytes) != "null" {
+		var p model.RetentionPolicy
+		if err := json.Unmarshal(policyBytes, &p); err == nil && (p.LogsTTLDays > 0 || p.ReportsTTLDays > 0 || p.SourcesTTLDays > 0 || p.BinariesTTLDays > 0 || p.RunsTTLDays > 0) {
+			suite.SetRetentionPolicy(&p)
+		}
 	}
 
 	log.Info().Dur("duration_ms", time.Since(start)).Msg("successfully found test suite by name")
@@ -129,7 +158,7 @@ func (r *TestSuiteRepository) List(ctx context.Context) ([]*model.TestSuite, err
 	log.Debug().Msg("listing all test suites")
 
 	query := `
-		SELECT id, name, description, state, created_at, updated_at
+		SELECT id, name, description, state, retention_policy, created_at, updated_at
 		FROM test_suites
 		ORDER BY created_at ASC
 	`
@@ -147,10 +176,11 @@ func (r *TestSuiteRepository) List(ctx context.Context) ([]*model.TestSuite, err
 			name        string
 			description string
 			state       string
+			policyBytes []byte
 			createdAt   time.Time
 			updatedAt   time.Time
 		)
-		if err := rows.Scan(&suiteID, &name, &description, &state, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&suiteID, &name, &description, &state, &policyBytes, &createdAt, &updatedAt); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan test suite row")
 			return nil, MapError(err)
 		}
@@ -158,6 +188,12 @@ func (r *TestSuiteRepository) List(ctx context.Context) ([]*model.TestSuite, err
 		if err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to reconstitute test suite from row")
 			return nil, err
+		}
+		if len(policyBytes) > 0 && string(policyBytes) != "{}" && string(policyBytes) != "null" {
+			var p model.RetentionPolicy
+			if err := json.Unmarshal(policyBytes, &p); err == nil && (p.LogsTTLDays > 0 || p.ReportsTTLDays > 0 || p.SourcesTTLDays > 0 || p.BinariesTTLDays > 0 || p.RunsTTLDays > 0) {
+				suite.SetRetentionPolicy(&p)
+			}
 		}
 		suites = append(suites, suite)
 	}

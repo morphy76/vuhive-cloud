@@ -28,12 +28,13 @@ func (s TestSuiteState) IsValid() bool {
 
 // TestSuite is the domain aggregate root representing a managed load test suite.
 type TestSuite struct {
-	id          string
-	name        string
-	description string
-	state       TestSuiteState
-	createdAt   time.Time
-	updatedAt   time.Time
+	id              string
+	name            string
+	description     string
+	state           TestSuiteState
+	retentionPolicy *RetentionPolicy
+	createdAt       time.Time
+	updatedAt       time.Time
 }
 
 // NewTestSuite creates a new TestSuite aggregate in DRAFT state.
@@ -112,6 +113,16 @@ func (s *TestSuite) CreatedAt() time.Time {
 // UpdatedAt returns the timestamp when the suite was last updated.
 func (s *TestSuite) UpdatedAt() time.Time {
 	return s.updatedAt
+}
+
+// RetentionPolicy returns the optional custom retention policy configured for the suite.
+func (s *TestSuite) RetentionPolicy() *RetentionPolicy {
+	return s.retentionPolicy
+}
+
+// SetRetentionPolicy sets the custom retention policy for the suite.
+func (s *TestSuite) SetRetentionPolicy(p *RetentionPolicy) {
+	s.retentionPolicy = p
 }
 
 // Activate transitions the test suite into the ACTIVE state.

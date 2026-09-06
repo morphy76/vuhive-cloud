@@ -466,5 +466,291 @@ func (r *TestRunRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// ListExpiredRunsForLogs retrieves runs older than cutoff having active log storage keys.
+func (r *TestRunRepository) ListExpiredRunsForLogs(ctx context.Context, before time.Time, suiteID *string, limit int) ([]*model.TestRun, error) {
+	start := time.Now()
+	if limit <= 0 {
+		limit = 100
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "TestRunRepository.ListExpiredRunsForLogs").
+		Time("before", before).
+		Int("limit", limit).
+		Logger()
+	log.Debug().Msg("listing expired runs for logs purge")
+
+	query := `
+		SELECT
+			id, suite_id, artifact_id, configuration_id, runner_profile_id, schedule_id,
+			status, k8s_job_name, k8s_namespace, started_at, finished_at, exit_code, sla_passed,
+			total_iterations, total_requests, avg_tps,
+			p50_duration_ms, p90_duration_ms, p95_duration_ms, p99_duration_ms,
+			error_rate_pct, s3_report_key, s3_logs_key, summary_json, abort_reason, created_at
+		FROM test_runs
+		WHERE COALESCE(finished_at, created_at) < $1
+		  AND status IN ('COMPLETED', 'FAILED', 'ABORTED', 'ARCHIVED')
+		  AND s3_logs_key != ''
+		  AND ($2::text IS NULL OR suite_id = $2::uuid)
+		ORDER BY created_at ASC
+		LIMIT $3
+	`
+	rows, err := r.pool.Query(ctx, query, before, suiteID, limit)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to query expired runs for logs")
+		return nil, MapError(err)
+	}
+	defer rows.Close()
+
+	runs, err := scanRunRows(rows)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan expired runs for logs")
+		return nil, err
+	}
+
+	log.Info().Int("count", len(runs)).Dur("duration_ms", time.Since(start)).Msg("successfully listed expired runs for logs")
+	return runs, nil
+}
+
+// ListExpiredRunsForReports retrieves terminal runs older than cutoff having report storage keys or JSON payloads.
+func (r *TestRunRepository) ListExpiredRunsForReports(ctx context.Context, before time.Time, suiteID *string, limit int) ([]*model.TestRun, error) {
+	start := time.Now()
+	if limit <= 0 {
+		limit = 100
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "TestRunRepository.ListExpiredRunsForReports").
+		Time("before", before).
+		Int("limit", limit).
+		Logger()
+	log.Debug().Msg("listing expired runs for reports purge")
+
+	query := `
+		SELECT
+			id, suite_id, artifact_id, configuration_id, runner_profile_id, schedule_id,
+			status, k8s_job_name, k8s_namespace, started_at, finished_at, exit_code, sla_passed,
+			total_iterations, total_requests, avg_tps,
+			p50_duration_ms, p90_duration_ms, p95_duration_ms, p99_duration_ms,
+			error_rate_pct, s3_report_key, s3_logs_key, summary_json, abort_reason, created_at
+		FROM test_runs
+		WHERE COALESCE(finished_at, created_at) < $1
+		  AND status IN ('COMPLETED', 'FAILED', 'ABORTED')
+		  AND (s3_report_key != '' OR summary_json IS NOT NULL)
+		  AND ($2::text IS NULL OR suite_id = $2::uuid)
+		ORDER BY created_at ASC
+		LIMIT $3
+	`
+	rows, err := r.pool.Query(ctx, query, before, suiteID, limit)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to query expired runs for reports")
+		return nil, MapError(err)
+	}
+	defer rows.Close()
+
+	runs, err := scanRunRows(rows)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan expired runs for reports")
+		return nil, err
+	}
+
+	log.Info().Int("count", len(runs)).Dur("duration_ms", time.Since(start)).Msg("successfully listed expired runs for reports")
+	return runs, nil
+}
+
+// ListExpiredRunsForPrune retrieves terminal runs older than cutoff eligible for database pruning.
+func (r *TestRunRepository) ListExpiredRunsForPrune(ctx context.Context, before time.Time, suiteID *string, limit int) ([]*model.TestRun, error) {
+	start := time.Now()
+	if limit <= 0 {
+		limit = 100
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "TestRunRepository.ListExpiredRunsForPrune").
+		Time("before", before).
+		Int("limit", limit).
+		Logger()
+	log.Debug().Msg("listing expired runs for prune")
+
+	query := `
+		SELECT
+			id, suite_id, artifact_id, configuration_id, runner_profile_id, schedule_id,
+			status, k8s_job_name, k8s_namespace, started_at, finished_at, exit_code, sla_passed,
+			total_iterations, total_requests, avg_tps,
+			p50_duration_ms, p90_duration_ms, p95_duration_ms, p99_duration_ms,
+			error_rate_pct, s3_report_key, s3_logs_key, summary_json, abort_reason, created_at
+		FROM test_runs
+		WHERE COALESCE(finished_at, created_at) < $1
+		  AND status IN ('COMPLETED', 'FAILED', 'ABORTED', 'ARCHIVED')
+		  AND ($2::text IS NULL OR suite_id = $2::uuid)
+		ORDER BY created_at ASC
+		LIMIT $3
+	`
+	rows, err := r.pool.Query(ctx, query, before, suiteID, limit)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to query expired runs for prune")
+		return nil, MapError(err)
+	}
+	defer rows.Close()
+
+	runs, err := scanRunRows(rows)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan expired runs for prune")
+		return nil, err
+	}
+
+	log.Info().Int("count", len(runs)).Dur("duration_ms", time.Since(start)).Msg("successfully listed expired runs for prune")
+	return runs, nil
+}
+
+// ClearLogsKey clears the s3_logs_key for a test run.
+func (r *TestRunRepository) ClearLogsKey(ctx context.Context, id string) error {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().Str("op", "TestRunRepository.ClearLogsKey").Str("run_id", id).Logger()
+	log.Debug().Msg("clearing test run logs key")
+
+	_, err := r.pool.Exec(ctx, `UPDATE test_runs SET s3_logs_key = '' WHERE id = $1`, id)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to clear test run logs key")
+		return MapError(err)
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("successfully cleared test run logs key")
+	return nil
+}
+
+// ClearReportKey clears the s3_report_key for a test run.
+func (r *TestRunRepository) ClearReportKey(ctx context.Context, id string) error {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().Str("op", "TestRunRepository.ClearReportKey").Str("run_id", id).Logger()
+	log.Debug().Msg("clearing test run report key")
+
+	_, err := r.pool.Exec(ctx, `UPDATE test_runs SET s3_report_key = '' WHERE id = $1`, id)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to clear test run report key")
+		return MapError(err)
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("successfully cleared test run report key")
+	return nil
+}
+
+// ArchiveRun marks a test run as ARCHIVED and clears its raw summary_json payload and report key.
+func (r *TestRunRepository) ArchiveRun(ctx context.Context, id string) error {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().Str("op", "TestRunRepository.ArchiveRun").Str("run_id", id).Logger()
+	log.Debug().Msg("archiving test run")
+
+	_, err := r.pool.Exec(ctx, `UPDATE test_runs SET status = 'ARCHIVED', summary_json = NULL, s3_report_key = '' WHERE id = $1`, id)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to archive test run")
+		return MapError(err)
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("successfully archived test run")
+	return nil
+}
+
+// DeleteBatch deletes multiple test runs by ID in a single query.
+func (r *TestRunRepository) DeleteBatch(ctx context.Context, ids []string) (int64, error) {
+	start := time.Now()
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	log := zerolog.Ctx(ctx).With().Str("op", "TestRunRepository.DeleteBatch").Int("count", len(ids)).Logger()
+	log.Debug().Msg("deleting test run batch")
+
+	cmdTag, err := r.pool.Exec(ctx, `DELETE FROM test_runs WHERE id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to delete test run batch")
+		return 0, MapError(err)
+	}
+
+	affected := cmdTag.RowsAffected()
+	log.Info().Int64("affected", affected).Dur("duration_ms", time.Since(start)).Msg("successfully deleted test run batch")
+	return affected, nil
+}
+
+// scanRunRows scans test_run rows into a slice of domain model.TestRun entities.
+func scanRunRows(rows pgxRows) ([]*model.TestRun, error) {
+	var runs []*model.TestRun
+	for rows.Next() {
+		var (
+			runID           string
+			sID             string
+			artifactID      string
+			configurationID *string
+			runnerProfileID string
+			scheduleID      *string
+			st              string
+			k8sJobName      string
+			k8sNamespace    string
+			startedAt       *time.Time
+			finishedAt      *time.Time
+			exitCode        *int
+			slaPassed       *bool
+			totalIterations int64
+			totalRequests   int64
+			avgTPS          float64
+			p50DurationMs   float64
+			p90DurationMs   float64
+			p95DurationMs   float64
+			p99DurationMs   float64
+			errorRatePct    float64
+			s3ReportKey     string
+			s3LogsKey       string
+			summaryJSON     []byte
+			abortReason     string
+			createdAt       time.Time
+		)
+		if err := rows.Scan(
+			&runID, &sID, &artifactID, &configurationID, &runnerProfileID, &scheduleID,
+			&st, &k8sJobName, &k8sNamespace, &startedAt, &finishedAt, &exitCode, &slaPassed,
+			&totalIterations, &totalRequests, &avgTPS,
+			&p50DurationMs, &p90DurationMs, &p95DurationMs, &p99DurationMs,
+			&errorRatePct, &s3ReportKey, &s3LogsKey, &summaryJSON, &abortReason, &createdAt,
+		); err != nil {
+			return nil, MapError(err)
+		}
+
+		metrics := model.RunMetrics{
+			TotalIterations: totalIterations,
+			TotalRequests:   totalRequests,
+			AvgTPS:          avgTPS,
+			P50DurationMs:   p50DurationMs,
+			P90DurationMs:   p90DurationMs,
+			P95DurationMs:   p95DurationMs,
+			P99DurationMs:   p99DurationMs,
+			ErrorRatePct:    errorRatePct,
+		}
+
+		run, err := model.NewTestRunWithID(
+			runID, sID, artifactID, configurationID, runnerProfileID, scheduleID,
+			model.RunStatus(st), k8sJobName, k8sNamespace,
+			startedAt, finishedAt, exitCode, slaPassed,
+			metrics, s3ReportKey, s3LogsKey, summaryJSON, abortReason, createdAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, MapError(err)
+	}
+
+	return runs, nil
+}
+
+type pgxRows interface {
+	Next() bool
+	Scan(dest ...any) error
+	Err() error
+	Close()
+}
+
 // Static compile-time interface assertion
 var _ outbound.TestRunRepository = (*TestRunRepository)(nil)
+

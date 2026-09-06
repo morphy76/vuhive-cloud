@@ -89,8 +89,9 @@ func TestOpenAPI_RouteCoverage(t *testing.T) {
 	schedulesUC := new(mockSchedulesUseCase)
 	runsUC := new(mockRunsUseCase)
 	barrierUC := new(mockBarrierUseCase)
+	housekeepingUC := new(MockHousekeepingUseCase)
 
-	router := rest.SetupRouterWithBarrier(buildsUC, profilesUC, schedulesUC, runsUC, barrierUC)
+	router := rest.SetupRouterWithAll(buildsUC, profilesUC, schedulesUC, runsUC, barrierUC, housekeepingUC)
 
 	// Parse OpenAPI 3.1 specification
 	var doc struct {

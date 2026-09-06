@@ -94,6 +94,27 @@ func (m *MockArtifactRepository) Delete(ctx context.Context, id string) error {
 	return args.Error(0)
 }
 
+func (m *MockArtifactRepository) ListOrphanedArtifacts(ctx context.Context, before time.Time, limit int) ([]*model.Artifact, error) {
+	args := m.Called(ctx, before, limit)
+	if a := args.Get(0); a != nil {
+		return a.([]*model.Artifact), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockArtifactRepository) ListExpiredArtifacts(ctx context.Context, before time.Time, suiteID *string, limit int) ([]*model.Artifact, error) {
+	args := m.Called(ctx, before, suiteID, limit)
+	if a := args.Get(0); a != nil {
+		return a.([]*model.Artifact), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockArtifactRepository) ClearBinaryKeys(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 // MockStoragePort mocks outbound.StoragePort
 type MockStoragePort struct {
 	mock.Mock
@@ -134,6 +155,19 @@ func (m *MockStoragePort) PresignUpload(ctx context.Context, key string, lifetim
 
 func (m *MockStoragePort) EnsureBucket(ctx context.Context) error {
 	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockStoragePort) ListObjects(ctx context.Context, prefix string) ([]outbound.ObjectInfo, error) {
+	args := m.Called(ctx, prefix)
+	if o := args.Get(0); o != nil {
+		return o.([]outbound.ObjectInfo), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockStoragePort) PutBucketLifecycleConfiguration(ctx context.Context, rules []outbound.LifecycleRule) error {
+	args := m.Called(ctx, rules)
 	return args.Error(0)
 }
 

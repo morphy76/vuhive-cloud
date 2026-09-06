@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -72,6 +73,15 @@ func (m *mockArtifactRepo) ListBySuiteID(_ context.Context, _ string) ([]*model.
 }
 func (m *mockArtifactRepo) Delete(_ context.Context, id string) error {
 	delete(m.artifacts, id)
+	return nil
+}
+func (m *mockArtifactRepo) ListOrphanedArtifacts(_ context.Context, _ time.Time, _ int) ([]*model.Artifact, error) {
+	return nil, nil
+}
+func (m *mockArtifactRepo) ListExpiredArtifacts(_ context.Context, _ time.Time, _ *string, _ int) ([]*model.Artifact, error) {
+	return nil, nil
+}
+func (m *mockArtifactRepo) ClearBinaryKeys(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -211,6 +221,43 @@ func (m *mockRunRepo) Delete(_ context.Context, id string) error {
 	delete(m.runs, id)
 	return nil
 }
+func (m *mockRunRepo) ListExpiredRunsForLogs(_ context.Context, _ time.Time, _ *string, _ int) ([]*model.TestRun, error) {
+	return nil, nil
+}
+func (m *mockRunRepo) ListExpiredRunsForReports(_ context.Context, _ time.Time, _ *string, _ int) ([]*model.TestRun, error) {
+	return nil, nil
+}
+func (m *mockRunRepo) ListExpiredRunsForPrune(_ context.Context, _ time.Time, _ *string, _ int) ([]*model.TestRun, error) {
+	return nil, nil
+}
+func (m *mockRunRepo) ClearLogsKey(_ context.Context, id string) error {
+	if r, ok := m.runs[id]; ok {
+		r.ClearS3LogsKey()
+	}
+	return nil
+}
+func (m *mockRunRepo) ClearReportKey(_ context.Context, id string) error {
+	if r, ok := m.runs[id]; ok {
+		r.ClearS3ReportKey()
+	}
+	return nil
+}
+func (m *mockRunRepo) ArchiveRun(_ context.Context, id string) error {
+	if r, ok := m.runs[id]; ok {
+		return r.Archive(time.Now())
+	}
+	return nil
+}
+func (m *mockRunRepo) DeleteBatch(_ context.Context, ids []string) (int64, error) {
+	var count int64
+	for _, id := range ids {
+		if _, ok := m.runs[id]; ok {
+			delete(m.runs, id)
+			count++
+		}
+	}
+	return count, nil
+}
 
 // Mock runner orchestrator
 type mockRunnerOrchestrator struct {
@@ -279,6 +326,22 @@ func (m *mockStoragePort) PresignUpload(_ context.Context, key string, _ time.Du
 	return "http://presigned-upload/" + key, nil
 }
 func (m *mockStoragePort) EnsureBucket(_ context.Context) error {
+	return nil
+}
+func (m *mockStoragePort) ListObjects(_ context.Context, prefix string) ([]outbound.ObjectInfo, error) {
+	var res []outbound.ObjectInfo
+	for k, v := range m.files {
+		if strings.HasPrefix(k, prefix) {
+			res = append(res, outbound.ObjectInfo{
+				Key:          k,
+				Size:         int64(len(v)),
+				LastModified: time.Now(),
+			})
+		}
+	}
+	return res, nil
+}
+func (m *mockStoragePort) PutBucketLifecycleConfiguration(_ context.Context, _ []outbound.LifecycleRule) error {
 	return nil
 }
 
