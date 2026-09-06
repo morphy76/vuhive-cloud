@@ -13,10 +13,11 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
 - 🧩 **Reusable Runner Profiles**: Decouple test scenario code from infrastructure scheduling. Define reusable profiles specifying CPU/memory requests and limits, node selectors, tolerations, and node affinities for targeted execution.
 - ⏰ **Native Kubernetes CronJob Scheduling**: Declarative scheduling mapped 1-to-1 to native Kubernetes `batch/v1` `CronJob`s with standard cron syntax (`0 2 * * *`), eliminating external scheduler dependencies.
 - 📊 **Automated KPI Indexing & SLA Verification**: Automatically parses deterministic execution reports (`summary.json`), extracting and indexing latency percentiles ($p_{50}$, $p_{90}$, $p_{95}$, $p_{99}$), throughput (TPS), error rates, and SLA pass/fail status into PostgreSQL.
-- 📈 **Execution Reports, Logs & Metrics Query API**: Query and filter historical runs by suite, schedule, status, and date range. Fetch indexed performance KPIs, full deterministic execution reports (`summary.json`), and runner stdout/stderr logs directly or as presigned S3 download URLs. Fully documented via [OpenAPI 3.1](./api/openapi.yaml) and served directly by the control plane (`GET /openapi.yaml` and `GET /openapi.json`).
+- 📈 **Execution Reports, Logs & Metrics Query API**: Query and filter historical runs by suite, schedule, status, and date range. Fetch indexed performance KPIs, full deterministic execution reports (`summary.json`), and runner stdout/stderr logs directly or as presigned S3 download URLs. Fully documented via [OpenAPI 3.1](./api/openapi.yaml), served directly by the control plane (`GET /openapi.yaml` and `GET /openapi.json`), and interactively testable via the optional Swagger UI viewer in the infrastructure chart.
 - 📦 **Pluggable Object Storage**: Integrates seamlessly with AWS S3 or MinIO for long-term retention of source packages, compiled binaries, full execution logs, and detailed performance summaries.
 - ⏱ **Distributed Start Barrier Synchronization**: Built-in rendezvous coordinator guarantees multi-pod distributed load generators synchronize and fire simultaneously without clock skew.
 - 🛑 **Execution Lifecycle Control & Graceful Abort**: Monitor active runs in real time and abort executions on demand (`POST /api/v1/runs/{id}/abort`), instantly tearing down Kubernetes workloads while propagating SIGTERM for partial log flush, updating state to `ABORTED` with audited cancellation metadata, and reclaiming cluster resources.
+- 🌐 **Embedded React 19 SPA & PWA File Server**: The Go Backend-For-Frontend (`cmd/bff`) serves the compiled React 19 web dashboard and PWA assets directly using Go `embed.FS`, eliminating separate web server containers (e.g. Nginx). Includes SPA fallback routing to `index.html`, immutable HTTP caching headers for hashed assets (`/assets/*`), service worker / manifest delivery, and live-reload reverse proxying (`--dev-proxy-url`) for local Vite frontend development.
 
 ---
 
@@ -77,9 +78,10 @@ For complete details on our development methodology, human oversight model, and 
 | Document | Role & Audience | Focus & Boundary |
 |---|---|---|
 | **[`README.md`](./README.md)** | **Introduction & Overview** | Introduces system capabilities, architectural topology, and project roadmap. |
+| **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** | **Developer & Contributor Guide** | Local environment setup, container builds with `--load`, local cluster validation, coding standards, and PR guidelines. |
 | **[`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md)** | **Engineering Philosophy & AI Disclosure** | Spec-Driven Development (SDD) paradigm, human vs. agent responsibility division, and quality gates. |
 | **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Installation** | Installs control plane on Kubernetes; configuration values, external secrets, RBAC, and security hardening. |
-| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation** | Installs backing evaluation services (PostgreSQL + MinIO). |
+| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation** | Installs backing evaluation services (PostgreSQL + MinIO + optional OpenAPI Swagger UI viewer). |
 | **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & Recipes** | Dedicated to `vuhive-cloud` adoption: end-to-end recipes for packaging test suites, profiles, schedules, and runs. |
 | **[`api/openapi.yaml`](./api/openapi.yaml)** | **REST API Reference** | Documents the APIs: complete OpenAPI 3.1 contract served live by control plane (`GET /openapi.yaml`, `GET /openapi.json`). |
 | **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | **Architectural Specification** | Bounded contexts, DDD domain aggregates, database schema (DDL), and security postures. |
@@ -99,7 +101,7 @@ helm repo add groundhog2k https://groundhog2k.github.io/helm-charts/
 helm repo add minio https://charts.min.io/
 helm repo update
 
-# 2. Deploy infrastructure (PostgreSQL + MinIO)
+# 2. Deploy infrastructure (PostgreSQL + MinIO + optional Swagger UI)
 helm dependency build deploy/helm/vuhive-cloud-infra
 helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --namespace vuhive-system \
@@ -107,7 +109,7 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --wait --timeout=180s
 ```
 
-> For details on database and storage parameters, see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
+> For details on database, storage parameters, and enabling the optional OpenAPI viewer (Swagger UI), see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
 
 ### 2. Deploy vuhive-cloud Control Plane
 Deploy the control plane connected to the local infrastructure:
@@ -185,6 +187,13 @@ make build
 # Build standalone BFF service binary
 make build-bff
 
+# Build container images with --load for local cluster testing (Rancher Desktop)
+make docker-build
+
+# Or build individual images
+make docker-build-server
+make docker-build-runner-init
+
 # Run unit tests
 make test
 
@@ -198,6 +207,21 @@ make lint
 make help
 ```
 
+For detailed instructions on local cluster validation, BuildKit containerd image loading, and coding standards, see **[`CONTRIBUTING.md`](./CONTRIBUTING.md)**.
+
+### Running the Go BFF & Web Dashboard Locally
+
+```bash
+# Run BFF with embedded SPA assets
+./bin/bff --port=8081 --control-plane-url=http://localhost:8080
+
+# Run BFF during frontend development with Vite HMR reverse proxying
+./bin/bff --port=8081 --control-plane-url=http://localhost:8080 --dev-proxy-url=http://localhost:5173
+
+# Run BFF with a local static build directory override
+./bin/bff --port=8081 --control-plane-url=http://localhost:8080 --static-dir=./web/dist
+```
+
 ---
 
 ## License
@@ -205,7 +229,7 @@ make help
 This project is licensed under the [MIT License](./LICENSE).
 The control plane exposes its REST API at port `8080`. See [`api/openapi.yaml`](./api/openapi.yaml) for the full API reference.
 For detailed Helm configuration options, see the chart READMEs:
-- [`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md) — infrastructure (PostgreSQL + MinIO)
+- [`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md) — infrastructure (PostgreSQL + MinIO + optional Swagger UI viewer)
 - [`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md) — control plane (namespace management, RBAC modes, all parameters)
 
 ## Documents in this Package

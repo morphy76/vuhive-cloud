@@ -1,0 +1,8 @@
+/* PLACEHOLDER CSS FOR ISSUE #58 */
+/* To be replaced by Tailwind CSS v4 bundle in Issue #61 */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #0f172a;
+  color: #f8fafc;
+}

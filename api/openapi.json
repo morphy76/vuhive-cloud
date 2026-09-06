@@ -82,6 +82,41 @@
         ],
         "type": "object"
       },
+      "BFFStatusResponse": {
+        "properties": {
+          "bff_status": {
+            "example": "UP",
+            "type": "string"
+          },
+          "bff_version": {
+            "example": "0.1.0",
+            "type": "string"
+          },
+          "control_plane_status": {
+            "example": "UP",
+            "type": "string"
+          },
+          "control_plane_version": {
+            "example": "0.0.1",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bff_status",
+          "bff_version",
+          "control_plane_status",
+          "timestamp"
+        ],
+        "type": "object"
+      },
       "BarrierAbortRequest": {
         "properties": {
           "reason": {
@@ -314,6 +349,34 @@
           "runner_profile_id",
           "name",
           "cron_expression"
+        ],
+        "type": "object"
+      },
+      "CreateSessionRequest": {
+        "properties": {
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "session_id": {
+            "example": "sess-usr-12345",
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "example": 3600,
+            "format": "int64",
+            "type": "integer"
+          },
+          "user_id": {
+            "example": "operator@vuhive.local",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "user_id"
         ],
         "type": "object"
       },
@@ -715,6 +778,39 @@
         ],
         "type": "object"
       },
+      "SessionResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "example": "sess-usr-12345",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "user_id": {
+            "example": "operator@vuhive.local",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "created_at",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "TolerationDTO": {
         "properties": {
           "effect": {
@@ -817,6 +913,110 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/bff/sessions": {
+      "post": {
+        "description": "Establishes a cached client session in the BFF.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Session created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request payload"
+          }
+        },
+        "summary": "Create client session",
+        "tags": [
+          "BFF"
+        ]
+      }
+    },
+    "/api/v1/bff/sessions/{id}": {
+      "get": {
+        "description": "Returns session context for the given session identifier.",
+        "parameters": [
+          {
+            "description": "Unique session identifier",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "Session details"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Session not found"
+          }
+        },
+        "summary": "Retrieve client session",
+        "tags": [
+          "BFF"
+        ]
+      }
+    },
+    "/api/v1/bff/status": {
+      "get": {
+        "description": "Returns health and version metadata from both the BFF and upstream Control Plane.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BFFStatusResponse"
+                }
+              }
+            },
+            "description": "Aggregated system status"
+          }
+        },
+        "summary": "Aggregated BFF and Control Plane status",
+        "tags": [
+          "BFF"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "description": "Returns API health status.",
@@ -1946,6 +2146,10 @@
     {
       "description": "Local port-forwarded control plane",
       "url": "http://localhost:8080"
+    },
+    {
+      "description": "Local Backend-For-Frontend (BFF) service",
+      "url": "http://localhost:8081"
     },
     {
       "description": "In-cluster Kubernetes service",
