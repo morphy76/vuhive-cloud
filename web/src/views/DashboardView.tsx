@@ -1,5 +1,8 @@
 import React from 'react'
 import { Activity, Layers, CalendarClock, CheckCircle2, Play, Cpu, ArrowUpRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 
 export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({ onNavigate }) => {
   const stats = [
@@ -48,14 +51,13 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
 
         {/* Quick action buttons */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <Button
             onClick={() => onNavigate?.('runs')}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-sm hover:shadow transition-all min-h-[44px]"
+            className="min-h-[44px] gap-2"
           >
             <Play className="w-4 h-4 fill-current" />
             <span>Trigger Run</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -100,9 +102,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
                 Cluster Execution Pipeline
               </h2>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-              Synchronized
-            </span>
+            <Badge variant="success">Synchronized</Badge>
           </div>
 
           <div className="space-y-3">
@@ -115,7 +115,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
                   Target architectures: linux/amd64, linux/arm64
                 </div>
               </div>
-              <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400">Ready</span>
+              <Badge variant="success">Ready</Badge>
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
@@ -127,7 +127,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
                   Zero clock-skew distributed synchronized firing
                 </div>
               </div>
-              <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400">Active</span>
+              <Badge variant="success">Active</Badge>
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
@@ -139,7 +139,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
                   summary.json parser (p50, p90, p95, p99, TPS, SLA)
                 </div>
               </div>
-              <span className="text-xs font-mono text-emerald-600 dark:text-emerald-400">Listening</span>
+              <Badge variant="success">Listening</Badge>
             </div>
           </div>
         </div>
@@ -154,27 +154,43 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
               Explore interactive endpoints, OpenAPI 3.1 definitions, and control plane recipes.
             </p>
 
-            <div className="space-y-2">
-              <a
-                href="/openapi.yaml"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300"
-              >
-                <span>OpenAPI 3.1 Specification</span>
-                <ArrowUpRight className="w-4 h-4 text-slate-400" />
-              </a>
+            <TooltipProvider>
+              <div className="space-y-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href="/openapi.yaml"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300"
+                    >
+                      <span>OpenAPI 3.1 Specification</span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-400" />
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    View the full OpenAPI 3.1 specification for the Control Plane API
+                  </TooltipContent>
+                </Tooltip>
 
-              <a
-                href="https://github.com/morphy76/vuhive-cloud/blob/main/docs/cookbook.md"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300"
-              >
-                <span>Control Plane Cookbook</span>
-                <ArrowUpRight className="w-4 h-4 text-slate-400" />
-              </a>
-            </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href="https://github.com/morphy76/vuhive-cloud/blob/main/docs/cookbook.md"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300"
+                    >
+                      <span>Control Plane Cookbook</span>
+                      <ArrowUpRight className="w-4 h-4 text-slate-400" />
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Read the developer cookbook for advanced configuration recipes
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </TooltipProvider>
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-400">

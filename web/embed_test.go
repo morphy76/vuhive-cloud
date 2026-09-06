@@ -46,7 +46,7 @@ func TestGetFS_EmbeddedFiles(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, entries, "assets directory must not be empty")
 
-		var foundJS, foundCSS, foundVendorReact, foundVendorUI bool
+		var foundJS, foundCSS, foundVendorReact, foundVendorUI, foundVendorRadix bool
 
 		for _, entry := range entries {
 			assert.False(t, entry.IsDir())
@@ -64,6 +64,9 @@ func TestGetFS_EmbeddedFiles(t *testing.T) {
 				if strings.HasPrefix(name, "vendor-ui-") {
 					foundVendorUI = true
 				}
+				if strings.HasPrefix(name, "vendor-radix-") {
+					foundVendorRadix = true
+				}
 			}
 			if strings.HasSuffix(name, ".css") {
 				foundCSS = true
@@ -74,6 +77,7 @@ func TestGetFS_EmbeddedFiles(t *testing.T) {
 		assert.True(t, foundCSS, "expected compiled Tailwind CSS bundle in assets/")
 		assert.True(t, foundVendorReact, "expected vendor-react chunk in assets/")
 		assert.True(t, foundVendorUI, "expected vendor-ui chunk in assets/")
+		assert.True(t, foundVendorRadix, "expected vendor-radix chunk in assets/")
 	})
 
 	t.Run("fails on non-existent file", func(t *testing.T) {

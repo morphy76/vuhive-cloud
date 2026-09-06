@@ -29,7 +29,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 8: Aborting & Cancelling In-Flight Test Runs on Demand](#recipe-8-aborting--cancelling-in-flight-test-runs-on-demand)
     - [Recipe 9: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-9-execution-diagnostics-log-inspection--troubleshooting)
     - [Recipe 10: Inspecting BFF Gateway Status & Session Management](#recipe-10-inspecting-bff-gateway-status--session-management)
-    - [Recipe 11: Accessing the Embedded Web Dashboard & PWA Routing](#recipe-11-accessing-the-embedded-web-dashboard--pwa-routing)
+    - [Recipe 11: Accessing the Embedded Web Dashboard, PWA Routing & Accessible Design System](#recipe-11-accessing-the-embedded-web-dashboard--pwa-routing)
     - [Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors)
 
 ---
@@ -918,7 +918,8 @@ The build pipeline enforces static content best practices:
 - **Cryptographic Content Hashing**: Output files use `[name]-[hash]` (e.g. `assets/index-B-4ef818.js`, `assets/index-DHWqHAGt.css`).
 - **Vendor Code Splitting (`manualChunks`)**:
   - `vendor-react-[hash].js`: React 19 core runtime (`react`, `react-dom`). Rarely changes across releases, maximizing long-term browser cache hits.
-  - `vendor-ui-[hash].js`: Icon and class utility libraries (`lucide-react`, `clsx`, `tailwind-merge`).
+  - `vendor-ui-[hash].js`: Icon and class utility libraries (`lucide-react`, `clsx`, `tailwind-merge`, `class-variance-authority`).
+  - `vendor-radix-[hash].js`: Radix UI headless accessible primitives (`@radix-ui/react-dialog`, `@radix-ui/react-tooltip`, `@radix-ui/react-select`, etc.).
   - `index-[hash].js`: Lightweight application domain logic and views.
 - **BFF Immutable Caching**: The Go BFF serves all `/assets/*` files with `Cache-Control: public, max-age=31536000, immutable`.
 - **Unhashed Entry Points**: `index.html`, `sw.js`, and `manifest.webmanifest` are served with `Cache-Control: no-cache, no-store, must-revalidate`, guaranteeing instant cache invalidation upon releasing new versions.
@@ -949,6 +950,45 @@ Execute unit and component tests for responsive layouts, navigation switching, a
 # Run Vitest test suite:
 make test-web
 # or:
+pnpm --dir web test
+```
+
+#### 8. Accessible Design System (WCAG 2.1 AA)
+
+The web interface ships an accessible design system built on **Radix UI** headless primitives conforming to **WCAG 2.1 AA**. All interactive components inherit battle-tested ARIA patterns, focus management, and keyboard navigation from Radix's accessibility-first primitives.
+
+**Component Inventory** (`web/src/components/ui/`):
+
+| Component | Radix Primitive | Key Accessibility Features |
+| :--- | :--- | :--- |
+| `Button` | `@radix-ui/react-slot` | `focus-visible:ring-2`, `min-h-[44px]` touch targets, `asChild` slot composition |
+| `Dialog` | `@radix-ui/react-dialog` | Focus trap, `Escape` to close, `aria-labelledby`/`aria-describedby`, body scroll lock |
+| `Tooltip` | `@radix-ui/react-tooltip` | Keyboard activation on focus, `role="tooltip"`, 200ms delay |
+| `Popover` | `@radix-ui/react-popover` | Focus management, collision-aware positioning, `Escape` to dismiss |
+| `DropdownMenu` | `@radix-ui/react-dropdown-menu` | Arrow key navigation, `aria-expanded`, `role="menuitem"`, sub-menus |
+| `Tabs` | `@radix-ui/react-tabs` | Arrow key tab switching, `role="tablist"`/`role="tabpanel"`, `aria-selected` |
+| `Select` | `@radix-ui/react-select` | Type-ahead search, arrow key navigation, `role="listbox"`/`role="option"` |
+| `Toast` | `@radix-ui/react-toast` | `aria-live="polite"`, swipe-to-dismiss, auto-dismiss timer |
+| `Switch` | `@radix-ui/react-switch` | `role="switch"`, `aria-checked`, `Space` to toggle |
+| `Badge` | (pure React + cva) | Icon + text for all semantic variants (not color-alone per WCAG 1.4.1) |
+
+**Keyboard Navigation Cheat Sheet**:
+
+| Action | Keys |
+| :--- | :--- |
+| Move between interactive elements | `Tab` / `Shift+Tab` |
+| Close modals, drawers, dropdowns | `Escape` |
+| Navigate menu items / tabs | `Arrow Up` / `Arrow Down` / `Arrow Left` / `Arrow Right` |
+| Activate buttons, menu items | `Enter` / `Space` |
+| Jump to first/last tab | `Home` / `End` |
+| Skip to main content | `Tab` (first element is the skip link) |
+
+**Running Accessibility Audits**:
+
+The test suite includes automated **axe-core** WCAG 2.1 AA audits integrated via `vitest-axe`. Every view (Dashboard, Suites, Runs, Schedules) is audited for zero critical or serious violations:
+
+```bash
+# Runs all tests including axe-core accessibility audits:
 pnpm --dir web test
 ```
 

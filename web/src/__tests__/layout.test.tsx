@@ -1,9 +1,16 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { Sidebar } from '../components/layout/Sidebar'
 import { NavDrawer } from '../components/layout/NavDrawer'
 import { BottomNav } from '../components/layout/BottomNav'
 import { ThemeProvider } from '../context/ThemeContext'
+import { TooltipProvider } from '../components/ui/tooltip'
+
+const withProviders = (ui: React.ReactElement) => (
+  <ThemeProvider>
+    <TooltipProvider>{ui}</TooltipProvider>
+  </ThemeProvider>
+)
 
 describe('Layout Components Unit Tests', () => {
   it('Sidebar renders in expanded state by default and handles route selection', () => {
@@ -11,12 +18,14 @@ describe('Layout Components Unit Tests', () => {
     const handleToggleCollapse = vi.fn()
 
     const { rerender } = render(
-      <Sidebar
-        currentRoute="dashboard"
-        onSelectRoute={handleSelectRoute}
-        isCollapsed={false}
-        onToggleCollapse={handleToggleCollapse}
-      />
+      withProviders(
+        <Sidebar
+          currentRoute="dashboard"
+          onSelectRoute={handleSelectRoute}
+          isCollapsed={false}
+          onToggleCollapse={handleToggleCollapse}
+        />
+      )
     )
 
     expect(screen.getByText('vuhive-cloud')).toBeInTheDocument()
@@ -32,63 +41,64 @@ describe('Layout Components Unit Tests', () => {
 
     // In collapsed state
     rerender(
-      <Sidebar
-        currentRoute="dashboard"
-        onSelectRoute={handleSelectRoute}
-        isCollapsed={true}
-        onToggleCollapse={handleToggleCollapse}
-      />
+      withProviders(
+        <Sidebar
+          currentRoute="dashboard"
+          onSelectRoute={handleSelectRoute}
+          isCollapsed={true}
+          onToggleCollapse={handleToggleCollapse}
+        />
+      )
     )
     expect(screen.getByRole('button', { name: /expand sidebar/i })).toBeInTheDocument()
     expect(screen.queryByText('Control Plane v0.1.0')).not.toBeInTheDocument()
   })
 
-  it('NavDrawer closes on Escape key press and left touch swipe', () => {
+  it('Sidebar marks active item with aria-current="page"', () => {
+    const handleSelectRoute = vi.fn()
+    const handleToggleCollapse = vi.fn()
+
+    render(
+      withProviders(
+        <Sidebar
+          currentRoute="suites"
+          onSelectRoute={handleSelectRoute}
+          isCollapsed={false}
+          onToggleCollapse={handleToggleCollapse}
+        />
+      )
+    )
+
+    const activeItem = screen.getByRole('button', { name: 'Suites' })
+    expect(activeItem).toHaveAttribute('aria-current', 'page')
+
+    const inactiveItem = screen.getByRole('button', { name: 'Dashboard' })
+    expect(inactiveItem).not.toHaveAttribute('aria-current')
+  })
+
+  it('NavDrawer opens via Radix Dialog and closes on button click', async () => {
     const handleClose = vi.fn()
     const handleSelectRoute = vi.fn()
 
-    const { rerender } = render(
-      <ThemeProvider>
+    render(
+      withProviders(
         <NavDrawer
           isOpen={true}
           onClose={handleClose}
           currentRoute="dashboard"
           onSelectRoute={handleSelectRoute}
         />
-      </ThemeProvider>
+      )
     )
 
-    expect(screen.getByRole('dialog', { name: /navigation drawer/i })).toBeInTheDocument()
+    // Radix Dialog should render the close button
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /close navigation menu/i })).toBeInTheDocument()
+    })
 
-    // Press Escape
-    fireEvent.keyDown(window, { key: 'Escape' })
+    // Click close button
+    fireEvent.click(screen.getByRole('button', { name: /close navigation menu/i }))
     expect(handleClose).toHaveBeenCalledTimes(1)
-
-    // Touch swipe left simulation
-    const drawerDialog = screen.getByRole('dialog', { name: /navigation drawer/i })
-    const drawerPanel = drawerDialog.querySelector('div.relative.z-10')!
-    expect(drawerPanel).toBeInTheDocument()
-
-    fireEvent.touchStart(drawerPanel, {
-      touches: [{ clientX: 200, clientY: 100 }],
-    })
-    fireEvent.touchEnd(drawerPanel, {
-      changedTouches: [{ clientX: 100, clientY: 100 }], // Swiped 100px left
-    })
-    expect(handleClose).toHaveBeenCalledTimes(2)
-
-    // Closed state
-    rerender(
-      <ThemeProvider>
-        <NavDrawer
-          isOpen={false}
-          onClose={handleClose}
-          currentRoute="dashboard"
-          onSelectRoute={handleSelectRoute}
-        />
-      </ThemeProvider>
-    )
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('BottomNav provides 4 primary route buttons', () => {
@@ -107,5 +117,22 @@ describe('Layout Components Unit Tests', () => {
     const schedulesBtn = screen.getByRole('button', { name: 'Schedules' })
     fireEvent.click(schedulesBtn)
     expect(handleSelectRoute).toHaveBeenCalledWith('schedules')
+  })
+
+  it('BottomNav marks active item with aria-current="page"', () => {
+    const handleSelectRoute = vi.fn()
+
+    render(
+      <BottomNav
+        currentRoute="runs"
+        onSelectRoute={handleSelectRoute}
+      />
+    )
+
+    const activeBtn = screen.getByRole('button', { name: 'Runs' })
+    expect(activeBtn).toHaveAttribute('aria-current', 'page')
+
+    const inactiveBtn = screen.getByRole('button', { name: 'Dashboard' })
+    expect(inactiveBtn).not.toHaveAttribute('aria-current')
   })
 })

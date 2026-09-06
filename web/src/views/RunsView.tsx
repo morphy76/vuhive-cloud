@@ -1,5 +1,8 @@
 import React from 'react'
-import { PlayCircle, CheckCircle2, Play } from 'lucide-react'
+import { PlayCircle, Play } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { VisuallyHidden } from '@/components/ui/visually-hidden'
 
 export const RunsView: React.FC = () => {
   const sampleRuns = [
@@ -47,27 +50,27 @@ export const RunsView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition-all min-h-[44px]"
-        >
+        <Button className="min-h-[44px] gap-2">
           <Play className="w-4 h-4 fill-current" />
           <span>New Execution</span>
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+            <caption>
+              <VisuallyHidden>Execution runs with performance metrics and status</VisuallyHidden>
+            </caption>
             <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <th className="px-6 py-4">Run Identifier</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Pods</th>
-                <th className="px-6 py-4">Duration</th>
-                <th className="px-6 py-4">Throughput</th>
-                <th className="px-6 py-4">p95 Latency</th>
-                <th className="px-6 py-4">Error Rate</th>
+                <th scope="col" className="px-6 py-4">Run Identifier</th>
+                <th scope="col" className="px-6 py-4">Status</th>
+                <th scope="col" className="px-6 py-4">Pods</th>
+                <th scope="col" className="px-6 py-4">Duration</th>
+                <th scope="col" className="px-6 py-4">Throughput</th>
+                <th scope="col" className="px-6 py-4">p95 Latency</th>
+                <th scope="col" className="px-6 py-4">Error Rate</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -84,15 +87,12 @@ export const RunsView: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                     {r.status === 'RUNNING' ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                      <Badge variant="warning">
                         <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                         RUNNING
-                      </span>
+                      </Badge>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        COMPLETED
-                      </span>
+                      <Badge variant="success">COMPLETED</Badge>
                     )}
                   </td>
                   <td className="px-6 py-4 font-mono text-xs">{r.runners}</td>
