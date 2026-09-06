@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { ThemeProvider } from '@/context/ThemeContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Shell } from '@/components/layout/Shell'
@@ -7,6 +8,7 @@ import { DashboardView } from '@/views/DashboardView'
 import { SuitesView } from '@/views/SuitesView'
 import { RunsView } from '@/views/RunsView'
 import { SchedulesView } from '@/views/SchedulesView'
+import { queryClient, idbPersister } from '@/lib/query-client'
 
 export const AppContent: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<RouteId>('dashboard')
@@ -23,11 +25,16 @@ export const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <ThemeProvider>
-      <TooltipProvider>
-        <AppContent />
-      </TooltipProvider>
-    </ThemeProvider>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{ persister: idbPersister }}
+    >
+      <ThemeProvider>
+        <TooltipProvider>
+          <AppContent />
+        </TooltipProvider>
+      </ThemeProvider>
+    </PersistQueryClientProvider>
   )
 }
 

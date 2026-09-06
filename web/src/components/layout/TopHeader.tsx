@@ -5,6 +5,7 @@ import { PRIMARY_NAV_ITEMS, RouteId } from '@/types/navigation'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
+import { InstallButton } from '@/components/ui/install-button'
 
 interface TopHeaderProps {
   currentRoute: RouteId
@@ -68,6 +69,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ currentRoute, onOpenDrawer
           </TooltipTrigger>
           <TooltipContent>OpenAPI 3.1 Specification</TooltipContent>
         </Tooltip>
+
+        {/* Install PWA Prompt Button */}
+        <InstallButton />
 
         {/* Theme Toggle */}
         <ThemeToggle />

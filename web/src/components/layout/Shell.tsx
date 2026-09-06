@@ -7,6 +7,7 @@ import { BottomNav } from './BottomNav'
 import { SkipLink } from '@/components/ui/skip-link'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/toaster'
+import { OfflineBanner } from '@/components/ui/offline-banner'
 
 interface ShellProps {
   currentRoute: RouteId
@@ -32,6 +33,9 @@ export const Shell: React.FC<ShellProps> = ({ currentRoute, onSelectRoute, child
 
         {/* Main Content Area */}
         <div className="flex flex-1 flex-col min-w-0">
+          {/* Offline Indicator Banner */}
+          <OfflineBanner />
+
           {/* Top Header */}
           <TopHeader
             currentRoute={currentRoute}

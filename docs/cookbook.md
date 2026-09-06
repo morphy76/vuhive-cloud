@@ -1237,6 +1237,74 @@ The test suite includes automated **axe-core** WCAG 2.1 AA audits integrated via
 pnpm --dir web test
 ```
 
+#### 9. Progressive Web App (PWA) Manifest & App Icons
+
+The web interface is configured as an installable Progressive Web App (PWA) via `vite-plugin-pwa`:
+- **Web App Manifest (`/manifest.webmanifest`)**:
+  - `name`: `vuhive-cloud`
+  - `short_name`: `vuhive`
+  - `display`: `standalone` (removes browser URL bar and controls for native app experience)
+  - `orientation`: `portrait-primary`
+  - `start_url`: `/`
+  - `theme_color`: `#0f172a` (slate-900 status bar on mobile)
+  - `background_color`: `#0f172a` (splash screen background)
+- **High-Resolution Multi-Platform Icons**:
+  - `favicon.svg`: Scalable vector icon for modern desktop browsers.
+  - `pwa-192x192.png`: Standard resolution icon for Android home screens and task switchers.
+  - `pwa-512x512.png`: High-resolution icon for splash screens and app stores.
+  - `pwa-maskable-512x512.png`: Adaptive maskable icon adhering to Android adaptive icon safe zones.
+  - `apple-touch-icon.png`: 180x180 iOS home screen icon declared via `<link rel="apple-touch-icon">`.
+
+#### 10. Service Worker & Workbox Caching Strategies
+
+Production builds automatically generate a Workbox service worker (`/sw.js`) with two complementary caching tiers:
+
+1. **Precached Bundle Assets & Cache-First Static Tier**:
+   - Workbox precaches all production compilation chunks (`assets/*.js`, `assets/*.css`, `index.html`, `manifest.webmanifest`, SVG and PNG icons).
+   - Additional static assets matching requests for styles, scripts, workers, images, and web fonts use a **Cache-First** strategy with a 30-day cache lifetime (`maxAgeSeconds: 2592000`) under cache name `vuhive-static-assets`.
+2. **Network-First Tier for API Read Endpoints**:
+   - Requests matching `/api/bff/v1/*` or `/api/v1/*` (GET operations) use a **Network-First** strategy with a 3-second network timeout.
+   - When online, requests fetch fresh backend responses and update cache name `vuhive-api-cache`.
+   - When offline or during network dropouts, Workbox immediately serves the cached API response (valid up to 24 hours), preventing failed fetches and page crashes.
+
+#### 11. Offline Read-Only Shell & TanStack Query Persistence
+
+To provide instant offline navigation across previously visited test suites, runs, and KPI reports, the frontend integrates **TanStack Query** persistence:
+- **IndexedDB Query Persistence (`idb-keyval`)**:
+  - Query cache state is automatically synchronized into browser IndexedDB via `@tanstack/react-query-persist-client`.
+  - Configured with `networkMode: 'offlineFirst'`, allowing cached data to resolve immediately when disconnected.
+  - Long garbage-collection time (`gcTime: 24h`) retains query results across browser sessions.
+- **Non-Intrusive Offline Indicator Banner**:
+  - The `useOnlineStatus` hook monitors browser connectivity via `window.addEventListener('online')` and `window.addEventListener('offline')`.
+  - When disconnected, the top-level `OfflineBanner` displays across all viewports:
+    `Offline Mode — Network connection unavailable. Displaying cached test data.`
+- **Contextual "Offline Preview" Badges**:
+  - While offline, table headers and action bars on the `Dashboard`, `Suites`, `Runs`, and `Schedules` views display an accessible `Offline Preview` badge indicating that the data on screen originates from the local persisted cache.
+
+#### 12. App Installation Prompt & Browser DevTools Verification
+
+The application listens for the native `beforeinstallprompt` event:
+- **Accessible Install Button**:
+  - An `Install` button (`InstallButton`) appears in the top header when the browser detects that the application meets all PWA installation criteria.
+  - Clicking the button invokes the browser's native installation prompt and handles user acceptance or dismissal.
+  - Automatically hides once installed (`appinstalled` event) or when running in standalone mode (`(display-mode: standalone)`).
+
+**Verifying PWA & Offline Functionality in Chrome DevTools**:
+
+1. **Audit with Lighthouse**:
+   - Open Chrome DevTools (`Cmd+Option+I` or `F12`) -> **Lighthouse** tab.
+   - Select **Progressive Web App** mode and click **Analyze page load**.
+   - Verify that the audit passes all PWA criteria: *Installable*, *Configured with a web app manifest*, *Registers a service worker*.
+2. **Inspect Service Worker & Manifest in Application Tab**:
+   - Navigate to **Application** -> **Manifest**: verify name, icons (including maskable preview), and colors.
+   - Navigate to **Application** -> **Service Workers**: verify status is *Activated and running*.
+3. **Simulate Offline Browsing**:
+   - In DevTools, go to the **Network** tab and select the throttling dropdown -> choose **Offline**.
+   - Navigate between **Dashboard**, **Test Suites**, and **Execution Runs**.
+   - Notice the amber **Offline Mode** banner appears at the top.
+   - Notice the **Offline Preview** badges appear on view headers.
+   - All previously visited views render cleanly without unhandled fetch exceptions or blank screens.
+
 ### Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)
 
 `vuhive-cloud` exposes its machine-readable OpenAPI 3.1 specification at `GET /openapi.json` and `GET /openapi.yaml`. When integrating frontend applications or exploring endpoints through third-party tools like Swagger UI, browser clients execute cross-origin HTTP requests subject to the browser's Same-Origin Policy.

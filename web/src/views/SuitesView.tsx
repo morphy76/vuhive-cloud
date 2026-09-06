@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { CreateSuiteDialog } from '@/components/dialogs/CreateSuiteDialog'
+import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 
 export const SuitesView: React.FC = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -48,13 +49,16 @@ export const SuitesView: React.FC = () => {
           </p>
         </div>
 
-        <Button
-          onClick={() => setIsCreateOpen(true)}
-          className="min-h-[44px] gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Suite</span>
-        </Button>
+        <div className="flex items-center gap-3">
+          <OfflinePreviewBadge />
+          <Button
+            onClick={() => setIsCreateOpen(true)}
+            className="min-h-[44px] gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>New Suite</span>
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">

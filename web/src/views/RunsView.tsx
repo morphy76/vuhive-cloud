@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
+import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 
 export const RunsView: React.FC = () => {
   const [isRunDialogOpen, setIsRunDialogOpen] = useState(false)
@@ -54,13 +55,16 @@ export const RunsView: React.FC = () => {
           </p>
         </div>
 
-        <Button
-          onClick={() => setIsRunDialogOpen(true)}
-          className="min-h-[44px] gap-2"
-        >
-          <Play className="w-4 h-4 fill-current" />
-          <span>New Execution</span>
-        </Button>
+        <div className="flex items-center gap-3">
+          <OfflinePreviewBadge />
+          <Button
+            onClick={() => setIsRunDialogOpen(true)}
+            className="min-h-[44px] gap-2"
+          >
+            <Play className="w-4 h-4 fill-current" />
+            <span>New Execution</span>
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">

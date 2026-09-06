@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
+import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 
 export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({ onNavigate }) => {
   const [isRunDialogOpen, setIsRunDialogOpen] = React.useState(false)
@@ -59,6 +60,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
 
         {/* Quick action buttons */}
         <div className="flex items-center gap-3">
+          <OfflinePreviewBadge />
           <Button
             variant="outline"
             onClick={() => onNavigate?.('runs')}
