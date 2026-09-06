@@ -1,7 +1,7 @@
 {
   "name": "vuhive-cloud",
   "short_name": "vuhive",
-  "description": "vuhive-cloud Load Testing Dashboard (Placeholder)",
+  "description": "vuhive-cloud Distributed Load Testing Control Plane",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
