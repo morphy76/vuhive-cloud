@@ -13,7 +13,7 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
 - 🧩 **Reusable Runner Profiles**: Decouple test scenario code from infrastructure scheduling. Define reusable profiles specifying CPU/memory requests and limits, node selectors, tolerations, and node affinities for targeted execution.
 - ⏰ **Native Kubernetes CronJob Scheduling**: Declarative scheduling mapped 1-to-1 to native Kubernetes `batch/v1` `CronJob`s with standard cron syntax (`0 2 * * *`), eliminating external scheduler dependencies.
 - 📊 **Automated KPI Indexing & SLA Verification**: Automatically parses deterministic execution reports (`summary.json`), extracting and indexing latency percentiles ($p_{50}$, $p_{90}$, $p_{95}$, $p_{99}$), throughput (TPS), error rates, and SLA pass/fail status into PostgreSQL.
-- 📈 **Execution Reports, Logs & Metrics Query API**: Query and filter historical runs by suite, schedule, status, and date range. Fetch indexed performance KPIs, full deterministic execution reports (`summary.json`), and runner stdout/stderr logs directly or as presigned S3 download URLs. Fully documented via [OpenAPI 3.0.3](./api/openapi.yaml).
+- 📈 **Execution Reports, Logs & Metrics Query API**: Query and filter historical runs by suite, schedule, status, and date range. Fetch indexed performance KPIs, full deterministic execution reports (`summary.json`), and runner stdout/stderr logs directly or as presigned S3 download URLs. Fully documented via [OpenAPI 3.0.3](./api/openapi.yaml) and interactively testable via the optional Swagger UI viewer in the infrastructure chart.
 - 📦 **Pluggable Object Storage**: Integrates seamlessly with AWS S3 or MinIO for long-term retention of source packages, compiled binaries, full execution logs, and detailed performance summaries.
 - ⏱ **Distributed Start Barrier Synchronization**: Built-in rendezvous coordinator guarantees multi-pod distributed load generators synchronize and fire simultaneously without clock skew.
 - 🛑 **Execution Lifecycle Control & Graceful Abort**: Monitor active runs in real time and abort executions on demand (`POST /api/v1/runs/{id}/abort`), instantly tearing down Kubernetes workloads while propagating SIGTERM for partial log flush, updating state to `ABORTED` with audited cancellation metadata, and reclaiming cluster resources.
@@ -79,7 +79,7 @@ For complete details on our development methodology, human oversight model, and 
 | **[`README.md`](./README.md)** | **Introduction & Overview**: System capabilities, architectural topology, and project roadmap. |
 | **[`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md)** | **Development Philosophy & AI Disclosure**: Spec-Driven Development (SDD) paradigm, human vs. agent responsibility division, and quality gates. |
 | **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Installation**: Production Helm deployment guide, configuration values reference, external secrets, RBAC, and security hardening. |
-| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation**: Quickstart backing services setup for evaluation (PostgreSQL + MinIO). |
+| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation**: Quickstart backing services setup for evaluation (PostgreSQL + MinIO + optional OpenAPI Swagger UI viewer). |
 | **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & API Recipes**: End-to-end recipes for packaging test suites, configuring runner profiles, scheduling CronJobs, dispatching runs, and querying KPIs. |
 | **[`api/openapi.yaml`](./api/openapi.yaml)** | **REST API Reference**: Full OpenAPI 3.0.3 specification covering all control plane endpoints, schemas, and abort lifecycle APIs. |
 | **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | **Architectural Specification**: Bounded contexts, DDD domain aggregates, database schema (DDL), and security postures. |
@@ -99,7 +99,7 @@ helm repo add groundhog2k https://groundhog2k.github.io/helm-charts/
 helm repo add minio https://charts.min.io/
 helm repo update
 
-# 2. Deploy infrastructure (PostgreSQL + MinIO)
+# 2. Deploy infrastructure (PostgreSQL + MinIO + optional Swagger UI)
 helm dependency build deploy/helm/vuhive-cloud-infra
 helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --namespace vuhive-system \
@@ -107,7 +107,7 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --wait --timeout=180s
 ```
 
-> For details on database and storage parameters, see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
+> For details on database, storage parameters, and enabling the optional OpenAPI viewer (Swagger UI), see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
 
 ### 2. Deploy vuhive-cloud Control Plane
 Deploy the control plane connected to the local infrastructure:
@@ -195,7 +195,7 @@ make help
 This project is licensed under the [MIT License](./LICENSE).
 The control plane exposes its REST API at port `8080`. See [`api/openapi.yaml`](./api/openapi.yaml) for the full API reference.
 For detailed Helm configuration options, see the chart READMEs:
-- [`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md) — infrastructure (PostgreSQL + MinIO)
+- [`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md) — infrastructure (PostgreSQL + MinIO + optional Swagger UI viewer)
 - [`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md) — control plane (namespace management, RBAC modes, all parameters)
 
 ## Documents in this Package
