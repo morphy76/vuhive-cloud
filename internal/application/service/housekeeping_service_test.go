@@ -191,8 +191,6 @@ func (m *mockHousekeepingRunRepo) DeleteBatch(_ context.Context, ids []string) (
 
 type mockHousekeepingArtifactRepo struct {
 	artifacts    map[string]*model.Artifact
-	orphans      []*model.Artifact
-	expired      []*model.Artifact
 	clearedKeys  []string
 	deletedBatch []string
 }
