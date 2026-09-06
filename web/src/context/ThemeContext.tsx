@@ -16,9 +16,13 @@ const THEME_STORAGE_KEY = 'vuhive-theme'
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window === 'undefined') return 'system'
-    const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null
-    if (stored === 'light' || stored === 'dark' || stored === 'system') {
-      return stored
+    try {
+      const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null
+      if (stored === 'light' || stored === 'dark' || stored === 'system') {
+        return stored
+      }
+    } catch {
+      // Ignore security errors in restricted environments
     }
     return 'system'
   })
@@ -49,7 +53,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme)
-    localStorage.setItem(THEME_STORAGE_KEY, newTheme)
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, newTheme)
+    } catch {
+      // Ignore storage errors in private browsing modes
+    }
   }
 
   const toggleTheme = () => {

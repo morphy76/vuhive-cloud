@@ -158,7 +158,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
               <a
                 href="/openapi.yaml"
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300"
               >
                 <span>OpenAPI 3.1 Specification</span>
@@ -168,7 +168,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
               <a
                 href="https://github.com/morphy76/vuhive-cloud/blob/main/docs/cookbook.md"
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300"
               >
                 <span>Control Plane Cookbook</span>

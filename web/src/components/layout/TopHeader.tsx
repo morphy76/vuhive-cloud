@@ -52,7 +52,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ currentRoute, onOpenDrawer
         <a
           href="/openapi.yaml"
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
           title="OpenAPI 3.1 Specification"
           className="hidden md:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200 dark:border-slate-800"
         >
