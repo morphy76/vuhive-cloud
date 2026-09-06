@@ -1,0 +1,46 @@
+{{- if .Values.openapiViewer.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vuhive-cloud-infra.openapiViewer.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud-infra.openapiViewer.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "vuhive-cloud-infra.openapiViewer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vuhive-cloud-infra.openapiViewer.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: openapi-viewer
+          image: "{{ .Values.openapiViewer.image.repository }}:{{ .Values.openapiViewer.image.tag }}"
+          imagePullPolicy: {{ .Values.openapiViewer.image.pullPolicy }}
+          env:
+            - name: URL
+              value: {{ .Values.openapiViewer.specUrl | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          {{- with .Values.openapiViewer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

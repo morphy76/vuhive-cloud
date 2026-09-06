@@ -126,6 +126,10 @@ thresholds:
 
 All examples assume the control plane is reachable at `http://vuhive-cloud.vuhive-system.svc.cluster.local:8080` (or `http://localhost:8080` when port-forwarded).
 
+> [!TIP]
+> **Interactive API Exploration with Swagger UI**:
+> If you deployed the optional OpenAPI viewer in `vuhive-cloud-infra` (`openapiViewer.enabled: true`), you can test all API recipes interactively from your browser at `http://localhost:8081` (via `kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openapi-viewer 8081:8080`). The viewer reads directly from the control plane's `GET /openapi.json` endpoint.
+
 ### Recipe 1: Registering a Test Suite & Uploading Source Packages
 
 Upload the source archive to trigger an asynchronous compilation build job in Kubernetes.
@@ -878,5 +882,5 @@ During frontend development (e.g. running Vite on port `5173`), start the Go BFF
 - **[OpenAPI 3.0.3 Specification](../api/openapi.yaml)**: Complete REST API contract, interactive endpoints, and request/response schemas.
 - **[Main Project README](../README.md)**: System overview, architecture diagram, and repository roadmap.
 - **[vuhive-cloud Helm Chart](../deploy/helm/vuhive-cloud/README.md)**: Production deployment instructions and configuration parameter reference.
-- **[vuhive-cloud-infra Helm Chart](../deploy/helm/vuhive-cloud-infra/README.md)**: Local backing services guide (PostgreSQL + MinIO).
+- **[vuhive-cloud-infra Helm Chart](../deploy/helm/vuhive-cloud-infra/README.md)**: Local backing services guide (PostgreSQL + MinIO + Swagger UI OpenAPI viewer).
 - **[Architecture Specification](../ARCHITECTURE_SPEC.md)**: Complete internal hexagonal architecture, DDL schemas, and domain models.

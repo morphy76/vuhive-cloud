@@ -29,3 +29,28 @@ helm.sh/chart: {{ include "vuhive-cloud-infra.name" . }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/part-of: vuhive-cloud
 {{- end }}
+
+{{/*
+OpenAPI Viewer fullname
+*/}}
+{{- define "vuhive-cloud-infra.openapiViewer.fullname" -}}
+{{- printf "%s-openapi-viewer" (include "vuhive-cloud-infra.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+OpenAPI Viewer labels
+*/}}
+{{- define "vuhive-cloud-infra.openapiViewer.labels" -}}
+{{ include "vuhive-cloud-infra.labels" . }}
+app.kubernetes.io/name: {{ include "vuhive-cloud-infra.name" . }}-openapi-viewer
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: openapi-viewer
+{{- end }}
+
+{{/*
+OpenAPI Viewer selector labels
+*/}}
+{{- define "vuhive-cloud-infra.openapiViewer.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "vuhive-cloud-infra.name" . }}-openapi-viewer
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
