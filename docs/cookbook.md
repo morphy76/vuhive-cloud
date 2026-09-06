@@ -30,6 +30,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 9: Execution Diagnostics, Log Inspection & Troubleshooting](#recipe-9-execution-diagnostics-log-inspection--troubleshooting)
     - [Recipe 10: Inspecting BFF Gateway Status & Session Management](#recipe-10-inspecting-bff-gateway-status--session-management)
     - [Recipe 11: Accessing the Embedded Web Dashboard & PWA Routing](#recipe-11-accessing-the-embedded-web-dashboard--pwa-routing)
+    - [Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors)
 
 ---
 
@@ -911,6 +912,93 @@ During frontend development (e.g. running Vite on port `5173`), start the Go BFF
 ```bash
 ./bin/bff --port=8081 --control-plane-url=http://localhost:8080 --dev-proxy-url=http://localhost:5173
 ```
+
+### Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)
+
+`vuhive-cloud` exposes its machine-readable OpenAPI 3.1 specification at `GET /openapi.json` and `GET /openapi.yaml`. When integrating frontend applications or exploring endpoints through third-party tools like Swagger UI, browser clients execute cross-origin HTTP requests subject to the browser's Same-Origin Policy.
+
+The `vuhive-cloud` control plane includes built-in CORS middleware that automatically handles preflight `OPTIONS` requests and injects the necessary CORS headers.
+
+#### 1. Interactive Exploration via Bundled Swagger UI
+
+Deploy Swagger UI using the infrastructure chart:
+
+```bash
+helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
+  --namespace vuhive-system \
+  --set openapiViewer.enabled=true
+```
+
+Forward ports to access the viewer:
+
+```bash
+# Port-forward the OpenAPI Swagger UI viewer (port 8081)
+kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openapi-viewer 8081:8080 &
+
+# Port-forward the vuhive-cloud control plane (port 8080)
+kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080 &
+```
+
+Open `http://localhost:8081` in your browser. Swagger UI initiates a browser `fetch()` to `http://localhost:8080/openapi.json`. Because cross-origin headers are returned, the browser loads the complete OpenAPI specification seamlessly.
+
+#### 2. Preflight OPTIONS Request Verification
+
+For complex HTTP requests (e.g. `POST /api/v1/suites/{id}/builds` with custom headers or multipart form data), web browsers first send an HTTP `OPTIONS` preflight request:
+
+```bash
+curl -s -i -X OPTIONS http://localhost:8080/openapi.json \
+  -H "Origin: http://localhost:8081" \
+  -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: Content-Type, X-Request-ID"
+```
+
+Response:
+```http
+HTTP/1.1 204 No Content
+Access-Control-Allow-Headers: Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-Request-ID
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, HEAD
+Access-Control-Allow-Origin: *
+Access-Control-Expose-Headers: Content-Length, X-Request-ID
+Access-Control-Max-Age: 86400
+X-Request-ID: 7b3137d6-3e7e-4ee2-bb5a-a530752199b5
+Date: Sun, 06 Sep 2026 14:00:00 GMT
+```
+
+#### 3. Actual Request with Origin Header
+
+When any REST or OpenAPI endpoint is queried with an `Origin` header, the control plane sets `Access-Control-Allow-Origin`:
+
+```bash
+curl -s -i http://localhost:8080/api/v1/health \
+  -H "Origin: http://localhost:8081"
+```
+
+Response:
+```http
+HTTP/1.1 200 OK
+Access-Control-Allow-Headers: Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-Request-ID
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, HEAD
+Access-Control-Allow-Origin: *
+Access-Control-Expose-Headers: Content-Length, X-Request-ID
+Access-Control-Max-Age: 86400
+Content-Type: application/json; charset=utf-8
+X-Request-ID: ece663eb-62a6-4be7-baae-ca0bbdd4d79d
+Date: Sun, 06 Sep 2026 14:00:00 GMT
+
+{"status":"ok"}
+```
+
+#### 4. Restricting Allowed Origins in Production
+
+By default, `vuhive-cloud` allows all origins (`*`) for frictionless local development. In restricted production environments, configure specific allowed origins via the `CORS_ALLOWED_ORIGINS` environment variable or Helm values:
+
+```yaml
+# values.yaml
+cors:
+  allowedOrigins: "https://dashboard.example.com,https://staging.example.com"
+```
+
+When specific origins are specified, the control plane returns `Access-Control-Allow-Origin: <origin>` and `Vary: Origin` only for matching origins, rejecting unauthorized cross-origin requests.
 
 ---
 

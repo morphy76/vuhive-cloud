@@ -7,6 +7,7 @@ metadata:
     {{- include "vuhive-cloud.labels" . | nindent 4 }}
 data:
   PORT: {{ .Values.service.targetPort | toString | quote }}
+  CORS_ALLOWED_ORIGINS: {{ (default (dict) .Values.cors).allowedOrigins | default "*" | quote }}
   S3_ENDPOINT: {{ .Values.s3.endpoint | quote }}
   S3_REGION: {{ .Values.s3.region | quote }}
   S3_BUCKET: {{ .Values.s3.bucket | quote }}
