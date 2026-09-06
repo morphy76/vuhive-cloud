@@ -417,7 +417,7 @@ When the runner Job spawns:
 │                                                                        │
 │ 3. Wrapper Finalization:                                               │
 │    - Uploads run.log & summary.json to S3                             │
-│    - Invokes POST /api/v1/runs/{id}/complete callback                 │
+│    - Invokes POST /api/v1/runs/complete (or /:id/complete) callback   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -433,7 +433,43 @@ kubectl wait --namespace vuhive-runners \
 
 ### Recipe 6: Reporting Run Completion, Ingesting KPIs & Querying Historical Runs
 
-Upon workload completion, the runner wrapper uploads execution artifacts to S3 and notifies the control plane callback endpoint. This endpoint can also be invoked directly by custom CI/CD pipelines:
+Upon workload completion, the runner wrapper uploads execution artifacts to S3 and notifies the control plane callback endpoint.
+
+The control plane exposes two interchangeable callback routes:
+1. **Body-driven (`POST /api/v1/runs/complete`)**: Invoked by standard runner pods, where `run_id` is passed within the request body.
+2. **Path-driven (`POST /api/v1/runs/{id}/complete`)**: Where `id` is specified in the URL path.
+
+#### Callback Network & DNS Considerations
+In Kubernetes environments:
+- When runners share the control plane namespace, `API_CALLBACK_URL` defaults to the unqualified service name `http://<fullname>:<port>/api/v1/runs/complete`, avoiding DNS search domain overhead.
+- When runners execute in a separate namespace (e.g., `vuhive-runners`), `API_CALLBACK_URL` defaults to the absolute FQDN with a trailing dot: `http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete`. This trailing dot prevents standard Linux `/etc/resolv.conf` `ndots:5` lookups from leaking to external upstream DHCP search domains before reaching CoreDNS.
+
+#### Triggering Callback via POST /api/v1/runs/complete:
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/runs/complete \
+  -H "Content-Type: application/json" \
+  -d '{
+    "run_id": "98bc19d4-1a3b-4882-a982-ff012498beaa",
+    "exit_code": 0,
+    "report_key": "runs/98bc19d4/summary.json",
+    "logs_key": "runs/98bc19d4/run.log",
+    "finished_at": "2026-09-05T10:15:30Z",
+    "summary": {
+      "total_iterations": 25000,
+      "total_requests": 100000,
+      "avg_tps": 1666.67,
+      "p50_duration_ms": 12.4,
+      "p90_duration_ms": 28.1,
+      "p95_duration_ms": 45.2,
+      "p99_duration_ms": 89.6,
+      "error_rate_pct": 0.02,
+      "status": "PASS"
+    }
+  }'
+```
+
+Alternatively, you can call the path-scoped endpoint `POST /api/v1/runs/98bc19d4-1a3b-4882-a982-ff012498beaa/complete`:
 
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff012498beaa/complete \

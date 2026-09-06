@@ -138,7 +138,16 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set builder.namespace=vuhive-system
 ```
 
-In this case no extra namespaces are created and no cross-namespace RBAC is needed.
+In this case no extra namespaces are created and no cross-namespace RBAC is needed. Furthermore, `apiCallbackUrl` automatically resolves to the unqualified service name `http://<fullname>:<port>/api/v1/runs/complete`.
+
+### Runner Completion Callbacks and DNS Search Domain Mitigation
+
+Runner containers upload execution artifacts (`run.log` and `summary.json`) to S3 and post completion telemetry to the control plane callback endpoint (`POST /api/v1/runs/complete`).
+
+To ensure callback requests succeed across different Kubernetes network setups:
+- **Same Namespace (`runner.namespace == Release.Namespace`)**: The chart automatically configures `apiCallbackUrl` as `http://<fullname>:<port>/api/v1/runs/complete`. With 0 dots, standard Kubernetes pods resolve the service name directly via the local namespace search domain without traversing upstream search lists.
+- **Cross-Namespace (`runner.namespace != Release.Namespace`)**: Standard Kubernetes pods have `ndots:5` in `/etc/resolv.conf`. Because `<service>.<namespace>.svc.cluster.local` has 4 dots, standard resolvers query host/DHCP upstream search domains first, which can cause connection failures if upstream wildcard DNS returns `127.0.0.1`. The chart mitigates this by generating a fully qualified domain name with a **trailing dot** (`http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete`), bypassing search lists and directing the query straight to CoreDNS.
+- **Custom Override**: You can override `apiCallbackUrl` explicitly with `--set apiCallbackUrl=...` if you route runner callbacks through custom gateways or ingresses.
 
 ## Configuration Parameters
 
@@ -179,4 +188,4 @@ In this case no extra namespaces are created and no cross-namespace RBAC is need
 | `builder.namespace` | Namespace where test builder jobs run | `vuhive-system` |
 | `builder.createNamespace` | Automatically create `builder.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release/runner namespace) | `true` |
 | `builder.image` | Builder container image | `golang:1.26-alpine` |
-| `apiCallbackUrl` | Callback URL for runner jobs | Auto-computed |
+| `apiCallbackUrl` | Callback URL for runner jobs. Auto-computed with path `/api/v1/runs/complete`: unqualified service name in same namespace, or trailing-dot FQDN in cross-namespace mode to prevent `ndots:5` search leaks. | Auto-computed |

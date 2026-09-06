@@ -74,11 +74,17 @@ Construct the PostgreSQL connection string.
 
 {{/*
 Construct the runner API callback URL.
+When runner.namespace differs from the release namespace, uses the cluster FQDN with a trailing dot
+(http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete) to prevent upstream ndots:5
+search domain leaks. When runner and control plane share the same namespace, uses the unqualified
+service name (http://<fullname>:<port>/api/v1/runs/complete).
 */}}
 {{- define "vuhive-cloud.apiCallbackUrl" -}}
 {{- if .Values.apiCallbackUrl }}
 {{- .Values.apiCallbackUrl }}
+{{- else if and .Values.runner.namespace (ne .Values.runner.namespace .Release.Namespace) }}
+{{- printf "http://%s.%s.svc.cluster.local.:%d/api/v1/runs/complete" (include "vuhive-cloud.fullname" .) .Release.Namespace (.Values.service.port | int) }}
 {{- else }}
-{{- printf "http://%s.%s.svc.cluster.local:%d" (include "vuhive-cloud.fullname" .) .Release.Namespace (.Values.service.port | int) }}
+{{- printf "http://%s:%d/api/v1/runs/complete" (include "vuhive-cloud.fullname" .) (.Values.service.port | int) }}
 {{- end }}
 {{- end }}

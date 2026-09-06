@@ -1296,7 +1296,7 @@
     },
     "/api/v1/runs/complete": {
       "post": {
-        "description": "Internal runner callback endpoint invoked upon test completion where run_id is supplied\nin the request body payload.\n",
+        "description": "Internal runner callback endpoint invoked upon test completion where run_id is supplied\nin the request body payload. Serves as the primary callback target for Kubernetes runner workloads.\n",
         "operationId": "completeRunFromBody",
         "requestBody": {
           "content": {

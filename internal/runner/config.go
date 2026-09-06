@@ -143,14 +143,26 @@ func (c *WrapperConfig) Validate() error {
 		c.ReleaseDelay = 300 * time.Millisecond
 	}
 
-	c.CoordinatorURL = strings.TrimSpace(c.CoordinatorURL)
-	if c.CoordinatorURL == "" && c.APICallbackURL != "" {
-		base := strings.TrimSuffix(c.APICallbackURL, "/complete")
-		base = strings.TrimSuffix(base, "/runs")
-		if !strings.Contains(base, "/api/v1/runs") {
-			base = strings.TrimRight(base, "/") + "/api/v1/runs"
+	c.APICallbackURL = strings.TrimRight(strings.TrimSpace(c.APICallbackURL), "/")
+	if c.APICallbackURL != "" {
+		if !strings.HasSuffix(c.APICallbackURL, "/complete") {
+			base := c.APICallbackURL
+			if !strings.Contains(base, "/api/v1/runs") {
+				base = base + "/api/v1/runs"
+			}
+			c.APICallbackURL = base + "/complete"
 		}
-		c.CoordinatorURL = fmt.Sprintf("%s/%s/barrier", base, c.RunID)
+	}
+
+	c.CoordinatorURL = strings.TrimSpace(c.CoordinatorURL)
+	if c.CoordinatorURL == "" && c.APICallbackURL != "" && c.RunID != "" {
+		if idx := strings.Index(c.APICallbackURL, "/api/v1/runs"); idx != -1 {
+			prefix := c.APICallbackURL[:idx]
+			c.CoordinatorURL = fmt.Sprintf("%s/api/v1/runs/%s/barrier", prefix, c.RunID)
+		} else {
+			base := strings.TrimRight(c.APICallbackURL, "/")
+			c.CoordinatorURL = fmt.Sprintf("%s/api/v1/runs/%s/barrier", base, c.RunID)
+		}
 	}
 
 	return nil

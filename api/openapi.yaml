@@ -452,7 +452,7 @@ paths:
       summary: Finalize test run execution and ingest summary report (callback without path ID)
       description: |
         Internal runner callback endpoint invoked upon test completion where run_id is supplied
-        in the request body payload.
+        in the request body payload. Serves as the primary callback target for Kubernetes runner workloads.
       operationId: completeRunFromBody
       tags:
         - Runs
