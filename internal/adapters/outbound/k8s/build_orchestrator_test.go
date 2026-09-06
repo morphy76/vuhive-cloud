@@ -208,3 +208,38 @@ func TestBuildOrchestrator_WaitForJob_ContextTimeout(t *testing.T) {
 	_, err := orchestrator.WaitForJob(ctx, jobName)
 	assert.ErrorIs(t, err, model.ErrTimeout)
 }
+
+func TestBuildOrchestrator_DispatchBuildJob_PrunesStaleJob(t *testing.T) {
+	cfg := k8s.DefaultConfig()
+	client := fake.NewSimpleClientset()
+	orchestrator := k8s.NewBuildOrchestrator(client, cfg)
+
+	ctx := context.Background()
+	opts := outbound.BuildJobOptions{
+		SuiteID:         "11111111-1111-1111-1111-111111111111",
+		ArtifactID:      "33333333-3333-3333-3333-333333333333",
+		Platform:        model.PlatformLinuxAmd64,
+		SourceURL:       "https://s3.example.com/source.tar.gz",
+		BinaryUploadURL: "https://s3.example.com/binary",
+	}
+
+	// First dispatch — succeeds and creates the job
+	jobName, err := orchestrator.DispatchBuildJob(ctx, opts)
+	require.NoError(t, err)
+	require.NotEmpty(t, jobName)
+
+	// Verify the job exists
+	_, err = client.BatchV1().Jobs(cfg.Namespace).Get(ctx, jobName, metav1.GetOptions{})
+	require.NoError(t, err)
+
+	// Second dispatch with the same artifact ID (simulating a retry after failure).
+	// The orchestrator must prune the stale job and create a fresh one without error.
+	jobName2, err := orchestrator.DispatchBuildJob(ctx, opts)
+	require.NoError(t, err)
+	assert.Equal(t, jobName, jobName2, "canonical job name should be identical across retries")
+
+	// Verify the job still exists (was re-created)
+	job, err := client.BatchV1().Jobs(cfg.Namespace).Get(ctx, jobName2, metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, jobName2, job.Name)
+}

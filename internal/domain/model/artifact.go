@@ -215,6 +215,19 @@ func (a *Artifact) MarkFailed(errorMessage, buildLogsS3Key string) error {
 	return nil
 }
 
+// RetryBuild resets a FAILED artifact back to PENDING, clearing previous error state,
+// and allowing a new compilation attempt to proceed from a clean baseline.
+// Only valid from the FAILED state; any other status returns ErrInvalidStateTransition.
+func (a *Artifact) RetryBuild() error {
+	if a.status != ArtifactStatusFailed {
+		return ErrInvalidStateTransition
+	}
+	a.status = ArtifactStatusPending
+	a.errorMessage = ""
+	a.buildLogsS3Key = ""
+	return nil
+}
+
 func isValidSHA256(s string) bool {
 	if len(s) != 64 {
 		return false

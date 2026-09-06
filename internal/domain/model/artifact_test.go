@@ -131,6 +131,66 @@ func TestArtifact_StateTransitions(t *testing.T) {
 		assert.ErrorIs(t, art.MarkBuilding(), model.ErrTerminalState)
 		assert.ErrorIs(t, art.MarkReady("key", validChecksum), model.ErrTerminalState)
 	})
+}
+
+func TestArtifact_RetryBuild(t *testing.T) {
+	validChecksum := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+	t.Run("FAILED -> PENDING succeeds and clears error state", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, art.MarkFailed("compilation error", "s3://logs/build.log"))
+
+		err = art.RetryBuild()
+		require.NoError(t, err)
+		assert.Equal(t, model.ArtifactStatusPending, art.Status())
+		assert.Empty(t, art.ErrorMessage())
+		assert.Empty(t, art.BuildLogsS3Key())
+	})
+
+	t.Run("RetryBuild from PENDING returns ErrInvalidStateTransition", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		assert.Equal(t, model.ArtifactStatusPending, art.Status())
+
+		err = art.RetryBuild()
+		assert.ErrorIs(t, err, model.ErrInvalidStateTransition)
+	})
+
+	t.Run("RetryBuild from BUILDING returns ErrInvalidStateTransition", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, art.MarkBuilding())
+
+		err = art.RetryBuild()
+		assert.ErrorIs(t, err, model.ErrInvalidStateTransition)
+	})
+
+	t.Run("RetryBuild from READY returns ErrInvalidStateTransition", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, art.MarkBuilding())
+		require.NoError(t, art.MarkReady("s3://bin/runner", validChecksum))
+
+		err = art.RetryBuild()
+		assert.ErrorIs(t, err, model.ErrInvalidStateTransition)
+	})
+
+	t.Run("after RetryBuild full lifecycle PENDING -> BUILDING -> READY succeeds", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, art.MarkFailed("previous failure", "s3://logs/old.log"))
+
+		require.NoError(t, art.RetryBuild())
+		assert.Equal(t, model.ArtifactStatusPending, art.Status())
+
+		require.NoError(t, art.MarkBuilding())
+		assert.Equal(t, model.ArtifactStatusBuilding, art.Status())
+
+		require.NoError(t, art.MarkReady("s3://bin/runner-v2", validChecksum))
+		assert.Equal(t, model.ArtifactStatusReady, art.Status())
+		assert.Equal(t, "s3://bin/runner-v2", art.S3BinaryKey())
+	})
 
 	t.Run("validation on MarkReady: empty s3Key or invalid checksum", func(t *testing.T) {
 		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
