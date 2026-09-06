@@ -66,6 +66,8 @@ kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openap
 
 Then navigate to `http://localhost:8081` in your browser. The viewer fetches the control plane's machine-readable specification from `http://vuhive-vuhive-cloud:8080/openapi.json` (configurable via `openapiViewer.specUrl`).
 
+Because modern web browsers enforce the Same-Origin Policy when fetching resources across different ports or hostnames, the `vuhive-cloud` control plane includes built-in Cross-Origin Resource Sharing (CORS) middleware and responds to HTTP `OPTIONS` preflight requests with `204 No Content` and standard CORS headers (`Access-Control-Allow-Origin: *`), ensuring seamless API exploration without browser blocks.
+
 ## Configuration Parameters
 
 | Parameter | Description | Default |

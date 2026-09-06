@@ -32,6 +32,7 @@ func SetupRouterWithBarrier(
 
 	router.Use(LoggingMiddleware())
 	router.Use(RecoveryMiddleware())
+	router.Use(CORSMiddleware())
 
 	// Health and liveness probes
 	healthHandler := func(c *gin.Context) {

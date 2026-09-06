@@ -2,6 +2,8 @@ package rest
 
 import (
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -66,6 +68,70 @@ func RecoveryMiddleware() gin.HandlerFunc {
 				})
 			}
 		}()
+		c.Next()
+	}
+}
+
+// CORSMiddleware provides Cross-Origin Resource Sharing (CORS) headers and handles
+// preflight HTTP OPTIONS requests for OpenAPI and REST endpoints.
+// Allowed origins can be passed directly as arguments, or retrieved from the
+// CORS_ALLOWED_ORIGINS environment variable (comma-separated).
+// If no origins are configured, it defaults to allowing all origins ("*").
+func CORSMiddleware(origins ...string) gin.HandlerFunc {
+	var allowedOrigins []string
+	if len(origins) > 0 {
+		for _, o := range origins {
+			for _, part := range strings.Split(o, ",") {
+				trimmed := strings.TrimSpace(part)
+				if trimmed != "" {
+					allowedOrigins = append(allowedOrigins, trimmed)
+				}
+			}
+		}
+	} else if envOrigins := os.Getenv("CORS_ALLOWED_ORIGINS"); envOrigins != "" {
+		for _, part := range strings.Split(envOrigins, ",") {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				allowedOrigins = append(allowedOrigins, trimmed)
+			}
+		}
+	}
+
+	allowAll := len(allowedOrigins) == 0
+	for _, o := range allowedOrigins {
+		if o == "*" {
+			allowAll = true
+			break
+		}
+	}
+
+	allowedOriginsMap := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		allowedOriginsMap[o] = struct{}{}
+	}
+
+	return func(c *gin.Context) {
+		reqOrigin := c.GetHeader("Origin")
+
+		if allowAll {
+			c.Header("Access-Control-Allow-Origin", "*")
+		} else if reqOrigin != "" {
+			if _, ok := allowedOriginsMap[reqOrigin]; ok {
+				c.Header("Access-Control-Allow-Origin", reqOrigin)
+				c.Header("Vary", "Origin")
+			}
+		}
+
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-Request-ID")
+		c.Header("Access-Control-Expose-Headers", "Content-Length, X-Request-ID")
+		c.Header("Access-Control-Max-Age", "86400")
+
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
 		c.Next()
 	}
 }

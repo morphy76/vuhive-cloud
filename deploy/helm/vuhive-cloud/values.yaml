@@ -145,6 +145,11 @@ builder:
 #   - http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete (cross-namespace, trailing dot mitigates ndots:5 upstream search hijacking)
 apiCallbackUrl: ""
 
+# ── CORS Configuration ────────────────────────────────────────────────
+cors:
+  # Allowed cross-origin domains for browser clients and Swagger UI (comma-separated or "*").
+  allowedOrigins: "*"
+
 nodeSelector: {}
 
 tolerations: []

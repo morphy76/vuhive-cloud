@@ -5,6 +5,10 @@ info:
     Cloud-native orchestration engine for distributed high-throughput load testing workloads on Kubernetes.
     Provides APIs for test suite compilation, runner profiles, scheduled execution (CronJobs),
     ad-hoc execution, start barrier synchronization, and historical telemetry / report query.
+
+    All endpoints support Cross-Origin Resource Sharing (CORS) and respond to HTTP OPTIONS preflight
+    requests with HTTP 204 No Content, allowing web browsers and tools like Swagger UI to explore and
+    interact with the API across different domains and ports.
   version: 0.0.1
 servers:
   - url: http://localhost:8080
