@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -124,5 +125,46 @@ func (h *Handler) GetRunDetail(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, ToRunDetailResponse(runDetail))
+}
+
+// Events handles GET /api/bff/v1/events and streams Server-Sent Events (SSE).
+func (h *Handler) Events(c *gin.Context) {
+	ctx := c.Request.Context()
+	log := zerolog.Ctx(ctx).With().Str("op", "Handler.Events").Logger()
+	log.Debug().Msg("establishing Server-Sent Events stream")
+
+	eventsCh, unsubscribe, err := h.bffService.SubscribeEvents(ctx)
+	if err != nil {
+		MapDomainError(c, err)
+		return
+	}
+	defer unsubscribe()
+
+	// Configure standard W3C text/event-stream headers
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("Transfer-Encoding", "chunked")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.Flush()
+
+	log.Info().Msg("client connected to SSE stream")
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("client disconnected from SSE stream")
+			return
+		case ev, ok := <-eventsCh:
+			if !ok {
+				log.Info().Msg("events stream channel closed")
+				return
+			}
+
+			_, _ = fmt.Fprintf(c.Writer, "id: %s\nevent: %s\ndata: %s\n\n", ev.ID, ev.Event, string(ev.Data))
+			c.Writer.Flush()
+		}
+	}
 }
 

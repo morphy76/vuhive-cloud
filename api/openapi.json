@@ -240,6 +240,59 @@
         ],
         "type": "object"
       },
+      "BuildStatusChangedPayload": {
+        "properties": {
+          "artifact_id": {
+            "example": "c7a6e118-20ab-48d6-953b-e01140026e61",
+            "type": "string"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "platform": {
+            "example": "linux/amd64",
+            "type": "string"
+          },
+          "previous_status": {
+            "example": "BUILDING",
+            "type": "string"
+          },
+          "s3_binary_key": {
+            "example": "artifacts/c7a6e118/runner",
+            "type": "string"
+          },
+          "sha256_checksum": {
+            "example": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "BUILDING",
+              "READY",
+              "FAILED"
+            ],
+            "example": "READY",
+            "type": "string"
+          },
+          "suite_id": {
+            "example": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "suite_id",
+          "platform",
+          "status",
+          "timestamp"
+        ],
+        "type": "object"
+      },
       "BuildTriggerResponse": {
         "properties": {
           "artifacts": {
@@ -1149,6 +1202,71 @@
         ],
         "type": "object"
       },
+      "RunStatusChangedPayload": {
+        "properties": {
+          "duration_ms": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "exit_code": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "k8s_job_name": {
+            "example": "vuhive-runner-3fa85f64",
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/RunMetrics"
+          },
+          "previous_status": {
+            "example": "QUEUED",
+            "type": "string"
+          },
+          "run_id": {
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "type": "string"
+          },
+          "sla_passed": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "COMPLETED",
+              "FAILED",
+              "ABORTED"
+            ],
+            "example": "RUNNING",
+            "type": "string"
+          },
+          "suite_id": {
+            "example": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "suite_id",
+          "status",
+          "timestamp"
+        ],
+        "type": "object"
+      },
       "ScheduleListResponse": {
         "properties": {
           "count": {
@@ -1215,6 +1333,38 @@
           "is_active",
           "created_at",
           "updated_at"
+        ],
+        "type": "object"
+      },
+      "ServerSentEvent": {
+        "properties": {
+          "data": {
+            "description": "Event payload matching the event type",
+            "type": "object"
+          },
+          "event": {
+            "enum": [
+              "run_status_changed",
+              "build_status_changed",
+              "system_heartbeat"
+            ],
+            "example": "run_status_changed",
+            "type": "string"
+          },
+          "id": {
+            "example": "run-a1b2c3d4-1",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "event",
+          "data",
+          "timestamp"
         ],
         "type": "object"
       },
@@ -1285,6 +1435,34 @@
           "state",
           "created_at",
           "updated_at"
+        ],
+        "type": "object"
+      },
+      "SystemHeartbeatPayload": {
+        "properties": {
+          "active_clients": {
+            "example": 2,
+            "type": "integer"
+          },
+          "active_runs": {
+            "example": 1,
+            "format": "int64",
+            "type": "integer"
+          },
+          "status": {
+            "example": "UP",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "active_clients",
+          "active_runs",
+          "timestamp"
         ],
         "type": "object"
       },
@@ -1450,6 +1628,38 @@
           }
         },
         "summary": "Aggregated composite dashboard overview",
+        "tags": [
+          "BFF"
+        ]
+      }
+    },
+    "/api/bff/v1/events": {
+      "get": {
+        "description": "Establishes a persistent text/event-stream connection to stream live test run state changes, artifact build transitions, and periodic system heartbeats.\n",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "description": "W3C text/event-stream format with event types run_status_changed, build_status_changed, and system_heartbeat.",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Persistent SSE event stream"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal error subscribing to event stream"
+          }
+        },
+        "summary": "Real-time Server-Sent Events (SSE) stream",
         "tags": [
           "BFF"
         ]
@@ -1647,6 +1857,38 @@
           }
         },
         "summary": "Aggregated composite dashboard overview (alias)",
+        "tags": [
+          "BFF"
+        ]
+      }
+    },
+    "/api/v1/bff/events": {
+      "get": {
+        "description": "Backwards-compatible alias for /api/bff/v1/events.",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "description": "W3C text/event-stream format with event types run_status_changed, build_status_changed, and system_heartbeat.",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Persistent SSE event stream"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal error subscribing to event stream"
+          }
+        },
+        "summary": "Real-time Server-Sent Events (SSE) stream (alias)",
         "tags": [
           "BFF"
         ]

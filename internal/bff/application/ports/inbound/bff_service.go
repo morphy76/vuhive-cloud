@@ -58,4 +58,6 @@ type BFFService interface {
 	GetSession(ctx context.Context, id model.SessionID) (*model.ClientSession, error)
 	GetDashboard(ctx context.Context) (*DashboardOverview, error)
 	GetRunDetail(ctx context.Context, id string) (*RunDetailComposite, error)
+	SubscribeEvents(ctx context.Context) (<-chan model.ServerSentEvent, func(), error)
+	BroadcastEvent(ctx context.Context, event model.ServerSentEvent) error
 }

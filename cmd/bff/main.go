@@ -15,6 +15,7 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/inbound/rest"
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/cache"
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/controlplane"
+	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/eventhub"
 	"github.com/morphy76/vuhive-cloud/internal/bff/application/service"
 	"github.com/morphy76/vuhive-cloud/internal/version"
 	"github.com/morphy76/vuhive-cloud/web"
@@ -30,6 +31,8 @@ func main() {
 	staticDirFlag := flag.String("static-dir", "", "Local static directory for web assets (defaults to STATIC_DIR env, overrides embedded assets)")
 	tokenFlag := flag.String("control-plane-token", "", "Bearer token for control plane API (defaults to CONTROL_PLANE_TOKEN env)")
 	retriesFlag := flag.Int("control-plane-retries", 2, "Max retries for idempotent control plane requests")
+	ssePollFlag := flag.Duration("sse-poll-interval", 0, "Polling interval for active run/build state changes (defaults to SSE_POLL_INTERVAL env or 2s)")
+	sseHbFlag := flag.Duration("sse-heartbeat-interval", 0, "Heartbeat interval for SSE streams (defaults to SSE_HEARTBEAT_INTERVAL env or 15s)")
 	flag.Parse()
 
 	if *showVersion {
@@ -74,6 +77,30 @@ func main() {
 		staticDir = os.Getenv("STATIC_DIR")
 	}
 
+	pollInterval := *ssePollFlag
+	if pollInterval <= 0 {
+		if envVal := os.Getenv("SSE_POLL_INTERVAL"); envVal != "" {
+			if d, err := time.ParseDuration(envVal); err == nil && d > 0 {
+				pollInterval = d
+			}
+		}
+	}
+	if pollInterval <= 0 {
+		pollInterval = 2 * time.Second
+	}
+
+	heartbeatInterval := *sseHbFlag
+	if heartbeatInterval <= 0 {
+		if envVal := os.Getenv("SSE_HEARTBEAT_INTERVAL"); envVal != "" {
+			if d, err := time.ParseDuration(envVal); err == nil && d > 0 {
+				heartbeatInterval = d
+			}
+		}
+	}
+	if heartbeatInterval <= 0 {
+		heartbeatInterval = 15 * time.Second
+	}
+
 	log.Info().
 		Str("version", version.Version).
 		Str("commit", version.Commit).
@@ -82,6 +109,8 @@ func main() {
 		Str("control_plane_url", cpURL).
 		Str("dev_proxy_url", devProxyURLStr).
 		Str("static_dir", staticDir).
+		Dur("sse_poll_interval", pollInterval).
+		Dur("sse_heartbeat_interval", heartbeatInterval).
 		Msg("starting vuhive-cloud backend-for-frontend (bff) service")
 
 	// Initialize outbound adapters
@@ -92,9 +121,22 @@ func main() {
 		MaxRetries: maxRetries,
 	})
 	cacheAdapter := cache.NewMemoryCache()
+	eventHub := eventhub.NewHub(64)
 
 	// Initialize application service
-	bffService := service.NewBFFService(cpClient, cacheAdapter, version.Version)
+	bffService := service.NewBFFService(cpClient, cacheAdapter, version.Version, eventHub)
+
+	// Start background event poller for live status updates
+	poller := service.NewPoller(cpClient, eventHub, service.PollerConfig{
+		PollInterval:      pollInterval,
+		HeartbeatInterval: heartbeatInterval,
+	})
+	pollerCtx, pollerCancel := context.WithCancel(context.Background())
+	go func() {
+		if err := poller.Start(pollerCtx); err != nil && !errors.Is(err, context.Canceled) {
+			log.Error().Err(err).Msg("background event poller encountered error")
+		}
+	}()
 
 	// Configure SPA serving (embedded assets, local filesystem override, or Vite dev proxy)
 	spaConfig := rest.SPAConfig{}
@@ -140,6 +182,9 @@ func main() {
 
 	sig := <-sigChan
 	log.Info().Str("signal", sig.String()).Msg("received shutdown signal, shutting down bff gracefully")
+
+	pollerCancel()
+	_ = eventHub.Close()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()

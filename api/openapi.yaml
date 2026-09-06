@@ -134,6 +134,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/bff/v1/events:
+    get:
+      summary: Real-time Server-Sent Events (SSE) stream
+      description: |
+        Establishes a persistent text/event-stream connection to stream live test run state changes, artifact build transitions, and periodic system heartbeats.
+      tags:
+        - BFF
+      responses:
+        '200':
+          description: Persistent SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: W3C text/event-stream format with event types run_status_changed, build_status_changed, and system_heartbeat.
+        '500':
+          description: Internal error subscribing to event stream
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/bff/v1/status:
     get:
       summary: Aggregated BFF and Control Plane status
@@ -249,6 +271,27 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
           description: Upstream control plane unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/bff/events:
+    get:
+      summary: Real-time Server-Sent Events (SSE) stream (alias)
+      description: Backwards-compatible alias for /api/bff/v1/events.
+      tags:
+        - BFF
+      responses:
+        '200':
+          description: Persistent SSE event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: W3C text/event-stream format with event types run_status_changed, build_status_changed, and system_heartbeat.
+        '500':
+          description: Internal error subscribing to event stream
           content:
             application/json:
               schema:
@@ -2241,4 +2284,142 @@ components:
           type: boolean
           description: Whether expired test runs are archived rather than permanently deleted
           example: false
+
+    ServerSentEvent:
+      type: object
+      required:
+        - id
+        - event
+        - data
+        - timestamp
+      properties:
+        id:
+          type: string
+          example: run-a1b2c3d4-1
+        event:
+          type: string
+          enum:
+            - run_status_changed
+            - build_status_changed
+            - system_heartbeat
+          example: run_status_changed
+        data:
+          type: object
+          description: Event payload matching the event type
+        timestamp:
+          type: string
+          format: date-time
+
+    RunStatusChangedPayload:
+      type: object
+      required:
+        - run_id
+        - suite_id
+        - status
+        - timestamp
+      properties:
+        run_id:
+          type: string
+          example: 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        suite_id:
+          type: string
+          example: e8d665b1-2e67-4228-8ab6-79c5b248a31e
+        status:
+          type: string
+          enum:
+            - QUEUED
+            - RUNNING
+            - COMPLETED
+            - FAILED
+            - ABORTED
+          example: RUNNING
+        previous_status:
+          type: string
+          example: QUEUED
+        k8s_job_name:
+          type: string
+          example: vuhive-runner-3fa85f64
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        duration_ms:
+          type: integer
+          format: int64
+        exit_code:
+          type: integer
+          nullable: true
+        sla_passed:
+          type: boolean
+          nullable: true
+        metrics:
+          $ref: '#/components/schemas/RunMetrics'
+        timestamp:
+          type: string
+          format: date-time
+
+    BuildStatusChangedPayload:
+      type: object
+      required:
+        - artifact_id
+        - suite_id
+        - platform
+        - status
+        - timestamp
+      properties:
+        artifact_id:
+          type: string
+          example: c7a6e118-20ab-48d6-953b-e01140026e61
+        suite_id:
+          type: string
+          example: e8d665b1-2e67-4228-8ab6-79c5b248a31e
+        platform:
+          type: string
+          example: linux/amd64
+        status:
+          type: string
+          enum:
+            - QUEUED
+            - BUILDING
+            - READY
+            - FAILED
+          example: READY
+        previous_status:
+          type: string
+          example: BUILDING
+        s3_binary_key:
+          type: string
+          example: artifacts/c7a6e118/runner
+        sha256_checksum:
+          type: string
+          example: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        error_message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    SystemHeartbeatPayload:
+      type: object
+      required:
+        - status
+        - active_clients
+        - active_runs
+        - timestamp
+      properties:
+        status:
+          type: string
+          example: UP
+        active_clients:
+          type: integer
+          example: 2
+        active_runs:
+          type: integer
+          format: int64
+          example: 1
+        timestamp:
+          type: string
+          format: date-time
 
