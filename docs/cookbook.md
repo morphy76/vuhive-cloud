@@ -131,7 +131,7 @@ All examples assume the control plane is reachable at `http://vuhive-cloud.vuhiv
 
 > [!TIP]
 > **Interactive API Exploration with Swagger UI**:
-> If you deployed the optional OpenAPI viewer in `vuhive-cloud-infra` (`openapiViewer.enabled: true`), you can test all API recipes interactively from your browser at `http://localhost:8081` (via `kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openapi-viewer 8081:8080`). The viewer reads directly from the control plane's `GET /openapi.json` endpoint.
+> If you deployed the optional OpenAPI viewer in `vuhive-cloud-infra` (`openapiViewer.enabled: true`), you can test all API recipes interactively from your browser at `http://localhost:8081` (via `kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openapi-viewer 8081:8080`). When accessing via local port-forwarding, set `openapiViewer.specUrl="http://localhost:8080/openapi.json"` so your browser resolves the control plane specification. See [Recipe 12](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors) for detailed setup.
 
 ### Recipe 1: Registering a Test Suite & Uploading Source Packages
 
@@ -1059,15 +1059,16 @@ The `vuhive-cloud` control plane includes built-in CORS middleware that automati
 
 #### 1. Interactive Exploration via Bundled Swagger UI
 
-Deploy Swagger UI using the infrastructure chart:
+Deploy Swagger UI using the infrastructure chart. Because Swagger UI is a client-side Single Page Application (SPA) running in your workstation's web browser (rather than inside the cluster network), override `openapiViewer.specUrl` to the port-forwarded localhost URL so your desktop browser can resolve and fetch the specification:
 
 ```bash
 helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --namespace vuhive-system \
-  --set openapiViewer.enabled=true
+  --set openapiViewer.enabled=true \
+  --set openapiViewer.specUrl="http://localhost:8080/openapi.json"
 ```
 
-Forward ports to access the viewer:
+Forward ports to access both the OpenAPI viewer and the control plane:
 
 ```bash
 # Port-forward the OpenAPI Swagger UI viewer (port 8081)
@@ -1077,7 +1078,7 @@ kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openap
 kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080 &
 ```
 
-Open `http://localhost:8081` in your browser. Swagger UI initiates a browser `fetch()` to `http://localhost:8080/openapi.json`. Because cross-origin headers are returned, the browser loads the complete OpenAPI specification seamlessly.
+Open `http://localhost:8081` in your browser. Swagger UI initiates a client-side browser `fetch()` to `http://localhost:8080/openapi.json`. Because cross-origin headers are returned, the browser loads the complete OpenAPI specification seamlessly.
 
 #### 2. Preflight OPTIONS Request Verification
 

@@ -112,7 +112,7 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --wait --timeout=180s
 ```
 
-> For details on database, storage parameters, and enabling the optional OpenAPI viewer (Swagger UI), see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
+> For details on database, storage parameters, and enabling the optional OpenAPI viewer (Swagger UI, including browser-accessible `specUrl` configuration for `kubectl port-forward`), see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
 
 ### 2. Deploy vuhive-cloud Control Plane
 Deploy the control plane connected to the local infrastructure:

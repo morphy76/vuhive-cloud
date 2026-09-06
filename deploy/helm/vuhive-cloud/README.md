@@ -44,6 +44,9 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --create-namespace
 ```
 
+> [!TIP]
+> If deploying the optional OpenAPI viewer (Swagger UI) in `vuhive-cloud-infra`, refer to the [Infrastructure Helm Guide](../vuhive-cloud-infra/README.md#enabling-the-openapi-viewer-swagger-ui) for configuring browser-accessible `specUrl` when using `kubectl port-forward`.
+
 ### 2. Deploy vuhive-cloud Control Plane
 
 With default values, Helm automatically creates the `vuhive-runners` and `vuhive-system` namespaces
