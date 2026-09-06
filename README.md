@@ -138,8 +138,9 @@ Verify service liveness, version, and OpenAPI specifications:
 # Check service health
 curl -i http://localhost:8080/healthz
 
-# Inspect runtime version
+# Inspect runtime version & compile-time metadata (injected via ldflags)
 curl -i http://localhost:8080/version
+# Response: {"version":"0.1.0","commit":"aca4153","build_time":"2026-09-06T12:00:00Z"}
 
 # Fetch machine-readable OpenAPI 3.1 specification
 curl -i http://localhost:8080/openapi.json
