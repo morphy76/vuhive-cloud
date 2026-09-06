@@ -6,6 +6,13 @@ Official Helm chart for the `vuhive-cloud` control plane.
 
 `vuhive-cloud` provides the Kubernetes-native control plane for orchestrating distributed load testing suites and runner jobs.
 
+> **Documentation Navigation**:
+> - **System Architecture & Overview**: [`README.md`](../../README.md) and [`ARCHITECTURE_SPEC.md`](../../ARCHITECTURE_SPEC.md)
+> - **Infrastructure Chart (PostgreSQL + MinIO)**: [`deploy/helm/vuhive-cloud-infra/README.md`](../vuhive-cloud-infra/README.md)
+> - **Adoption Guide & API Recipes**: [`docs/cookbook.md`](../../docs/cookbook.md)
+> - **REST API Reference**: [`api/openapi.yaml`](../../api/openapi.yaml)
+> - **Engineering Philosophy**: [`AI_DISCLOSURE.md`](../../AI_DISCLOSURE.md)
+
 ## Prerequisites
 
 - Kubernetes 1.28+

@@ -2,6 +2,12 @@
 
 Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-end walkthrough for test engineers, DevOps specialists, and platform architects looking to build, schedule, execute, and monitor distributed load testing workloads on Kubernetes with `vuhive-cloud`.
 
+> **Documentation Navigation**:
+> - **System Overview & Architecture**: [`README.md`](../README.md) and [`ARCHITECTURE_SPEC.md`](../ARCHITECTURE_SPEC.md)
+> - **Installation Guides**: [Control Plane Helm Chart (`deploy/helm/vuhive-cloud/README.md`)](../deploy/helm/vuhive-cloud/README.md) and [Infrastructure Helm Chart (`deploy/helm/vuhive-cloud-infra/README.md`)](../deploy/helm/vuhive-cloud-infra/README.md)
+> - **REST API Specification**: [OpenAPI 3.0.3 Reference (`api/openapi.yaml`)](../api/openapi.yaml)
+> - **Engineering Philosophy**: [Spec-Driven Development & AI Disclosure (`AI_DISCLOSURE.md`)](../AI_DISCLOSURE.md)
+
 ---
 
 ## Table of Contents
