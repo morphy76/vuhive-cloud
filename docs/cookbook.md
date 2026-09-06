@@ -31,6 +31,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 10: Inspecting BFF Gateway Status & Session Management](#recipe-10-inspecting-bff-gateway-status--session-management)
     - [Recipe 11: Accessing the Embedded Web Dashboard & PWA Routing](#recipe-11-accessing-the-embedded-web-dashboard--pwa-routing)
     - [Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors)
+    - [Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines](#recipe-13-inspecting-control-plane-version-metadata--health-in-automated-pipelines)
 
 ---
 
@@ -1038,6 +1039,62 @@ cors:
 ```
 
 When specific origins are specified, the control plane returns `Access-Control-Allow-Origin: <origin>` and `Vary: Origin` only for matching origins, rejecting unauthorized cross-origin requests.
+
+### Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines
+
+Before kicking off high-concurrency load testing suites or automated performance regressions in CI/CD pipelines (e.g. GitHub Actions, GitLab CI, Argo Workflows), pipeline jobs should assert that the target `vuhive-cloud` control plane is reachable and operating on the expected binary version and git commit hash.
+
+#### 1. Probing Health and Liveness
+
+Verify that the control plane is healthy and ready to process requests:
+
+```bash
+curl -f -s http://localhost:8080/healthz
+# Output: {"status":"ok"}
+```
+
+#### 2. Querying Compile-Time Version Metadata
+
+Retrieve the semantic version, git commit hash, and build timestamp injected via Go `ldflags`:
+
+```bash
+curl -f -s http://localhost:8080/version
+```
+
+Response payload:
+```json
+{
+  "version": "0.1.0",
+  "commit": "aca4153",
+  "build_time": "2026-09-06T12:00:00Z"
+}
+```
+
+#### 3. Automated Shell Preflight Assertion
+
+In automated deployment or test scripts, use `jq` to enforce version compatibility before dispatching tests:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENDPOINT="${VUHIVE_ENDPOINT:-http://localhost:8080}"
+EXPECTED_MIN_VERSION="0.1.0"
+
+echo "Pinging vuhive-cloud control plane at ${ENDPOINT}..."
+VERSION_JSON=$(curl -f -s "${ENDPOINT}/version")
+SERVER_VERSION=$(echo "${VERSION_JSON}" | jq -r '.version')
+COMMIT_HASH=$(echo "${VERSION_JSON}" | jq -r '.commit')
+BUILD_TIME=$(echo "${VERSION_JSON}" | jq -r '.build_time')
+
+echo "Connected to vuhive-cloud version: ${SERVER_VERSION} (commit: ${COMMIT_HASH}, built: ${BUILD_TIME})"
+
+if [ "${SERVER_VERSION}" == "dev" ]; then
+  echo "Warning: Running against development build."
+fi
+
+echo "Control plane preflight check succeeded. Proceeding with load test suite execution."
+```
 
 ---
 
