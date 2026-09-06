@@ -9,6 +9,8 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local port-forwarded control plane
+  - url: http://localhost:8081
+    description: Local Backend-For-Frontend (BFF) service
   - url: http://vuhive-cloud.vuhive-system.svc.cluster.local:8080
     description: In-cluster Kubernetes service
 
@@ -42,6 +44,73 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VersionResponse'
+
+  /api/v1/bff/status:
+    get:
+      summary: Aggregated BFF and Control Plane status
+      description: Returns health and version metadata from both the BFF and upstream Control Plane.
+      tags:
+        - BFF
+      responses:
+        '200':
+          description: Aggregated system status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BFFStatusResponse'
+
+  /api/v1/bff/sessions:
+    post:
+      summary: Create client session
+      description: Establishes a cached client session in the BFF.
+      tags:
+        - BFF
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/bff/sessions/{id}:
+    get:
+      summary: Retrieve client session
+      description: Returns session context for the given session identifier.
+      tags:
+        - BFF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Unique session identifier
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 
   /api/v1/health:
@@ -1301,3 +1370,77 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BarrierParticipantResponse'
+
+    # ── BFF ────────────────────────────────────────────────────────────────
+    BFFStatusResponse:
+      type: object
+      required:
+        - bff_status
+        - bff_version
+        - control_plane_status
+        - timestamp
+      properties:
+        bff_status:
+          type: string
+          example: UP
+        bff_version:
+          type: string
+          example: 0.1.0
+        control_plane_status:
+          type: string
+          example: UP
+        control_plane_version:
+          type: string
+          example: 0.0.1
+        timestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CreateSessionRequest:
+      type: object
+      required:
+        - session_id
+        - user_id
+      properties:
+        session_id:
+          type: string
+          example: sess-usr-12345
+        user_id:
+          type: string
+          example: operator@vuhive.local
+        ttl_seconds:
+          type: integer
+          format: int64
+          example: 3600
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    SessionResponse:
+      type: object
+      required:
+        - id
+        - user_id
+        - created_at
+        - expires_at
+      properties:
+        id:
+          type: string
+          example: sess-usr-12345
+        user_id:
+          type: string
+          example: operator@vuhive.local
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
