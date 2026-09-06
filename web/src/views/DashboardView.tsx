@@ -3,8 +3,12 @@ import { Activity, Layers, CalendarClock, CheckCircle2, Play, Cpu, ArrowUpRight 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { HelpTooltip } from '@/components/help/HelpTooltip'
+import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
 
 export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({ onNavigate }) => {
+  const [isRunDialogOpen, setIsRunDialogOpen] = React.useState(false)
+
   const stats = [
     {
       title: 'Active Runners',
@@ -12,6 +16,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
       trend: '+4 from last hour',
       icon: Activity,
       color: 'text-brand-500 bg-brand-50 dark:bg-brand-950/50',
+      help: 'Number of currently executing Kubernetes runner pods across all active test runs.',
     },
     {
       title: 'Test Suites',
@@ -19,6 +24,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
       trend: 'All artifacts ready',
       icon: Layers,
       color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/50',
+      help: 'Configured load test scenarios and cross-compiled execution artifacts.',
     },
     {
       title: 'Cron Schedules',
@@ -26,6 +32,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
       trend: 'Next trigger in 14m',
       icon: CalendarClock,
       color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/50',
+      help: 'Native Kubernetes CronJobs orchestrating automated recurring test executions.',
     },
     {
       title: 'SLA Pass Rate',
@@ -33,6 +40,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
       trend: 'Last 24 hours',
       icon: CheckCircle2,
       color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/50',
+      help: 'Percentage of test runs satisfying all latency percentiles (p50, p90, p95, p99) and error rate SLAs.',
     },
   ]
 
@@ -52,7 +60,15 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
         {/* Quick action buttons */}
         <div className="flex items-center gap-3">
           <Button
+            variant="outline"
             onClick={() => onNavigate?.('runs')}
+            className="min-h-[44px] gap-2"
+          >
+            <Activity className="w-4 h-4" />
+            <span>View Runs</span>
+          </Button>
+          <Button
+            onClick={() => setIsRunDialogOpen(true)}
             className="min-h-[44px] gap-2"
           >
             <Play className="w-4 h-4 fill-current" />
@@ -71,9 +87,12 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
               className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between"
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                  {stat.title}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    {stat.title}
+                  </span>
+                  <HelpTooltip text={stat.help} label={`Help for ${stat.title}`} />
+                </div>
                 <div className={`p-2 rounded-xl ${stat.color}`}>
                   <Icon className="w-4 h-4" />
                 </div>
@@ -108,8 +127,12 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
           <div className="space-y-3">
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-slate-900 dark:text-white">
-                  Ephemeral Compilation Subsystem
+                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-white">
+                  <span>Ephemeral Compilation Subsystem</span>
+                  <HelpTooltip
+                    text="Cross-compiles Go source packages with AST validation into static binaries for linux/amd64 and linux/arm64."
+                    label="Help for compilation subsystem"
+                  />
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">
                   Target architectures: linux/amd64, linux/arm64
@@ -120,8 +143,12 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
 
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-slate-900 dark:text-white">
-                  Distributed Start Barrier Rendezvous
+                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-white">
+                  <span>Distributed Start Barrier Rendezvous</span>
+                  <HelpTooltip
+                    text="Zero clock-skew distributed rendezvous barrier coordinating simultaneous test execution across all runner pods."
+                    label="Help for distributed start barrier"
+                  />
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">
                   Zero clock-skew distributed synchronized firing
@@ -132,8 +159,12 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
 
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-slate-900 dark:text-white">
-                  Telemetry & KPI Indexer
+                <div className="flex items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-white">
+                  <span>Telemetry & KPI Indexer</span>
+                  <HelpTooltip
+                    text="Extracts summary.json reports to index p50, p90, p95, p99 percentiles, TPS throughput, and SLA compliance into PostgreSQL."
+                    label="Help for telemetry indexer"
+                  />
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">
                   summary.json parser (p50, p90, p95, p99, TPS, SLA)
@@ -198,6 +229,11 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
           </div>
         </div>
       </div>
+
+      <TriggerRunDialog
+        open={isRunDialogOpen}
+        onOpenChange={setIsRunDialogOpen}
+      />
     </div>
   )
 }

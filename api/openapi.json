@@ -985,31 +985,37 @@
       "RunMetrics": {
         "properties": {
           "avg_tps": {
+            "description": "Average Transactions Per Second (TPS) throughput rate",
             "example": 750.5,
             "format": "double",
             "type": "number"
           },
           "error_rate_pct": {
+            "description": "Percentage of failed HTTP transactions (5xx status or network timeouts)",
             "example": 0.02,
             "format": "double",
             "type": "number"
           },
           "p50_duration_ms": {
+            "description": "Median transaction duration (50th percentile latency) in milliseconds",
             "example": 12.4,
             "format": "double",
             "type": "number"
           },
           "p90_duration_ms": {
+            "description": "90th percentile latency duration in milliseconds",
             "example": 25.1,
             "format": "double",
             "type": "number"
           },
           "p95_duration_ms": {
+            "description": "95th percentile benchmark SLA latency threshold in milliseconds",
             "example": 38.6,
             "format": "double",
             "type": "number"
           },
           "p99_duration_ms": {
+            "description": "99th percentile worst 1% tail latency duration in milliseconds",
             "example": 85.2,
             "format": "double",
             "type": "number"

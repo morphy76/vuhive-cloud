@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { ThemeProvider } from '@/context/ThemeContext'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { Shell } from '@/components/layout/Shell'
 import { RouteId } from '@/types/navigation'
 import { DashboardView } from '@/views/DashboardView'
@@ -23,7 +24,9 @@ export const AppContent: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <ThemeProvider>
-      <AppContent />
+      <TooltipProvider>
+        <AppContent />
+      </TooltipProvider>
     </ThemeProvider>
   )
 }
