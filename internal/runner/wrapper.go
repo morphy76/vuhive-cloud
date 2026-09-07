@@ -263,6 +263,9 @@ func (w *RunnerWrapper) sendCallback(ctx context.Context, cfg WrapperConfig, exi
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if token, err := ResolveBearerToken(ctx, cfg, w.httpClient); err == nil && token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := w.httpClient.Do(req)
 	if err != nil {

@@ -54,3 +54,28 @@ OpenAPI Viewer selector labels
 app.kubernetes.io/name: {{ include "vuhive-cloud-infra.name" . }}-openapi-viewer
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+Keycloak fullname
+*/}}
+{{- define "vuhive-cloud-infra.keycloak.fullname" -}}
+{{- printf "%s-keycloak" (include "vuhive-cloud-infra.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Keycloak labels
+*/}}
+{{- define "vuhive-cloud-infra.keycloak.labels" -}}
+{{ include "vuhive-cloud-infra.labels" . }}
+app.kubernetes.io/name: {{ include "vuhive-cloud-infra.name" . }}-keycloak
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: keycloak
+{{- end }}
+
+{{/*
+Keycloak selector labels
+*/}}
+{{- define "vuhive-cloud-infra.keycloak.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "vuhive-cloud-infra.name" . }}-keycloak
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

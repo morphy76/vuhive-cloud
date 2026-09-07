@@ -1,0 +1,12 @@
+{{- if .Values.keycloak.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vuhive-cloud-infra.keycloak.fullname" . }}-realm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud-infra.keycloak.labels" . | nindent 4 }}
+data:
+  vuhive-realm.json: |-
+{{ .Files.Get "files/vuhive-realm.json" | indent 4 }}
+{{- end }}

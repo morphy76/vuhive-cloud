@@ -59,6 +59,22 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set s3.endpoint=http://vuhive-infra-minio:9000
 ```
 
+#### Enabling OIDC Authentication & RBAC (with Keycloak)
+
+To secure the control plane REST API with Keycloak OpenID Connect and Role-Based Access Control:
+
+```bash
+helm install vuhive deploy/helm/vuhive-cloud \
+  --namespace vuhive-system \
+  --set database.host=vuhive-infra-postgresql \
+  --set s3.endpoint=http://vuhive-infra-minio:9000 \
+  --set auth.enabled=true \
+  --set auth.issuerUrl=http://vuhive-infra-vuhive-cloud-infra-keycloak:8080/realms/vuhive \
+  --set auth.jwksUrl=http://vuhive-infra-vuhive-cloud-infra-keycloak:8080/realms/vuhive/protocol/openid-connect/certs \
+  --set auth.runner.clientId=vuhive-runner \
+  --set auth.runner.clientSecret=vuhive-runner-secret
+```
+
 > [!NOTE]
 > When `s3.endpoint` is non-empty (as in the MinIO case above), `s3.usePathStyle` is automatically treated as `true` by the control plane server, runner-init, and runner-wrapper. Path-style addressing (`http://<endpoint>/<bucket>/`) is required for MinIO because virtual-hosted-style URLs (`http://<bucket>.<service>/`) depend on DNS wildcards unavailable for Kubernetes Service names.
 
@@ -283,4 +299,13 @@ The control plane includes an automated retention lifecycle worker and housekeep
 | `housekeeping.runsTtlDays` | Retention window (days) for historical test run database records (`0` disables run pruning) | `90` |
 | `housekeeping.artifactsTtlDays` | Retention window (days) for compiled scenario binaries in S3 (`0` disables binary pruning) | `180` |
 | `housekeeping.archiveOnly` | When true, transitions expired runs to `ARCHIVED` status instead of permanently deleting rows | `false` |
+| `auth.enabled` | Enable OpenID Connect (OIDC) JWT authentication and RBAC for all REST endpoints | `false` |
+| `auth.issuerUrl` | Keycloak realm OIDC issuer URL (e.g. `http://<keycloak-svc>:8080/realms/vuhive`) | `""` |
+| `auth.jwksUrl` | Keycloak realm JWKS public keyset URL | `""` |
+| `auth.runner.clientId` | Machine-to-machine OAuth2 client identifier injected into runner jobs | `vuhive-runner` |
+| `auth.runner.clientSecret` | Machine-to-machine OAuth2 client secret injected into runner jobs | `vuhive-runner-secret` |
+| `auth.runner.tokenUrl` | Explicit token endpoint URL for runner jobs (defaults to `<issuerUrl>/protocol/openid-connect/token`) | `""` |
+| `auth.runner.existingSecret` | Name of existing Secret containing runner client secret | `""` |
+| `auth.runner.existingSecretKey` | Key within `auth.runner.existingSecret` containing secret | `RUNNER_CLIENT_SECRET` |
+
 

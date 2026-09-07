@@ -30,6 +30,8 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
 - 📡 **Real-Time Server-Sent Events (SSE) Telemetry Stream**: The BFF exposes a persistent event stream (`GET /api/bff/v1/events` and backwards-compatible `/api/v1/bff/events`) delivering real-time execution state transitions without high-frequency browser polling. Streams typed event frames including `run_status_changed` (live progression through `QUEUED`, `RUNNING`, `COMPLETED`, `FAILED`, `ABORTED` with latency percentiles and error rates), `build_status_changed` (`QUEUED`, `BUILDING`, `READY`, `FAILED`), and periodic `system_heartbeat` keeping firewalls and proxies alive. Implemented with a non-blocking fan-out hub, per-client buffered channels, and proactive context cancellation monitoring to prevent goroutine leaks.
 - 🌍 **Cross-Origin API Support (CORS) & Preflight Handling**: Built-in configurable CORS middleware and HTTP `OPTIONS` preflight handling (`204 No Content`) across all REST and OpenAPI endpoints, enabling seamless cross-origin API consumption from browser applications, third-party dashboards, and the bundled Swagger UI viewer.
 - 🧹 **Execution Artifact Housekeeping & Retention Lifecycle Engine**: Automated background maintenance and retention enforcement for multi-tenant storage optimization and compliance. Configurable system-wide or per-suite time-to-live (TTL) policies govern independent retention windows for raw execution stdout/stderr logs (`runs/*/run.log`), deterministic summary reports (`runs/*/summary.json`), compiled scenario binaries, and historical database test run records. Features safe archiving (`RunStatusArchived` stripping raw summary JSON while preserving indexed KPI percentiles for longitudinal trend analysis), orphaned build artifact pruning, declarative synchronization of native S3 bucket lifecycle rules for automated storage-tier object expiration, safe dry-run simulation mode, and on-demand REST API triggers (`POST /api/v1/system/housekeeping` and `GET /api/v1/system/housekeeping/policy`).
+- 🔐 **Enterprise REST API Security & Keycloak OIDC**: All control plane REST endpoints (`/api/v1/*`) are protected by OpenID Connect (OIDC) JWT bearer authentication backed by Keycloak. Implements fine-grained Role-Based Access Control (RBAC) across standard persona roles (`vuhive-admin`, `vuhive-deployer`, `vuhive-developer`, `vuhive-viewer`) and M2M client credentials (`vuhive-runner`), rejecting unauthorized requests with standardized `401 Unauthorized` and `403 Forbidden` JSON responses.
+- 💻 **Developer CLI (`vuhive`)**: Official cross-platform CLI tool (`cmd/cli`, built as `bin/vuhive` via `make build-cli`) for developers, deployers, and automation pipelines. Supports browser-based OAuth2 Authorization Code flow with PKCE and OAuth2 Device Flow fallback (`vuhive auth login`), local credential and role inspection (`vuhive auth status`), credential revocation (`vuhive auth logout`), test suite archiving and upload (`vuhive suite upload`), ad-hoc test run triggering and monitoring (`vuhive run start|status|logs|report`), and native CronJob scheduling (`vuhive schedule create|list`). Enforces client-side role guards before dispatching network requests.
 
 ---
 
@@ -241,13 +243,59 @@ For detailed instructions on local cluster validation, BuildKit containerd image
 
 ---
 
-## License
+## Authentication, Authorization & Developer CLI
 
-This project is licensed under the [MIT License](./LICENSE).
+`vuhive-cloud` integrates enterprise-grade OpenID Connect (OIDC) authentication and Role-Based Access Control (RBAC) backed by Keycloak.
+
+### Role-Based Access Control (RBAC) Matrix
+
+| Persona Role | Keycloak Group | Permitted Operations |
+|---|---|---|
+| **`vuhive-admin`** | `/administrators` | Full administrative control: manage all resources, configurations, and housekeeping policies. |
+| **`vuhive-deployer`** | `/deployers` | Workload execution: dispatch ad-hoc runs (`POST /api/v1/runs`), abort runs (`POST /api/v1/runs/{id}/abort`), create and manage CronJob schedules (`POST /api/v1/schedules`), inspect all entities. |
+| **`vuhive-developer`** | `/developers` | Authoring & Compilation: register test suites (`POST /api/v1/suites`), upload Go scenario source packages (`POST /api/v1/suites/{id}/builds`), inspect builds, view runs and reports. |
+| **`vuhive-viewer`** | `/viewers` | Read-only inspection: list and view test suites, runner profiles, schedules, runs, logs, and summary reports. |
+| **`vuhive-runner`** | M2M Service Account | Runner execution: post start barrier sync signals (`POST /api/v1/barrier/rendezvous`), abort barrier sessions, report run completion (`POST /api/v1/runs/complete`). |
+
+### Developer CLI (`vuhive`)
+
+The `vuhive` CLI (`cmd/cli`, compiled via `make build-cli` into `bin/vuhive`) provides a first-class command-line interface for scenario developers and release engineers.
+
+```bash
+# Build the developer CLI
+make build-cli
+
+# Authenticate via browser PKCE flow (with Device Authorization fallback)
+./bin/vuhive auth login --issuer http://localhost:8080/realms/vuhive --server http://localhost:8080
+
+# Inspect active credentials, token expiration, and granted roles
+./bin/vuhive auth status
+
+# Upload scenario source package and trigger automated compilation
+./bin/vuhive suite upload <source-path> --suite-id <suite-uuid>
+
+# Dispatch an ad-hoc load test run
+./bin/vuhive run start <suite-uuid> --profile-id <profile-uuid> --artifact-id <artifact-uuid>
+
+# Inspect execution status, KPIs, stream logs, or fetch report
+./bin/vuhive run status <run-uuid>
+./bin/vuhive run logs <run-uuid>
+./bin/vuhive run report <run-uuid>
+
+# Manage native Kubernetes CronJob schedules
+./bin/vuhive schedule create --name nightly-test --suite-id <suite-uuid> --profile-id <profile-uuid> --artifact-id <artifact-uuid> --cron "0 2 * * *"
+./bin/vuhive schedule list
+
+# Log out and revoke credentials
+./bin/vuhive auth logout
+```
+
+---
+
 The control plane exposes its REST API at port `8080`. See [`api/openapi.yaml`](./api/openapi.yaml) for the full API reference.
 For detailed Helm configuration options, see the chart READMEs:
-- [`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md) — infrastructure (PostgreSQL + MinIO + optional Swagger UI viewer)
-- [`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md) — control plane (namespace management, RBAC modes, all parameters)
+- [`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md) — infrastructure (PostgreSQL + MinIO + Keycloak + optional Swagger UI viewer)
+- [`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md) — control plane (namespace management, RBAC modes, OIDC authentication, all parameters)
 
 ## Documents in this Package
 

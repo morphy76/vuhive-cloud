@@ -202,6 +202,18 @@ func (g *RunnerJobGenerator) GenerateJob(
 	if g.cfg.APICallbackURL != "" {
 		runnerEnvs = append(runnerEnvs, corev1.EnvVar{Name: "API_CALLBACK_URL", Value: g.cfg.APICallbackURL})
 	}
+	if g.cfg.RunnerAuthToken != "" {
+		runnerEnvs = append(runnerEnvs, corev1.EnvVar{Name: "VUHIVE_AUTH_TOKEN", Value: g.cfg.RunnerAuthToken})
+	}
+	if g.cfg.RunnerClientID != "" {
+		runnerEnvs = append(runnerEnvs, corev1.EnvVar{Name: "VUHIVE_CLIENT_ID", Value: g.cfg.RunnerClientID})
+	}
+	if g.cfg.RunnerClientSecret != "" {
+		runnerEnvs = append(runnerEnvs, corev1.EnvVar{Name: "VUHIVE_CLIENT_SECRET", Value: g.cfg.RunnerClientSecret})
+	}
+	if g.cfg.RunnerTokenURL != "" {
+		runnerEnvs = append(runnerEnvs, corev1.EnvVar{Name: "VUHIVE_TOKEN_URL", Value: g.cfg.RunnerTokenURL})
+	}
 	if len(opts.EnvVars) > 0 {
 		keys := make([]string, 0, len(opts.EnvVars))
 		for k := range opts.EnvVars {

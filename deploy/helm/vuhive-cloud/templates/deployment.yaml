@@ -69,6 +69,13 @@ spec:
                 secretKeyRef:
                   name: {{ default (include "vuhive-cloud.fullname" .) .Values.s3.existingSecret }}
                   key: {{ default "AWS_SECRET_ACCESS_KEY" .Values.s3.existingSecretSecretKey }}
+            {{- if .Values.auth.enabled }}
+            - name: RUNNER_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "vuhive-cloud.fullname" .) (default (dict) .Values.auth.runner).existingSecret }}
+                  key: {{ default "RUNNER_CLIENT_SECRET" (default (dict) .Values.auth.runner).existingSecretKey }}
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

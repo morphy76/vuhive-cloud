@@ -80,6 +80,9 @@ func (c *HTTPBarrierClient) SignalAbort(ctx context.Context, cfg WrapperConfig, 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if token, err := ResolveBearerToken(ctx, cfg, c.httpClient); err == nil && token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -144,6 +147,9 @@ func (c *HTTPBarrierClient) Rendezvous(ctx context.Context, cfg WrapperConfig) e
 		return fmt.Errorf("failed creating barrier await request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if token, err := ResolveBearerToken(ctx, cfg, c.httpClient); err == nil && token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

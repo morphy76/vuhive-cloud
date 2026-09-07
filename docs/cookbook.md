@@ -33,6 +33,8 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors)
     - [Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines](#recipe-13-inspecting-control-plane-version-metadata--health-in-automated-pipelines)
     - [Recipe 14: Execution Artifact Housekeeping, Storage Retention Policies & Automated Pruning](#recipe-14-execution-artifact-housekeeping-storage-retention-policies--automated-pruning)
+    - [Recipe 15: Web UI Micro-Guidance & Domain Concepts Adoption Guide](#recipe-15-web-ui-micro-guidance--domain-concepts-adoption-guide)
+    - [Recipe 16: Adopting the Developer CLI (vuhive) & Keycloak OIDC Authentication](#recipe-16-adopting-the-developer-cli-vuhive--keycloak-oidc-authentication)
 
 ---
 
@@ -1560,7 +1562,7 @@ This ensures that object expiration occurs efficiently at the object storage lay
 
 ---
 
-### Recipe 13: Web UI Micro-Guidance & Domain Concepts Adoption Guide
+### Recipe 15: Web UI Micro-Guidance & Domain Concepts Adoption Guide
 
 The official React 19 web interface (`web/`) features an accessible inline micro-guidance system designed to streamline test engineering onboarding and prevent configuration errors without context-switching away from the UI.
 
@@ -1582,6 +1584,99 @@ The UI introduces two core guidance primitives adhering strictly to **WCAG 2.1 A
 | **CRON Expression Syntax** | New Schedule Dialog (`CreateScheduleDialog`) | 5-field standard syntax (`minute hour day-of-month month day-of-week`) with quick presets (Hourly `0 * * * *`, Nightly `0 2 * * *`, Weekly `0 4 * * 6`). Emphasizes cluster UTC clock evaluation. |
 | **KPI Latency Percentiles** | Runs View & Dashboard Metrics | Explains $p_{50}$ (median duration), $p_{90}$ (90% threshold), $p_{95}$ (SLA benchmark threshold), and $p_{99}$ (worst 1% tail latency identifying lock contention and GC pauses). |
 | **Throughput & Error Rate** | Runs View & Dashboard Metrics | Explains Transactions Per Second (TPS) as the average rate of successfully completed requests, and error rate percentage as the proportion of HTTP 5xx responses or connection timeouts. |
+
+---
+
+### Recipe 16: Adopting the Developer CLI (`vuhive`) & Keycloak OIDC Authentication
+
+The official `vuhive` CLI (`cmd/cli`, built via `make build-cli` into `bin/vuhive`) provides developers and release operators with a streamlined command-line interface protected by Role-Based Access Control (RBAC).
+
+#### 1. Logging In (`vuhive auth login`)
+
+Authenticate with Keycloak using the standard OAuth2 Authorization Code flow with Proof Key for Code Exchange (PKCE):
+
+```bash
+# Browser-based PKCE login
+vuhive auth login --issuer http://localhost:8080/realms/vuhive --server http://localhost:8080
+
+# Non-interactive / headless environment fallback: Device Authorization Flow
+vuhive auth login --device --issuer http://localhost:8080/realms/vuhive --server http://localhost:8080
+```
+
+The CLI launches a local loopback server on a dynamic port, opens the browser to Keycloak's login page, exchanges the authorization code with the PKCE code verifier, and securely stores the credentials in `~/.vuhive/credentials.json` with strict `0600` permissions.
+
+#### 2. Checking Authentication & Granted Roles (`vuhive auth status`)
+
+```bash
+vuhive auth status
+```
+
+Output:
+```text
+=== vuhive-cloud Authentication Status ===
+User:       alice (c0a80101-0000-0000-0000-000000000001)
+Email:      alice@example.com
+Roles:      vuhive-developer, vuhive-viewer
+Groups:     /developers
+Server URL: http://localhost:8080
+Status:     ACTIVE (expires at 2026-09-07T12:00:00Z)
+```
+
+#### 3. Authoring Workflow: Uploading Test Suites (`vuhive suite upload`)
+
+Developers with the `vuhive-developer` role can package and upload test scenarios directly from source directories or tarballs:
+
+```bash
+# Automatically archives scenario directory into tar.gz and uploads to control plane
+vuhive suite upload ./scenarios/http-benchmark --suite-id c7a6e118-8f81-4b24-9b0d-7b2434e38e68 --platform linux/amd64
+```
+
+The control plane verifies the user's role, inspects the AST, launches an ephemeral build job, and cross-compiles the runner binary.
+
+#### 4. Execution Workflow: Triggering Runs, Inspecting Logs & Reports (`vuhive run`)
+
+Deployers with the `vuhive-deployer` or `vuhive-admin` role can trigger ad-hoc runs:
+
+```bash
+# Start an ad-hoc test run
+vuhive run start c7a6e118-8f81-4b24-9b0d-7b2434e38e68 \
+  --profile-id p1000000-0000-0000-0000-000000000001 \
+  --artifact-id a1000000-0000-0000-0000-000000000001
+
+# Inspect execution status and performance KPIs
+vuhive run status r1000000-0000-0000-0000-000000000001
+
+# Stream execution logs
+vuhive run logs r1000000-0000-0000-0000-000000000001
+
+# Fetch deterministic summary report
+vuhive run report r1000000-0000-0000-0000-000000000001
+```
+
+#### 5. Scheduling Workflow: Native CronJobs (`vuhive schedule`)
+
+Deployers can configure recurring load tests:
+
+```bash
+# Create a nightly scheduled load test
+vuhive schedule create \
+  --name nightly-load \
+  --suite-id c7a6e118-8f81-4b24-9b0d-7b2434e38e68 \
+  --profile-id p1000000-0000-0000-0000-000000000001 \
+  --artifact-id a1000000-0000-0000-0000-000000000001 \
+  --cron "0 2 * * *"
+
+# List configured CronJob schedules
+vuhive schedule list
+```
+
+#### 6. Logging Out (`vuhive auth logout`)
+
+```bash
+vuhive auth logout
+```
+
+Revokes the refresh token against Keycloak's token revocation endpoint and purges the local credential file.
 
 ---
 

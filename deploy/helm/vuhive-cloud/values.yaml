@@ -174,6 +174,22 @@ housekeeping:
     # Archive runs instead of hard deleting historical records past runsDays
     archiveOnly: false
 
+# ── Authentication & REST API Security (OIDC / Keycloak) ────────────────
+auth:
+  # Enable OIDC JWT verification and RBAC on /api/v1 endpoints
+  enabled: false
+  # OIDC realm issuer URL (e.g. http://vuhive-infra-keycloak:8080/realms/vuhive)
+  issuerUrl: ""
+  # JWKS JSON Web Key Set URL (e.g. http://vuhive-infra-keycloak:8080/realms/vuhive/protocol/openid-connect/certs)
+  jwksUrl: ""
+  # Runner M2M OAuth2 credentials injected into Runner Job manifests
+  runner:
+    clientId: "vuhive-runner"
+    clientSecret: "vuhive-runner-secret"
+    tokenUrl: ""
+    existingSecret: ""
+    existingSecretKey: "RUNNER_CLIENT_SECRET"
+
 nodeSelector: {}
 
 tolerations: []
@@ -182,4 +198,5 @@ affinity: {}
 
 extraEnv: []
 extraEnvFrom: []
+
 

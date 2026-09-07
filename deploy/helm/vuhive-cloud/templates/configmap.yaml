@@ -28,4 +28,9 @@ data:
   RETENTION_BINARIES_DAYS: {{ (default (dict) (default (dict) .Values.housekeeping).retention).binariesDays | default 30 | toString | quote }}
   RETENTION_RUNS_DAYS: {{ (default (dict) (default (dict) .Values.housekeeping).retention).runsDays | default 180 | toString | quote }}
   RETENTION_ARCHIVE_ONLY: {{ (default (dict) (default (dict) .Values.housekeeping).retention).archiveOnly | default false | toString | quote }}
+  AUTH_ENABLED: {{ (default (dict) .Values.auth).enabled | default false | toString | quote }}
+  OIDC_ISSUER_URL: {{ (default (dict) .Values.auth).issuerUrl | default "" | quote }}
+  OIDC_JWKS_URL: {{ (default (dict) .Values.auth).jwksUrl | default "" | quote }}
+  RUNNER_CLIENT_ID: {{ (default (dict) (default (dict) .Values.auth).runner).clientId | default "" | quote }}
+  RUNNER_TOKEN_URL: {{ (default (dict) (default (dict) .Values.auth).runner).tokenUrl | default "" | quote }}
 

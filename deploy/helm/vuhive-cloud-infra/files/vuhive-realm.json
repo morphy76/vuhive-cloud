@@ -1,0 +1,119 @@
+{
+  "realm": "vuhive",
+  "displayName": "vuhive-cloud Realm",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "vuhive-admin",
+        "description": "Full administrative access across vuhive-cloud"
+      },
+      {
+        "name": "vuhive-deployer",
+        "description": "Execution deployment and trigger access for runs and schedules"
+      },
+      {
+        "name": "vuhive-developer",
+        "description": "Authoring access to compile and upload test suites"
+      },
+      {
+        "name": "vuhive-viewer",
+        "description": "Read-only access to inspect runs, reports, and schedules"
+      },
+      {
+        "name": "vuhive-runner",
+        "description": "Machine-to-machine execution runner role"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "administrators",
+      "path": "/administrators",
+      "realmRoles": [
+        "vuhive-admin",
+        "vuhive-deployer",
+        "vuhive-developer",
+        "vuhive-viewer"
+      ]
+    },
+    {
+      "name": "deployers",
+      "path": "/deployers",
+      "realmRoles": [
+        "vuhive-deployer",
+        "vuhive-viewer"
+      ]
+    },
+    {
+      "name": "developers",
+      "path": "/developers",
+      "realmRoles": [
+        "vuhive-developer",
+        "vuhive-viewer"
+      ]
+    },
+    {
+      "name": "viewers",
+      "path": "/viewers",
+      "realmRoles": [
+        "vuhive-viewer"
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "vuhive-cloud-api",
+      "name": "vuhive-cloud REST API Resource Server",
+      "enabled": true,
+      "bearerOnly": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "publicClient": false
+    },
+    {
+      "clientId": "vuhive-cloud-cli",
+      "name": "vuhive Developer CLI",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:*",
+        "http://127.0.0.1:*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "true"
+      }
+    },
+    {
+      "clientId": "vuhive-runner",
+      "name": "vuhive M2M Runner Execution Client",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "secret": "vuhive-runner-secret",
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ]
+    }
+  ]
+}
