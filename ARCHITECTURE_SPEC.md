@@ -320,6 +320,25 @@ CREATE TABLE test_runs (
 CREATE INDEX idx_test_runs_suite_id ON test_runs(suite_id);
 CREATE INDEX idx_test_runs_status ON test_runs(status);
 CREATE INDEX idx_test_runs_created_at ON test_runs(created_at DESC);
+
+-- BFF Client Sessions (Token Handler persistent session store)
+CREATE TABLE bff_sessions (
+    id VARCHAR(128) PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    keycloak_sid VARCHAR(255),
+    access_token TEXT NOT NULL DEFAULT '',
+    refresh_token TEXT NOT NULL DEFAULT '',
+    id_token TEXT,
+    roles JSONB NOT NULL DEFAULT '[]'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX idx_bff_sessions_keycloak_sid ON bff_sessions(keycloak_sid);
+CREATE INDEX idx_bff_sessions_user_id ON bff_sessions(user_id);
+CREATE INDEX idx_bff_sessions_expires_at ON bff_sessions(expires_at);
 ```
 
 ---
