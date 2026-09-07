@@ -17,6 +17,22 @@ postgresql:
       value: vuhive
     password:
       value: vuhive-dev
+  # Custom initialization scripts mounted into /docker-entrypoint-initdb.d
+  # to provision dedicated databases and schemas during initial cluster startup.
+  customScripts:
+    02-init-keycloak-db.sh: |
+      #!/bin/sh
+      set -e
+      # Provision dedicated keycloak database if it does not already exist
+      psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+        SELECT 'CREATE DATABASE keycloak'
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\gexec
+        GRANT ALL PRIVILEGES ON DATABASE keycloak TO "$USERDB_USER";
+        ALTER DATABASE keycloak OWNER TO "$USERDB_USER";
+      EOSQL
+      psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" -d keycloak <<-EOSQL
+        GRANT ALL ON SCHEMA public TO "$USERDB_USER";
+      EOSQL
   storage:
     requestedSize: 1Gi
 
@@ -93,9 +109,13 @@ keycloak:
     # Defaults to PostgreSQL service deployed by this infra chart when left empty
     host: ""
     port: 5432
-    name: "vuhive"
+    # Dedicated database for Keycloak to isolate internal IAM tables from application data
+    name: "keycloak"
     user: "vuhive"
     password: "vuhive-dev"
+    # Optional dedicated schema within the target database (e.g. keycloak).
+    # When set, sets KC_DB_SCHEMA in Keycloak.
+    schema: ""
   service:
     type: ClusterIP
     port: 8080

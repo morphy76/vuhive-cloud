@@ -33,7 +33,11 @@ spec:
             - name: KC_DB
               value: "postgres"
             - name: KC_DB_URL
-              value: {{ printf "jdbc:postgresql://%s:%v/%s" (.Values.keycloak.database.host | default (printf "%s-postgresql" .Release.Name)) (.Values.keycloak.database.port | default 5432) (.Values.keycloak.database.name | default "vuhive") | quote }}
+              value: {{ printf "jdbc:postgresql://%s:%v/%s" (.Values.keycloak.database.host | default (printf "%s-postgresql" .Release.Name)) (.Values.keycloak.database.port | default 5432) (.Values.keycloak.database.name | default "keycloak") | quote }}
+            {{- if .Values.keycloak.database.schema }}
+            - name: KC_DB_SCHEMA
+              value: {{ .Values.keycloak.database.schema | quote }}
+            {{- end }}
             - name: KC_DB_USERNAME
               value: {{ .Values.keycloak.database.user | default "vuhive" | quote }}
             - name: KC_DB_PASSWORD

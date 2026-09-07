@@ -421,4 +421,121 @@ func TestHelmChart_NetworkPolicyRendering(t *testing.T) {
 	})
 }
 
+func runHelmTemplateInfra(t *testing.T, extraArgs ...string) string {
+	t.Helper()
+	if _, err := exec.LookPath("helm"); err != nil {
+		t.Skip("helm binary not available in PATH")
+	}
+
+	repoRoot := findRepoRoot(t)
+	chartPath := filepath.Join(repoRoot, "deploy", "helm", "vuhive-cloud-infra")
+
+	args := append([]string{"template", "vuhive-infra", chartPath}, extraArgs...)
+	cmd := exec.Command("helm", args...)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "helm template failed: %s", string(out))
+	return string(out)
+}
+
+func TestHelmChart_Infra_KeycloakDatabaseIsolation_Default(t *testing.T) {
+	rendered := runHelmTemplateInfra(t)
+	docs := splitManifests(rendered)
+
+	// 1. Verify PostgreSQL customscripts ConfigMap provisions dedicated keycloak database
+	cm := findResource(docs, "ConfigMap", "vuhive-infra-postgresql-customscripts")
+	require.NotNil(t, cm, "vuhive-infra-postgresql-customscripts ConfigMap must be generated")
+	cmData := cm["data"].(map[string]interface{})
+	script, ok := cmData["02-init-keycloak-db.sh"].(string)
+	require.True(t, ok, "02-init-keycloak-db.sh must exist in customscripts ConfigMap")
+	assert.Contains(t, script, "CREATE DATABASE keycloak")
+	assert.Contains(t, script, `GRANT ALL PRIVILEGES ON DATABASE keycloak TO "$USERDB_USER"`)
+	assert.Contains(t, script, `ALTER DATABASE keycloak OWNER TO "$USERDB_USER"`)
+
+	// 2. Verify Keycloak Deployment defaults to connecting to the isolated 'keycloak' database
+	keycloakDep := findResource(docs, "Deployment", "vuhive-infra-vuhive-cloud-infra-keycloak")
+	require.NotNil(t, keycloakDep, "Keycloak Deployment must exist by default")
+
+	spec := keycloakDep["spec"].(map[string]interface{})
+	tmpl := spec["template"].(map[string]interface{})
+	podSpec := tmpl["spec"].(map[string]interface{})
+	containers := podSpec["containers"].([]interface{})
+	kcContainer := containers[0].(map[string]interface{})
+	envList := kcContainer["env"].([]interface{})
+
+	findEnvValue := func(name string) (string, bool) {
+		for _, e := range envList {
+			eMap := e.(map[string]interface{})
+			if eMap["name"] == name {
+				if val, exists := eMap["value"]; exists {
+					return val.(string), true
+				}
+			}
+		}
+		return "", false
+	}
+
+	dbURL, found := findEnvValue("KC_DB_URL")
+	require.True(t, found, "KC_DB_URL must be defined in Keycloak container")
+	assert.Equal(t, "jdbc:postgresql://vuhive-infra-postgresql:5432/keycloak", dbURL)
+
+	_, hasSchema := findEnvValue("KC_DB_SCHEMA")
+	assert.False(t, hasSchema, "KC_DB_SCHEMA should not be set when schema is omitted")
+}
+
+func TestHelmChart_Infra_KeycloakDatabaseIsolation_CustomSchema(t *testing.T) {
+	rendered := runHelmTemplateInfra(t, "--set", "keycloak.database.schema=keycloak_iam")
+	docs := splitManifests(rendered)
+
+	keycloakDep := findResource(docs, "Deployment", "vuhive-infra-vuhive-cloud-infra-keycloak")
+	require.NotNil(t, keycloakDep)
+
+	spec := keycloakDep["spec"].(map[string]interface{})
+	tmpl := spec["template"].(map[string]interface{})
+	podSpec := tmpl["spec"].(map[string]interface{})
+	containers := podSpec["containers"].([]interface{})
+	kcContainer := containers[0].(map[string]interface{})
+	envList := kcContainer["env"].([]interface{})
+
+	var schemaVal string
+	var foundSchema bool
+	for _, e := range envList {
+		eMap := e.(map[string]interface{})
+		if eMap["name"] == "KC_DB_SCHEMA" {
+			schemaVal = eMap["value"].(string)
+			foundSchema = true
+			break
+		}
+	}
+
+	require.True(t, foundSchema, "KC_DB_SCHEMA must be present when keycloak.database.schema is configured")
+	assert.Equal(t, "keycloak_iam", schemaVal)
+}
+
+func TestHelmChart_Infra_KeycloakDatabaseIsolation_CustomDatabase(t *testing.T) {
+	rendered := runHelmTemplateInfra(t, "--set", "keycloak.database.name=custom_keycloak")
+	docs := splitManifests(rendered)
+
+	keycloakDep := findResource(docs, "Deployment", "vuhive-infra-vuhive-cloud-infra-keycloak")
+	require.NotNil(t, keycloakDep)
+
+	spec := keycloakDep["spec"].(map[string]interface{})
+	tmpl := spec["template"].(map[string]interface{})
+	podSpec := tmpl["spec"].(map[string]interface{})
+	containers := podSpec["containers"].([]interface{})
+	kcContainer := containers[0].(map[string]interface{})
+	envList := kcContainer["env"].([]interface{})
+
+	var dbURLVal string
+	for _, e := range envList {
+		eMap := e.(map[string]interface{})
+		if eMap["name"] == "KC_DB_URL" {
+			dbURLVal = eMap["value"].(string)
+			break
+		}
+	}
+
+	assert.Equal(t, "jdbc:postgresql://vuhive-infra-postgresql:5432/custom_keycloak", dbURLVal)
+}
+
+
 

@@ -1970,6 +1970,10 @@ The session subsystem emits structured `zerolog` events with operation names, se
 
 The Go BFF functions as an OAuth 2.0 / OIDC confidential client implementing the Token Handler pattern. It interfaces directly with Keycloak to exchange authorization codes with PKCE, refresh active user tokens, revoke credentials on logout, and validate cryptographically signed Backchannel Logout tokens.
 
+> [!TIP]
+> **Database & Schema Isolation**:
+> When deploying Keycloak alongside PostgreSQL, configure Keycloak to use a dedicated database (`keycloak`) or isolated schema (`KC_DB_SCHEMA=keycloak`) rather than sharing the application's `vuhive` database and `public` schema. This prevents internal IAM metadata tables from intermingling with application aggregates and `bff_sessions`. In the evaluation infrastructure chart (`vuhive-cloud-infra`), this separation is provisioned automatically via PostgreSQL initialization scripts.
+
 #### 1. Keycloak Admin Console Realm Client Setup
 
 Within your Keycloak realm (e.g., `vuhive`), configure the BFF client:
