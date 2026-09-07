@@ -9,6 +9,15 @@ var (
 	// ErrSessionNotFound is returned when a requested BFF session does not exist.
 	ErrSessionNotFound = errors.New("bff session not found")
 
+	// ErrSessionExpired is returned when attempting an operation on an expired session.
+	ErrSessionExpired = errors.New("bff session has expired")
+
+	// ErrInvalidSession is returned when a session aggregate is in an invalid state.
+	ErrInvalidSession = errors.New("invalid bff session")
+
+	// ErrConcurrentSessionModification is returned when optimistic locking or concurrent write conflicts occur.
+	ErrConcurrentSessionModification = errors.New("concurrent session modification")
+
 	// ErrControlPlaneUnavailable is returned when upstream cmd/server cannot be reached.
 	ErrControlPlaneUnavailable = errors.New("control plane service is unavailable")
 

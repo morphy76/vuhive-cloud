@@ -270,3 +270,85 @@ func TestHelmChart_BFF_CustomExistingSecretsAndURL(t *testing.T) {
 	assert.Equal(t, "my-session-key", sessionKey)
 }
 
+func TestHelmChart_BFF_PostgresSessionAndServiceAlias(t *testing.T) {
+	rendered := runHelmTemplate(t,
+		"--set", "bff.replicaCount=2",
+		"--set", "bff.session.encryptionKey=my-32-byte-secret-encryption-key",
+		"--set", "bff.database.url=postgres://bff:secret@custom-pg:5432/bffdb",
+	)
+	docs := splitManifests(rendered)
+
+	// Check Deployment replicas and env
+	bffDep := findResource(docs, "Deployment", "vuhive-vuhive-cloud-bff")
+	require.NotNil(t, bffDep)
+	spec := bffDep["spec"].(map[string]interface{})
+	assert.Equal(t, 2, spec["replicas"])
+
+	tmpl := spec["template"].(map[string]interface{})
+	podSpec := tmpl["spec"].(map[string]interface{})
+	containers := podSpec["containers"].([]interface{})
+	bffContainer := containers[0].(map[string]interface{})
+	envList := bffContainer["env"].([]interface{})
+
+	var dbURLVal string
+	for _, e := range envList {
+		eMap := e.(map[string]interface{})
+		if eMap["name"] == "DATABASE_URL" {
+			if val, ok := eMap["value"]; ok {
+				dbURLVal = val.(string)
+			}
+		}
+	}
+	assert.Equal(t, "postgres://bff:secret@custom-pg:5432/bffdb", dbURLVal)
+
+	// Check alias service vuhive-cloud-bff exists
+	aliasSvc := findResource(docs, "Service", "vuhive-cloud-bff")
+	require.NotNil(t, aliasSvc)
+}
+
+func TestHelmChart_ValuesProduction_BFFRendering(t *testing.T) {
+	rendered := runHelmTemplate(t, "-f", "vuhive-cloud/values-production.yaml")
+	docs := splitManifests(rendered)
+
+	// Verify BFF Deployment rendered with 2 replicas
+	bffDep := findResource(docs, "Deployment", "vuhive-vuhive-cloud-bff")
+	require.NotNil(t, bffDep)
+	spec := bffDep["spec"].(map[string]interface{})
+	assert.Equal(t, 2, spec["replicas"])
+
+	tmpl := spec["template"].(map[string]interface{})
+	podSpec := tmpl["spec"].(map[string]interface{})
+	containers := podSpec["containers"].([]interface{})
+	bffContainer := containers[0].(map[string]interface{})
+	envList := bffContainer["env"].([]interface{})
+
+	findEnvSecretRef := func(envName string) (string, string) {
+		for _, e := range envList {
+			eMap := e.(map[string]interface{})
+			if eMap["name"] == envName {
+				valFrom := eMap["valueFrom"].(map[string]interface{})
+				secRef := valFrom["secretKeyRef"].(map[string]interface{})
+				return secRef["name"].(string), secRef["key"].(string)
+			}
+		}
+		return "", ""
+	}
+
+	kcSecret, kcKey := findEnvSecretRef("KEYCLOAK_CLIENT_SECRET")
+	assert.Equal(t, "vuhive-bff-auth", kcSecret)
+	assert.Equal(t, "KEYCLOAK_CLIENT_SECRET", kcKey)
+
+	sessionCookieSecret, sessionCookieKey := findEnvSecretRef("SESSION_COOKIE_SECRET")
+	assert.Equal(t, "vuhive-bff-auth", sessionCookieSecret)
+	assert.Equal(t, "SESSION_COOKIE_SECRET", sessionCookieKey)
+
+	sessionEncSecret, sessionEncKey := findEnvSecretRef("SESSION_ENCRYPTION_KEY")
+	assert.Equal(t, "vuhive-bff-auth", sessionEncSecret)
+	assert.Equal(t, "SESSION_ENCRYPTION_KEY", sessionEncKey)
+
+	dbSecret, dbKey := findEnvSecretRef("DATABASE_URL")
+	assert.Equal(t, "vuhive-db-secret", dbSecret)
+	assert.Equal(t, "DATABASE_URL", dbKey)
+}
+
+

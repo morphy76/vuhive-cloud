@@ -18,10 +18,11 @@ var _ inbound.BFFService = (*BFFService)(nil)
 
 // BFFService orchestrates Backend-For-Frontend use cases and status aggregation.
 type BFFService struct {
-	controlPlane outbound.ControlPlaneClient
-	cache        outbound.CachePort
-	version      string
-	eventHub     outbound.EventStreamHub
+	controlPlane   outbound.ControlPlaneClient
+	cache          outbound.CachePort
+	version        string
+	eventHub       outbound.EventStreamHub
+	sessionService inbound.SessionService
 }
 
 // NewBFFService creates an instance of the BFF use case orchestrator.
@@ -36,6 +37,12 @@ func NewBFFService(cp outbound.ControlPlaneClient, cache outbound.CachePort, ver
 		version:      version,
 		eventHub:     eventHub,
 	}
+}
+
+// WithSessionService attaches an inbound.SessionService orchestrator to the BFFService.
+func (s *BFFService) WithSessionService(sessionService inbound.SessionService) *BFFService {
+	s.sessionService = sessionService
+	return s
 }
 
 // GetStatus aggregates the health and runtime version of the BFF and the upstream control plane.
@@ -80,6 +87,10 @@ func (s *BFFService) GetStatus(ctx context.Context) (*inbound.SystemStatus, erro
 
 // CreateSession initiates and persists a client session aggregate.
 func (s *BFFService) CreateSession(ctx context.Context, cmd inbound.CreateSessionCommand) (*model.ClientSession, error) {
+	if s.sessionService != nil {
+		return s.sessionService.CreateSession(ctx, cmd)
+	}
+
 	start := time.Now()
 	log := zerolog.Ctx(ctx).With().
 		Str("op", "CreateSession").
@@ -122,6 +133,10 @@ func (s *BFFService) CreateSession(ctx context.Context, cmd inbound.CreateSessio
 
 // GetSession retrieves and validates an existing active client session.
 func (s *BFFService) GetSession(ctx context.Context, id model.SessionID) (*model.ClientSession, error) {
+	if s.sessionService != nil {
+		return s.sessionService.GetSession(ctx, id)
+	}
+
 	start := time.Now()
 	log := zerolog.Ctx(ctx).With().
 		Str("op", "GetSession").

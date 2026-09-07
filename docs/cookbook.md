@@ -34,7 +34,11 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines](#recipe-13-inspecting-control-plane-version-metadata--health-in-automated-pipelines)
     - [Recipe 14: Execution Artifact Housekeeping, Storage Retention Policies & Automated Pruning](#recipe-14-execution-artifact-housekeeping-storage-retention-policies--automated-pruning)
     - [Recipe 15: Web UI Micro-Guidance & Domain Concepts Adoption Guide](#recipe-15-web-ui-micro-guidance--domain-concepts-adoption-guide)
-    - [Recipe 16: Adopting the Developer CLI (vuhive) & Keycloak OIDC Authentication](#recipe-16-adopting-the-developer-cli-vuhive--keycloak-oidc-authentication)
+    - [Recipe 16: Adopting the Developer CLI (`vuhive`) & Keycloak OIDC Authentication](#recipe-16-adopting-the-developer-cli-vuhive--keycloak-oidc-authentication)
+    - [Recipe 17: Deploying Web UI & Go BFF with Helm and Unified Ingress Routing](#recipe-17-deploying-web-ui--go-bff-with-helm-and-unified-ingress-routing)
+    - [Recipe 18: BFF Session Management, Sliding Expiration Tuning & Background Janitor Operations](#recipe-18-bff-session-management-sliding-expiration-tuning--background-janitor-operations)
+    - [Recipe 19: Keycloak OIDC Client Configuration with PKCE & Backchannel Logout](#recipe-19-keycloak-oidc-client-configuration-with-pkce--backchannel-logout)
+    - [Recipe 20: BFF Token Handler, Authentication Endpoints & Transparent Token Refresh](#recipe-20-bff-token-handler-authentication-endpoints--transparent-token-refresh)
 
 ---
 
@@ -1091,6 +1095,51 @@ data: {"run_id":"3fa85f64-5717-4562-b3fc-2c963f66afa6","suite_id":"e8d665b1-2e67
 > [!NOTE]
 > All `/api/bff/v1/*` endpoints are also accessible via their backwards-compatible `/api/v1/bff/*` paths for legacy integrations.
 
+#### 5. Persistent Session Management & Token Handler Architecture
+
+The Go BFF implements the confidential Token Handler pattern, shielding raw OAuth 2.0 access and refresh tokens from browser storage by maintaining an encrypted, `HttpOnly`, `SameSite=Lax` cookie (`vuhive_session`).
+
+##### A. Domain Aggregate & Port Contracts
+
+The BFF encapsulates session state and lifecycle rules in a pure DDD aggregate:
+
+- **Domain Model (`internal/bff/domain/model/session.go`)**:
+  - Encapsulates `SessionID`, `UserID`, `KeycloakSID`, `AccessToken`, `RefreshToken`, `IDToken`, `Roles`, `CreatedAt`, `UpdatedAt`, `ExpiresAt`, and `Metadata`.
+  - Enforces domain invariants: `IsExpired() bool`, atomic `RotateTokens(accessToken, refreshToken, idToken, ttl)`, sliding expiration `Touch(ttl)`, and explicit `Revoke()`.
+  - Supports non-breaking functional options: `WithKeycloakSID`, `WithTokens`, `WithRoles`, `WithMetadata`.
+- **Outbound Driven Port (`internal/bff/application/ports/outbound/session_store.go`)**:
+  - Declares the `SessionStore` interface with methods: `Create`, `Get`, `Update`, `Delete`, `DeleteByKeycloakSID`, `DeleteByUserID`, and `DeleteExpired`.
+- **Storage Adapters**:
+  - `MemorySessionStore` (`internal/bff/adapters/outbound/session/memory`): Fast, thread-safe, deep-copying store for unit testing and local development.
+  - `PostgresSessionStore` (`internal/bff/adapters/outbound/session/postgres`): Clustered relational store supporting multi-pod horizontal scalability, AES-256-GCM token encryption at rest, and $O(1)$ Keycloak backchannel logout invalidation.
+
+##### B. PostgreSQL Schema & AES-256-GCM Token Encryption
+
+In multi-replica cloud deployments, session persistence in PostgreSQL (`bff_sessions`) eliminates pod-memory loss and guarantees that OIDC backchannel logout invalidations take effect cluster-wide:
+
+```sql
+CREATE TABLE IF NOT EXISTS bff_sessions (
+    id VARCHAR(128) PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    keycloak_sid VARCHAR(255),
+    access_token TEXT NOT NULL DEFAULT '',
+    refresh_token TEXT NOT NULL DEFAULT '',
+    id_token TEXT,
+    roles JSONB NOT NULL DEFAULT '[]'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bff_sessions_keycloak_sid ON bff_sessions(keycloak_sid);
+CREATE INDEX IF NOT EXISTS idx_bff_sessions_user_id ON bff_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_bff_sessions_expires_at ON bff_sessions(expires_at);
+```
+
+- **Index Optimization**: Lookups by cookie token hash (`id`) and Keycloak backchannel logout invalidations (`keycloak_sid`) operate in $O(1)$ time, while batch cleanup of expired sessions utilizes `idx_bff_sessions_expires_at`.
+- **Encryption at Rest**: When `SESSION_ENCRYPTION_KEY` (a 32-byte hexadecimal, base64, or passphrase string) is configured, the `TokenCipher` utility transparently encrypts `access_token`, `refresh_token`, and `id_token` using authenticated AES-256-GCM with randomized 12-byte nonces before persisting to PostgreSQL.
+
 ---
 
 
@@ -1791,6 +1840,204 @@ helm install vuhive deploy/helm/vuhive-cloud \
 2. Click **Login** to initiate OAuth2 Authorization Code flow with PKCE via `/api/v1/bff/auth/login`.
 3. The BFF exchanges the authorization code for tokens server-side, encrypts the session, and sets a secure `HttpOnly` cookie.
 4. Core API calls or CLI interactions targeting `https://loadtest.example.com/api/v1/*` are routed directly to the control plane server with OIDC Bearer token verification.
+
+---
+
+### Recipe 18: BFF Session Management, Sliding Expiration Tuning & Background Janitor Operations
+
+The Go BFF manages persistent client sessions in PostgreSQL (`bff_sessions`) using AES-256-GCM encrypted token storage at rest. To ensure optimal database performance under high read throughput while maintaining seamless session continuity, the BFF provides sliding expiration write-throttling and an automated background janitor.
+
+#### 1. Understanding Session Inactivity TTL vs. Sliding Write-Throttling
+
+- **Session Inactivity Timeout (`bff.session.ttl`, default `24h`)**: The maximum idle time before a session expires if no user interaction occurs.
+- **Sliding Write-Throttling Threshold (`bff.session.slidingThreshold`, default `15m`)**: When an active session is accessed (`GetSession`), the BFF checks if `time.Since(updated_at) >= slidingThreshold`. If the elapsed time is less than the threshold, the session is returned without triggering a PostgreSQL `UPDATE`. If equal to or exceeding the threshold, `expires_at` is extended by the session TTL and written back to PostgreSQL. This eliminates write-churn while ensuring actively used sessions never expire.
+- **Background Cleaner Interval (`bff.session.cleanerInterval`, default `10m`)**: The ticker frequency at which the `SessionCleaner` janitor executes `DeleteExpired(ctx, time.Now())` in PostgreSQL, purging abandoned or expired sessions and freeing database storage.
+
+#### 2. Tuning Session Policies via Helm Values
+
+In high-traffic environments where thousands of concurrent dashboard users interact simultaneously, tune the sliding window and cleaner cadence in `values.yaml`:
+
+```yaml
+bff:
+  session:
+    ttl: "12h"                  # 12-hour session lifetime
+    slidingThreshold: "30m"     # Only write to DB once every 30 minutes per active session
+    cleanerInterval: "15m"      # Janitor purge frequency
+    encryptionKeyExistingSecret: "vuhive-bff-auth"
+    encryptionKeyKey: "SESSION_ENCRYPTION_KEY"
+```
+
+#### 3. Monitoring & Operational Logs
+
+The session subsystem emits structured `zerolog` events with operation names, session IDs, and durations:
+
+```json
+{"level":"info","op":"SessionService.GetSession","session_id":"sess-9b4e...","user_id":"admin@corp","duration_ms":1.2,"time":"2026-09-07T12:00:00Z","message":"completed session lookup"}
+{"level":"debug","op":"SessionService.GetSession","session_id":"sess-9b4e...","new_expires_at":"2026-09-08T00:00:00Z","message":"sliding expiration extended in store"}
+{"level":"info","op":"SessionCleaner.CleanOnce","deleted_sessions":42,"duration_ms":12.8,"time":"2026-09-07T12:10:00Z","message":"completed expired session cleanup cycle"}
+```
+
+---
+
+### Recipe 19: Keycloak OIDC Client Configuration with PKCE & Backchannel Logout
+
+The Go BFF functions as an OAuth 2.0 / OIDC confidential client implementing the Token Handler pattern. It interfaces directly with Keycloak to exchange authorization codes with PKCE, refresh active user tokens, revoke credentials on logout, and validate cryptographically signed Backchannel Logout tokens.
+
+#### 1. Keycloak Admin Console Realm Client Setup
+
+Within your Keycloak realm (e.g., `vuhive`), configure the BFF client:
+
+1. **General Settings**:
+   - **Client type**: `OpenID Connect`
+   - **Client ID**: `vuhive-cloud-bff`
+   - **Name**: `VuHive Cloud BFF Token Handler`
+2. **Capability config**:
+   - **Client authentication**: `ON` (Confidential client)
+   - **Authorization**: `OFF`
+   - **Authentication flow**:
+     - Standard flow: `Enabled` (Authorization Code flow)
+     - Direct access grants: `Disabled` (Resource Owner Password Credentials prohibited)
+     - Implicit flow: `Disabled`
+3. **Login settings**:
+   - **Root URL**: `https://loadtest.example.com`
+   - **Home URL**: `https://loadtest.example.com/`
+   - **Valid redirect URIs**: `https://loadtest.example.com/api/v1/bff/auth/callback`
+   - **Valid post logout redirect URIs**: `https://loadtest.example.com/`
+   - **Web origins**: `+` (or `https://loadtest.example.com`)
+4. **Advanced Settings & PKCE**:
+   - **Proof Key for Code Exchange (PKCE) Code Challenge Method**: `S256` (enforces SHA-256 code challenge verification)
+   - **Backchannel logout URL**:
+     - *In-Cluster (Evaluations & Internal Mesh)*: `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (or release-prefixed `http://<release>-vuhive-cloud-bff:8081/...`)
+     - *External Ingress (Production IdP)*: `https://loadtest.example.com/api/v1/bff/auth/backchannel-logout`
+   - **Backchannel logout session required**: `ON` (ensures Keycloak includes the `sid` claim in logout tokens)
+   - **Backchannel logout revoke offline sessions**: `ON`
+
+#### 2. Helm Configuration for Production
+
+Bind the Keycloak confidential client credentials to the BFF deployment via a Kubernetes Secret (see [Helm Chart README](../deploy/helm/vuhive-cloud/README.md#5-external-infrastructure--production-deployment-scenarios)):
+
+```bash
+kubectl create secret generic vuhive-bff-auth \
+  --namespace vuhive-system \
+  --from-literal=KEYCLOAK_CLIENT_SECRET="KeycloakGeneratedClientSecret456" \
+  --from-literal=SESSION_COOKIE_SECRET="$(openssl rand -hex 16)" \
+  --from-literal=SESSION_ENCRYPTION_KEY="$(openssl rand -hex 16)"
+```
+
+Configure `values-production.yaml`:
+
+```yaml
+bff:
+  keycloak:
+    issuerUrl: "https://auth.example.com/realms/vuhive"
+    clientId: "vuhive-cloud-bff"
+    clientSecretExistingSecret: "vuhive-bff-auth"
+    clientSecretKey: "KEYCLOAK_CLIENT_SECRET"
+    sessionCookieSecretRef: "vuhive-bff-auth"
+    sessionCookieSecretKey: "SESSION_COOKIE_SECRET"
+```
+
+#### 3. Automatic JWKS Key Rotation Verification
+
+The BFF fetches Keycloak's public signing keys on startup from `/protocol/openid-connect/certs` and caches them in memory. If Keycloak performs a zero-downtime signing key rotation, incoming Backchannel Logout tokens signed with an unseen Key ID (`kid`) automatically trigger an on-demand JWKS cache refresh, preventing any service interruption.
+
+---
+
+### Recipe 20: BFF Token Handler, Authentication Endpoints & Transparent Token Refresh
+
+The Go BFF implements the OAuth 2.0 Token Handler pattern, insulating frontend browser environments (React 19 SPA) from managing raw OAuth2 tokens. Instead, the browser receives an encrypted, `HttpOnly`, `SameSite=Lax` cookie (`vuhive_session`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Browser / React SPA
+    participant BFF as Go BFF Gateway
+    participant DB as PostgreSQL (bff_sessions)
+    participant KC as Keycloak IdP
+    participant CP as Control Plane
+
+    Note over User,KC: 1. Login & Code Exchange
+    User->>BFF: GET /api/v1/bff/auth/login
+    BFF-->>User: 302 Redirect to Keycloak + Cookies (state, code_verifier)
+    User->>KC: Authenticate with credentials
+    KC-->>User: 302 Redirect /api/v1/bff/auth/callback?code=...&state=...
+    User->>BFF: GET /api/v1/bff/auth/callback
+    BFF->>KC: POST /token (Exchange code + PKCE verifier)
+    KC-->>BFF: {access_token, refresh_token, id_token}
+    BFF->>DB: Store session (tokens encrypted with AES-256-GCM)
+    BFF-->>User: 302 Redirect / + Set-Cookie: vuhive_session (HttpOnly, SameSite=Lax)
+
+    Note over User,CP: 2. Protected Request & Transparent Refresh
+    User->>BFF: GET /api/bff/v1/dashboard (Cookie: vuhive_session)
+    BFF->>DB: GetSession & extend sliding expiration
+    alt Access Token Expiring Soon (< 60s)
+        BFF->>KC: POST /token (refresh_token grant)
+        KC-->>BFF: {access_token, refresh_token}
+        BFF->>DB: RotateSessionTokens (atomic update)
+    end
+    BFF->>CP: GET /api/v1/... (Header: Authorization: Bearer <access_token>)
+    CP-->>BFF: 200 OK Response
+    BFF-->>User: 200 OK Dashboard Data
+
+    Note over User,KC: 3. Logout & Backchannel Logout
+    User->>BFF: POST /api/v1/bff/auth/logout (Cookie: vuhive_session)
+    BFF->>KC: POST /revoke (Revoke refresh token)
+    BFF->>DB: DeleteSession
+    BFF-->>User: 200 OK + Clear-Cookie: vuhive_session
+
+    KC->>BFF: POST /api/v1/bff/auth/backchannel-logout (logout_token)
+    BFF->>BFF: Verify RS256 signature against Keycloak JWKS
+    BFF->>DB: RevokeByKeycloakSID (Invalidate all sessions for user SID)
+    BFF-->>KC: 200 OK
+```
+
+#### 1. Available Authentication Endpoints
+
+The BFF registers the following endpoints under both `/api/bff/v1/auth/` and `/api/v1/bff/auth/`:
+
+| Endpoint | Method | Purpose | Response |
+| :--- | :--- | :--- | :--- |
+| `/login` | `GET` | Initiates OIDC flow with PKCE, sets transient state/verifier cookies, redirects to Keycloak | `302 Found` (Location: Keycloak) |
+| `/callback` | `GET` | Validates PKCE/state, exchanges code for tokens, persists encrypted session in PostgreSQL, issues `HttpOnly` cookie | `302 Found` (Location: `/`) |
+| `/logout` | `POST` | Revokes Keycloak refresh token, deletes persistent session, clears session cookie | `200 OK` (`{"message":"logged out successfully"}`) |
+| `/me` | `GET` | Returns sanitized user profile (`user_id`, `email`, `name`, `roles`) without exposing raw tokens | `200 OK` (`AuthUserResponse`) |
+| `/backchannel-logout` | `POST` | Receives signed logout token from Keycloak, verifies signature, invalidates sessions matching `sid` | `200 OK` |
+
+#### 2. Inbound Session Middleware & Transparent Token Refresh
+
+All protected BFF aggregate endpoints (`/api/bff/v1/dashboard`, `/api/bff/v1/runs/{id}`, `/api/bff/v1/events`) and reverse proxy routes (`/api/bff/v1/suites`, `/api/bff/v1/profiles`, `/api/bff/v1/schedules`, `/api/bff/v1/runs`) are guarded by `SessionMiddleware`:
+- **Cookie Extraction**: Reads `vuhive_session` cookie (or falls back to an existing `Authorization: Bearer` header if present).
+- **Session Verification**: Validates session validity and sliding expiration with `SessionService`.
+- **Pre-emptive Token Refresh**: Inspects the unverified access token `exp` claim. If the access token expires within **60 seconds**, the middleware asynchronously executes a token refresh with Keycloak, rotates the stored tokens in PostgreSQL atomically, and updates the in-memory session.
+- **Header Injection**: Transparently injects `Authorization: Bearer <access_token>` into the request, ensuring upstream control plane proxies receive valid JWTs.
+- **Context Injection**: Sets `user_id`, `roles`, and the `ClientSession` into the Gin context for downstream handler consumption.
+
+#### 3. Production Multi-Replica Resilience & Pod Eviction Survivability
+
+In Kubernetes production clusters, configure the BFF with multiple replicas (`bff.replicaCount: 2` or higher) alongside persistent PostgreSQL session storage:
+
+```yaml
+bff:
+  replicaCount: 2
+  database:
+    autoMigrate: true
+  session:
+    ttl: "24h"
+    slidingThreshold: "15m"
+    cleanerInterval: "10m"
+    encryptionKeyExistingSecret: "vuhive-session-crypto"
+    encryptionKeyKey: "session-encryption-key"
+  keycloak:
+    issuerUrl: "https://auth.example.com/realms/vuhive"
+    clientId: "vuhive-cloud-bff"
+    clientSecretExistingSecret: "vuhive-bff-keycloak-secret"
+    clientSecretKey: "client-secret"
+```
+
+**Key Operational Capabilities:**
+1. **Shared State & Zero Session Drop on Pod Restarts**: Because sessions and rotated OAuth tokens persist in PostgreSQL (`bff_sessions`) with AES-256-GCM encryption, ingress traffic can be routed round-robin to any BFF replica. If a pod terminates, crashes, or is rescheduled during rolling deployments, active user sessions continue without interruption.
+2. **Cluster-Wide Backchannel Logout**: When Keycloak issues an HTTP POST to `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`, any receiving BFF pod verifies the cryptographic RS256 token and invokes `RevokeByKeycloakSID`. This immediately invalidates the user's session record in PostgreSQL, immediately terminating authorization across all cluster pods.
+3. **Automated Schema Evolution**: The BFF automatically checks and applies database migrations on startup using an isolated migration tracking table (`bff_goose_db_version`), allowing seamless parallel deployments with the core control plane.
 
 ---
 
