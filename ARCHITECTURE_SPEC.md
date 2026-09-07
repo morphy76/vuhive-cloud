@@ -163,12 +163,13 @@ vuhive-cloud/
    - **Go AST Analysis (`go/parser` & `go/ast`):** Parses all uploaded Go source files to verify implementation of the `vuhive.Scenario` contract (`NewScenario()`, `Scenario()`, `InitScenario()`, `Register(*vuhive.Engine)`, or exported `var Scenario`).
    - **Disallowed Package Import Blocklist:** Rejects source code importing unauthorized system or execution libraries (e.g. `os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`, raw sockets) to prevent crypto-mining, backdoors, or non-load-testing workloads.
    - **Policy-Governed Insecure Import Override:** Deployers may configure `ALLOW_INSECURE_IMPORTS` or `ALLOWED_IMPORT_PACKAGES`. When permitted, users can supply `allow_insecure_imports=true` (marking the resulting artifact as `is_dangerous: true` for executor visibility).
-   - **Platform-Managed Driver Injection (`main.go`):** Normalizes user code under `scenario/` and injects an immutable, trusted `main.go` driver wiring CLI flags (`--summary-export`, `--config`) and OS signal handling (`SIGINT`, `SIGTERM`).
+   - **Platform-Managed Driver Injection (`main.go`):** Normalizes user code under `scenario/` and injects an immutable, trusted `main.go` driver importing `github.com/morphy76/vuhive/pkg/vuhive` and wiring CLI flags (`--summary-export`, `--config`) and OS signal handling (`SIGINT`, `SIGTERM`).
    - **Fast Rejection:** If static inspection fails, `POST /api/v1/suites/{id}/builds` immediately aborts with `400 Bad Request` (or `403 Forbidden`), preventing malformed or dangerous archives from consuming cluster build resources.
 3. **Staging:** Control plane saves the normalized source archive with injected driver to S3 bucket `vuhive-sources/{suite_id}/{build_id}.tar.gz`.
 4. **Build Job Dispatch:** Control plane dispatches an ephemeral Kubernetes Job (`vuhive-build-{build_id}`) in `vuhive-system` using image `golang:1.26-alpine`.
-5. **Compilation:** The build pod compiles the static binary:
+5. **Compilation:** The build pod tidies module dependencies and compiles the static binary:
    ```bash
+   go mod tidy
    CGO_ENABLED=0 GOOS=linux GOARCH=${TARGET_ARCH} go build -trimpath -ldflags="-s -w" -o /workspace/runner .
    ```
 6. **Publish:** The build pod uploads the static binary to `s3://vuhive-binaries/{suite_id}/{build_id}/{target_arch}/runner` and notifies the control plane API.

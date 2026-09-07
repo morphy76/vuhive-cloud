@@ -630,7 +630,7 @@ When a `CronJob` fires a `batch/v1` Job:
 
 The control plane implements an automated pre-build static verification gate for all uploaded test archives (`POST /api/v1/suites/{id}/builds`):
 - **`go.mod` Verification**: Validates that `go.mod` declares `github.com/morphy76/vuhive` as a required direct dependency.
-- **Inverted Control (`package scenario`)**: Uploaded Go files must belong to `package scenario` (defining `NewScenario()`, `Scenario()`, `InitScenario()`, or `Register(*vuhive.Engine)`). Defining `package main` or `func main()` is prohibited. The platform automatically injects an immutable `main.go` driver into the compilation workspace.
+- **Inverted Control (`package scenario`)**: Uploaded Go files must belong to `package scenario` (importing `github.com/morphy76/vuhive/pkg/vuhive` and defining `NewScenario()`, `Scenario()`, `InitScenario()`, or `Register(*vuhive.Engine)`). Defining `package main` or `func main()` is prohibited. The platform automatically injects an immutable `main.go` driver into the compilation workspace (importing `github.com/morphy76/vuhive/pkg/vuhive`), executes `go mod tidy` within the ephemeral build container to reconcile module dependencies, and compiles the static runner binary.
 - **Import Blocklist**: Prohibits dangerous libraries (`os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`) by default.
 - **Cluster Deployment Overrides**:
   - `ALLOW_INSECURE_IMPORTS` (`true`/`false`): Controls whether users can request an import blocklist override (`allow_insecure_imports=true`). When enabled, overridden artifacts are flagged as dangerous.
