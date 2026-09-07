@@ -338,6 +338,33 @@ func TestProfileService_UpdateProfile(t *testing.T) {
 		})
 		assert.ErrorIs(t, err, model.ErrInvalidResourceQuantity)
 	})
+
+	t.Run("successfully update profile with security policy", func(t *testing.T) {
+		repo := new(MockRunnerProfileRepository)
+		svc := service.NewProfileService(repo)
+
+		res, _ := model.NewResourceRequirements("1000m", "2000m", "1Gi", "2Gi")
+		existing, _ := model.NewRunnerProfile("orig-name", "orig-desc", "", res, nil, model.Affinity{}, nil)
+
+		repo.On("FindByID", ctx, existing.ID()).Return(existing, nil)
+		repo.On("Save", ctx, mock.MatchedBy(func(p *model.RunnerProfile) bool {
+			return p.ActiveDeadlineSeconds() != nil && *p.ActiveDeadlineSeconds() == 1800 &&
+				p.RuntimeClassName() != nil && *p.RuntimeClassName() == "gvisor"
+		})).Return(nil)
+
+		deadline := int64(1800)
+		runtimeClass := "gvisor"
+		updated, err := svc.UpdateProfile(ctx, existing.ID(), inbound.UpdateProfileCommand{
+			Name:                  "orig-name",
+			ActiveDeadlineSeconds: &deadline,
+			RuntimeClassName:      &runtimeClass,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, updated)
+		assert.Equal(t, int64(1800), *updated.ActiveDeadlineSeconds())
+		assert.Equal(t, "gvisor", *updated.RuntimeClassName())
+		repo.AssertExpectations(t)
+	})
 }
 
 func TestProfileService_DeleteProfile(t *testing.T) {

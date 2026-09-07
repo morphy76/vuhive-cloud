@@ -48,6 +48,9 @@ var (
 	// ErrInvalidToleration indicates an invalid Kubernetes toleration configuration.
 	ErrInvalidToleration = errors.New("invalid toleration configuration")
 
+	// ErrInvalidDeadline indicates an invalid active deadline seconds value.
+	ErrInvalidDeadline = errors.New("active deadline seconds must be greater than zero")
+
 	// ErrBarrierNotFound indicates the barrier session was not found.
 	ErrBarrierNotFound = errors.New("barrier session not found")
 

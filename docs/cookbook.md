@@ -39,6 +39,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 18: BFF Session Management, Sliding Expiration Tuning & Background Janitor Operations](#recipe-18-bff-session-management-sliding-expiration-tuning--background-janitor-operations)
     - [Recipe 19: Keycloak OIDC Client Configuration with PKCE & Backchannel Logout](#recipe-19-keycloak-oidc-client-configuration-with-pkce--backchannel-logout)
     - [Recipe 20: BFF Token Handler, Authentication Endpoints & Transparent Token Refresh](#recipe-20-bff-token-handler-authentication-endpoints--transparent-token-refresh)
+    - [Recipe 21: Runner Pod Security Hardening, Restricted PSS & Egress NetworkPolicies](#recipe-21-runner-pod-security-hardening-restricted-pss--egress-networkpolicies)
 
 ---
 
@@ -331,7 +332,7 @@ The control plane automatically:
 
 ### Recipe 3: Defining & Managing Reusable Runner Profiles
 
-Runner Profiles decouple test suite logic from cluster compute topology. A profile encapsulates resource constraints, node affinity, and tolerations.
+Runner Profiles decouple test suite logic from cluster compute topology. A profile encapsulates resource constraints, node affinity, tolerations, execution timeout deadlines, and container runtime sandboxing.
 
 #### 1. Create a Runner Profile:
 
@@ -340,12 +341,14 @@ curl -i -X POST http://localhost:8080/api/v1/profiles \
   -H "Content-Type: application/json" \
   -d '{
     "name": "high-cpu-isolated-runners",
-    "description": "Dedicated performance testing node pool profile",
+    "description": "Dedicated performance testing node pool profile with gVisor sandbox and 30m deadline",
     "runner_image": "alpine:3.20",
     "cpu_request": "2000m",
     "cpu_limit": "4000m",
     "memory_request": "4Gi",
     "memory_limit": "8Gi",
+    "active_deadline_seconds": 1800,
+    "runtime_class_name": "gvisor",
     "node_selector": {
       "node-role.kubernetes.io/performance-runner": "true"
     },
@@ -368,18 +371,24 @@ curl -i -X POST http://localhost:8080/api/v1/profiles \
   }'
 ```
 
+> **Security & Lifecycle Fields**:
+> - `active_deadline_seconds` (optional integer): Maximum allowed execution duration (in seconds) for runner Jobs. If a test hangs or runs past this limit, Kubernetes forcibly terminates the Pod and marks the Job failed, preventing runaway cloud billing.
+> - `runtime_class_name` (optional string): Injects `spec.template.spec.runtimeClassName` into the Kubernetes Job manifest (e.g. `gvisor`, `runsc`, or `kata`), isolating the container from the host Linux kernel.
+
 #### Response (`201 Created`):
 
 ```json
 {
   "id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
   "name": "high-cpu-isolated-runners",
-  "description": "Dedicated performance testing node pool profile",
+  "description": "Dedicated performance testing node pool profile with gVisor sandbox and 30m deadline",
   "runner_image": "alpine:3.20",
   "cpu_request": "2000m",
   "cpu_limit": "4000m",
   "memory_request": "4Gi",
   "memory_limit": "8Gi",
+  "active_deadline_seconds": 1800,
+  "runtime_class_name": "gvisor",
   "node_selector": {
     "node-role.kubernetes.io/performance-runner": "true"
   },
@@ -2099,6 +2108,118 @@ bff:
 1. **Shared State & Zero Session Drop on Pod Restarts**: Because sessions and rotated OAuth tokens persist in PostgreSQL (`bff_sessions`) with AES-256-GCM encryption, ingress traffic can be routed round-robin to any BFF replica. If a pod terminates, crashes, or is rescheduled during rolling deployments, active user sessions continue without interruption.
 2. **Cluster-Wide Backchannel Logout**: When Keycloak issues an HTTP POST to `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`, any receiving BFF pod verifies the cryptographic RS256 token and invokes `RevokeByKeycloakSID`. This immediately invalidates the user's session record in PostgreSQL, immediately terminating authorization across all cluster pods.
 3. **Automated Schema Evolution**: The BFF automatically checks and applies database migrations on startup using an isolated migration tracking table (`bff_goose_db_version`), allowing seamless parallel deployments with the core control plane.
+
+---
+
+### Recipe 21: Runner Pod Security Hardening, Restricted PSS & Egress NetworkPolicies
+
+Enterprise load testing environments must isolate runner workloads to prevent unauthorized access to sensitive cluster components, cloud provider metadata endpoints, and internal microservices.
+
+#### 1. Out-of-the-Box Restricted Pod Security Standards (PSS)
+
+Every runner Job created by `vuhive-cloud` enforces Kubernetes **Restricted** Pod Security Standards by default:
+
+```yaml
+# Generated Job Pod template securityContext
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container securityContext (runner-init and runner-wrapper)
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Mounts for temporary scratch space under readOnlyRootFilesystem
+volumeMounts:
+  - name: shared-artifacts
+    mountPath: /shared
+  - name: tmp-volume
+    mountPath: /tmp
+```
+
+- **Non-Root Execution**: Workload processes run as unprivileged UID `10001`.
+- **Read-Only Root**: Prevents attackers or untrusted load test binaries from modifying root filesystems.
+- **Scratch Space**: Dedicated `emptyDir` volumes mounted at `/shared` (compiled binary transport) and `/tmp` (application temporary scratch space, DNS resolver cache).
+
+#### 2. Restricting Network Egress with NetworkPolicies
+
+To prevent load test runners from accessing sensitive cloud metadata APIs or scanning internal cluster pods, configure egress NetworkPolicies via Helm:
+
+```yaml
+# deploy/helm/vuhive-cloud/values.yaml or values-production.yaml
+networkPolicy:
+  enabled: true
+  denyMetadata: true
+  denyClusterCIDR: true
+  clusterCIDRs:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+  targetCIDR: "0.0.0.0/0"
+  additionalEgress:
+    # Example: Allow outbound access to a specific external payment gateway API
+    - to:
+        - ipBlock:
+            cidr: "198.51.100.0/24"
+      ports:
+        - protocol: TCP
+          port: 443
+```
+
+When enabled, the rendered `NetworkPolicy` guarantees:
+1. **Cloud Metadata Blocked**: Requests to `169.254.169.254/32` are rejected, preventing AWS STS, GCP metadata, or Azure IMDS token theft.
+2. **Cluster CIDR Blocked**: Requests to internal Kubernetes service and pod IPs are denied, protecting internal control planes and databases.
+3. **Core Infrastructure Allowed**: Egress to cluster DNS (UDP/TCP 53), the control plane callback URL, and configured S3/MinIO endpoints is explicitly permitted.
+4. **Target Allowed**: Egress to load testing targets defined in `targetCIDR` or `additionalEgress` is permitted.
+
+#### 3. Setting Execution Deadlines to Prevent Runaway Jobs
+
+Configure `active_deadline_seconds` on a `RunnerProfile` or override it per test run:
+
+```bash
+# Create or update profile with a 15-minute active deadline
+curl -i -X POST http://localhost:8080/api/v1/profiles \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "strict-timeout-profile",
+    "runner_image": "alpine:3.20",
+    "cpu_request": "1000m",
+    "cpu_limit": "2000m",
+    "memory_request": "1Gi",
+    "memory_limit": "2Gi",
+    "active_deadline_seconds": 900
+  }'
+```
+
+If the runner Job exceeds 900 seconds (15 minutes), Kubernetes immediately terminates the pods with `DeadlineExceeded`, and the control plane updates the `TestRun` status to `FAILED`.
+
+#### 4. Kernel Sandboxing with gVisor / Kata Containers
+
+When running test scenarios authored by untrusted teams or third parties, isolate execution using a specialized container runtime:
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/profiles \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "gvisor-sandboxed-profile",
+    "runner_image": "alpine:3.20",
+    "cpu_request": "1000m",
+    "cpu_limit": "2000m",
+    "memory_request": "1Gi",
+    "memory_limit": "2Gi",
+    "runtime_class_name": "gvisor"
+  }'
+```
+
+The control plane injects `spec.template.spec.runtimeClassName: "gvisor"` into the generated Kubernetes Job, routing execution to the node's sandboxed runtime engine.
 
 ---
 

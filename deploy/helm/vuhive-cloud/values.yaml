@@ -131,6 +131,23 @@ runner:
   initImage: "ghcr.io/morphy76/vuhive-cloud/runner-init:latest"
   defaultImage: "alpine:3.20"
 
+# ── Network Policy Hardening ──────────────────────────────────────────
+networkPolicy:
+  # Enable egress NetworkPolicy to isolate test runner pods conforming to restricted security standards.
+  enabled: false
+  runner:
+    # Deny cloud instance metadata API (169.254.169.254/32) to prevent IAM credential theft.
+    denyMetadata: true
+    metadataCIDR: "169.254.169.254/32"
+    # Deny Kubernetes internal Cluster/Service CIDR (default: 10.96.0.0/12) to block API server access.
+    denyClusterCIDR: true
+    clusterCIDRs:
+      - "10.96.0.0/12"
+    # Target CIDRs allowed for load testing (0.0.0.0/0 except metadata and internal cluster CIDRs).
+    targetCIDR: "0.0.0.0/0"
+    # Additional allowed egress rules if needed.
+    additionalEgress: []
+
 builder:
   namespace: "vuhive-system"
   # When rbac.clusterScoped is false and builder.namespace differs from the release namespace,
