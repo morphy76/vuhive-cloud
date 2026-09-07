@@ -68,9 +68,22 @@ func (g *RunnerJobGenerator) GenerateJob(
 
 	backoffLimit := g.cfg.RunnerBackoffLimit
 	activeDeadlineSeconds := g.cfg.RunnerActiveDeadlineSeconds
+	if profile.ActiveDeadlineSeconds() != nil && *profile.ActiveDeadlineSeconds() > 0 {
+		activeDeadlineSeconds = *profile.ActiveDeadlineSeconds()
+	}
+	if opts.ActiveDeadlineSeconds != nil && *opts.ActiveDeadlineSeconds > 0 {
+		activeDeadlineSeconds = *opts.ActiveDeadlineSeconds
+	}
 	if activeDeadlineSeconds <= 0 {
 		activeDeadlineSeconds = 3600
 	}
+
+	var runtimeClassName *string
+	if profile.RuntimeClassName() != nil && strings.TrimSpace(*profile.RuntimeClassName()) != "" {
+		rc := strings.TrimSpace(*profile.RuntimeClassName())
+		runtimeClassName = &rc
+	}
+
 	ttlSecondsAfterFinished := g.cfg.RunnerTTLSecondsAfterFinished
 	if ttlSecondsAfterFinished <= 0 {
 		ttlSecondsAfterFinished = 86400
@@ -294,12 +307,19 @@ func (g *RunnerJobGenerator) GenerateJob(
 							Type: corev1.SeccompProfileTypeRuntimeDefault,
 						},
 					},
-					NodeSelector: profile.NodeSelector(),
-					Affinity:     k8sAffinity,
-					Tolerations:  k8sTolerations,
+					NodeSelector:     profile.NodeSelector(),
+					Affinity:         k8sAffinity,
+					Tolerations:      k8sTolerations,
+					RuntimeClassName: runtimeClassName,
 					Volumes: []corev1.Volume{
 						{
 							Name: "shared-workspace",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "tmp-volume",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
@@ -322,6 +342,10 @@ func (g *RunnerJobGenerator) GenerateJob(
 								{
 									Name:      "shared-workspace",
 									MountPath: "/shared",
+								},
+								{
+									Name:      "tmp-volume",
+									MountPath: "/tmp",
 								},
 							},
 						},
@@ -354,6 +378,10 @@ func (g *RunnerJobGenerator) GenerateJob(
 								{
 									Name:      "shared-workspace",
 									MountPath: "/shared",
+								},
+								{
+									Name:      "tmp-volume",
+									MountPath: "/tmp",
 								},
 							},
 						},

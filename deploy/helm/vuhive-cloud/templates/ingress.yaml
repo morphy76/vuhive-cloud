@@ -1,4 +1,4 @@
-{{- if .Values.ingress.enabled -}}
+{{- if and .Values.ingress .Values.ingress.enabled -}}
 {{- $fullName := include "vuhive-cloud.fullname" . -}}
 {{- $svcPort := .Values.service.port -}}
 {{- $bffFullName := include "vuhive-cloud.bff.fullname" . -}}

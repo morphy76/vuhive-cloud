@@ -270,7 +270,7 @@ func TestHelmChart_BFF_CustomExistingSecretsAndURL(t *testing.T) {
 	assert.Equal(t, "my-session-key", sessionKey)
 }
 
-func TestHelmChart_BFF_PostgresSessionAndServiceAlias(t *testing.T) {
+func TestHelmChart_BFF_PostgresSessionAndCanonicalService(t *testing.T) {
 	rendered := runHelmTemplate(t,
 		"--set", "bff.replicaCount=2",
 		"--set", "bff.session.encryptionKey=my-32-byte-secret-encryption-key",
@@ -301,9 +301,44 @@ func TestHelmChart_BFF_PostgresSessionAndServiceAlias(t *testing.T) {
 	}
 	assert.Equal(t, "postgres://bff:secret@custom-pg:5432/bffdb", dbURLVal)
 
-	// Check alias service vuhive-cloud-bff exists
+	// Check canonical BFF service exists and duplicate alias service vuhive-cloud-bff does NOT exist
+	canonicalSvc := findResource(docs, "Service", "vuhive-vuhive-cloud-bff")
+	require.NotNil(t, canonicalSvc, "canonical BFF service must exist")
+
 	aliasSvc := findResource(docs, "Service", "vuhive-cloud-bff")
-	require.NotNil(t, aliasSvc)
+	assert.Nil(t, aliasSvc, "duplicate/alias BFF service 'vuhive-cloud-bff' must not be created")
+}
+
+func TestHelmChart_Ingress_NullOrOmitted(t *testing.T) {
+	rendered := runHelmTemplate(t, "--set", "ingress=null")
+	docs := splitManifests(rendered)
+	ingress := findResource(docs, "Ingress", "vuhive-vuhive-cloud")
+	assert.Nil(t, ingress, "Ingress should not be rendered when ingress is null")
+}
+
+func TestHelmChart_ValuesDev_LocalImages(t *testing.T) {
+	rendered := runHelmTemplate(t, "-f", "vuhive-cloud/values-dev.yaml")
+	docs := splitManifests(rendered)
+
+	serverDep := findResource(docs, "Deployment", "vuhive-vuhive-cloud")
+	require.NotNil(t, serverDep)
+	serverSpec := serverDep["spec"].(map[string]interface{})
+	serverTmpl := serverSpec["template"].(map[string]interface{})
+	serverPodSpec := serverTmpl["spec"].(map[string]interface{})
+	serverContainers := serverPodSpec["containers"].([]interface{})
+	serverC := serverContainers[0].(map[string]interface{})
+	assert.Equal(t, "vuhive/server:local", serverC["image"])
+	assert.Equal(t, "Never", serverC["imagePullPolicy"])
+
+	bffDep := findResource(docs, "Deployment", "vuhive-vuhive-cloud-bff")
+	require.NotNil(t, bffDep)
+	bffSpec := bffDep["spec"].(map[string]interface{})
+	bffTmpl := bffSpec["template"].(map[string]interface{})
+	bffPodSpec := bffTmpl["spec"].(map[string]interface{})
+	bffContainers := bffPodSpec["containers"].([]interface{})
+	bffC := bffContainers[0].(map[string]interface{})
+	assert.Equal(t, "vuhive/bff:local", bffC["image"])
+	assert.Equal(t, "Never", bffC["imagePullPolicy"])
 }
 
 func TestHelmChart_ValuesProduction_BFFRendering(t *testing.T) {
@@ -349,6 +384,41 @@ func TestHelmChart_ValuesProduction_BFFRendering(t *testing.T) {
 	dbSecret, dbKey := findEnvSecretRef("DATABASE_URL")
 	assert.Equal(t, "vuhive-db-secret", dbSecret)
 	assert.Equal(t, "DATABASE_URL", dbKey)
+}
+
+func TestHelmChart_NetworkPolicyRendering(t *testing.T) {
+	t.Run("disabled by default", func(t *testing.T) {
+		rendered := runHelmTemplate(t)
+		docs := splitManifests(rendered)
+		netPol := findResource(docs, "NetworkPolicy", "vuhive-vuhive-cloud-runner-isolation")
+		assert.Nil(t, netPol)
+	})
+
+	t.Run("rendered when networkPolicy.enabled is true", func(t *testing.T) {
+		rendered := runHelmTemplate(t,
+			"--set", "networkPolicy.enabled=true",
+			"--set", "runner.namespace=vuhive-runners",
+		)
+		docs := splitManifests(rendered)
+		netPol := findResource(docs, "NetworkPolicy", "vuhive-vuhive-cloud-runner-isolation")
+		require.NotNil(t, netPol)
+
+		metadata := netPol["metadata"].(map[string]interface{})
+		assert.Equal(t, "vuhive-runners", metadata["namespace"])
+
+		spec := netPol["spec"].(map[string]interface{})
+		podSelector := spec["podSelector"].(map[string]interface{})
+		matchLabels := podSelector["matchLabels"].(map[string]interface{})
+		assert.Equal(t, "vuhive-runner", matchLabels["app.kubernetes.io/name"])
+
+		egressList := spec["egress"].([]interface{})
+		require.NotEmpty(t, egressList)
+
+		// Check DNS rule
+		dnsRule := egressList[0].(map[string]interface{})
+		ports := dnsRule["ports"].([]interface{})
+		require.Len(t, ports, 2)
+	})
 }
 
 

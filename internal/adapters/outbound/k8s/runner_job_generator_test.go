@@ -121,9 +121,11 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		assert.Equal(t, corev1.TaintEffectNoSchedule, podSpec.Tolerations[0].Effect)
 
 		// Volumes
-		require.Len(t, podSpec.Volumes, 1)
+		require.Len(t, podSpec.Volumes, 2)
 		assert.Equal(t, "shared-workspace", podSpec.Volumes[0].Name)
 		assert.NotNil(t, podSpec.Volumes[0].EmptyDir)
+		assert.Equal(t, "tmp-volume", podSpec.Volumes[1].Name)
+		assert.NotNil(t, podSpec.Volumes[1].EmptyDir)
 
 		// Init Container
 		require.Len(t, podSpec.InitContainers, 1)
@@ -147,9 +149,11 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		assert.Equal(t, "vuhive-configs/suite-123/vuhive.yaml", envMap["S3_CONFIG_KEY"])
 		assert.Equal(t, "/shared", envMap["SHARED_DIR"])
 
-		require.Len(t, initC.VolumeMounts, 1)
+		require.Len(t, initC.VolumeMounts, 2)
 		assert.Equal(t, "shared-workspace", initC.VolumeMounts[0].Name)
 		assert.Equal(t, "/shared", initC.VolumeMounts[0].MountPath)
+		assert.Equal(t, "tmp-volume", initC.VolumeMounts[1].Name)
+		assert.Equal(t, "/tmp", initC.VolumeMounts[1].MountPath)
 
 		// Main Container
 		require.Len(t, podSpec.Containers, 1)
@@ -310,6 +314,65 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		assert.Equal(t, "vuhive-runner", envMap["VUHIVE_CLIENT_ID"])
 		assert.Equal(t, "vuhive-runner-secret", envMap["VUHIVE_CLIENT_SECRET"])
 		assert.Equal(t, "http://keycloak/token", envMap["VUHIVE_TOKEN_URL"])
+	})
+
+	t.Run("generate job respects security hardening, deadline precedence, and runtime class", func(t *testing.T) {
+		profileDeadline := int64(1200)
+		runtimeClass := "gvisor"
+		p, err := model.NewRunnerProfile(
+			"sec-profile", "desc", "alpine:3.20", resources, nil, model.Affinity{}, nil,
+		)
+		require.NoError(t, err)
+		p.WithActiveDeadlineSeconds(&profileDeadline).WithRuntimeClassName(&runtimeClass)
+
+		run, err := model.NewTestRun("suite-1", "art-1", nil, p.ID(), nil)
+		require.NoError(t, err)
+
+		// 1. Profile deadline used when opts has no override
+		job, err := generator.GenerateJob(run, p, outbound.RunnerJobOptions{S3BinaryKey: "key"})
+		require.NoError(t, err)
+		require.NotNil(t, job.Spec.ActiveDeadlineSeconds)
+		assert.Equal(t, int64(1200), *job.Spec.ActiveDeadlineSeconds)
+		require.NotNil(t, job.Spec.Template.Spec.RuntimeClassName)
+		assert.Equal(t, "gvisor", *job.Spec.Template.Spec.RuntimeClassName)
+
+		// Check tmp emptyDir volume mount in pod spec
+		hasTmpVolume := false
+		for _, v := range job.Spec.Template.Spec.Volumes {
+			if v.Name == "tmp-volume" && v.EmptyDir != nil {
+				hasTmpVolume = true
+				break
+			}
+		}
+		assert.True(t, hasTmpVolume, "pod must contain tmp-volume emptyDir")
+
+		// Check tmp mount in runner container
+		runnerC := job.Spec.Template.Spec.Containers[0]
+		hasTmpMount := false
+		for _, vm := range runnerC.VolumeMounts {
+			if vm.Name == "tmp-volume" && vm.MountPath == "/tmp" {
+				hasTmpMount = true
+				break
+			}
+		}
+		assert.True(t, hasTmpMount, "runner container must mount /tmp")
+
+		// Check restricted PSS securityContext
+		require.NotNil(t, runnerC.SecurityContext)
+		assert.False(t, *runnerC.SecurityContext.AllowPrivilegeEscalation)
+		assert.True(t, *runnerC.SecurityContext.ReadOnlyRootFilesystem)
+		require.NotNil(t, runnerC.SecurityContext.Capabilities)
+		assert.Contains(t, runnerC.SecurityContext.Capabilities.Drop, corev1.Capability("ALL"))
+
+		// 2. Opts deadline overrides profile deadline
+		optsDeadline := int64(600)
+		job2, err := generator.GenerateJob(run, p, outbound.RunnerJobOptions{
+			S3BinaryKey:           "key",
+			ActiveDeadlineSeconds: &optsDeadline,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, job2.Spec.ActiveDeadlineSeconds)
+		assert.Equal(t, int64(600), *job2.Spec.ActiveDeadlineSeconds)
 	})
 }
 

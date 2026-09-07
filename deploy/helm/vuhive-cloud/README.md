@@ -59,6 +59,27 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set s3.endpoint=http://vuhive-infra-minio:9000
 ```
 
+#### Local Development Deployment (`values-dev.yaml`)
+
+When testing local container images built via `make docker-build` with `--load` (e.g. on Rancher Desktop or local clusters), deploy using the standardized `values-dev.yaml` template:
+
+```bash
+helm install vuhive deploy/helm/vuhive-cloud \
+  --namespace vuhive-system \
+  -f deploy/helm/vuhive-cloud/values-dev.yaml \
+  --set database.host=vuhive-infra-postgresql \
+  --set s3.endpoint=http://vuhive-infra-minio:9000
+```
+
+This applies image overrides (`vuhive/server:local`, `vuhive/runner-init:local`, `vuhive/bff:local`) with `imagePullPolicy: Never` so the local CRI image store is utilized directly.
+
+> [!NOTE]
+> - **MinIO Ports**: MinIO exposes two distinct ports:
+>   - **Port `9000` (S3 API)**: Used by `s3.endpoint: http://vuhive-infra-minio:9000` for artifact uploads, binaries, and execution logs.
+>   - **Port `9001` (Console / WebUI)**: MinIO Web UI dashboard (access via `kubectl port-forward -n vuhive-system svc/vuhive-infra-minio 9001:9001`).
+> - **Path-Style S3 Addressing**: When `s3.endpoint` is non-empty (as in the MinIO case above), `s3.usePathStyle` is automatically treated as `true` by the control plane server, runner-init, and runner-wrapper. Path-style addressing (`http://<endpoint>/<bucket>/`) is required for MinIO because virtual-hosted-style URLs (`http://<bucket>.<service>/`) depend on DNS wildcards unavailable for Kubernetes Service names.
+> - **Database Schema Migrations**: The control plane runs automated Goose migrations on startup (or via `database.autoMigrate: true` pre-install hook), sequentially applying `000001_init_schema.sql`, `000002_retention_policies.sql`, and `000003_create_bff_sessions.sql`.
+
 #### Enabling OIDC Authentication & RBAC (with Keycloak)
 
 To secure the control plane REST API with Keycloak OpenID Connect and Role-Based Access Control:
@@ -74,9 +95,6 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set auth.runner.clientId=vuhive-runner \
   --set auth.runner.clientSecret=vuhive-runner-secret
 ```
-
-> [!NOTE]
-> When `s3.endpoint` is non-empty (as in the MinIO case above), `s3.usePathStyle` is automatically treated as `true` by the control plane server, runner-init, and runner-wrapper. Path-style addressing (`http://<endpoint>/<bucket>/`) is required for MinIO because virtual-hosted-style URLs (`http://<bucket>.<service>/`) depend on DNS wildcards unavailable for Kubernetes Service names.
 
 ### 3. Verify Health & Version Metadata
 
@@ -283,7 +301,7 @@ To bind an external Keycloak instance or existing corporate realm, administrator
    - **Valid Redirect URIs**: `https://<dashboard-domain>/*` (for local evaluation: `/*` or `http://localhost:8081/*`)
    - **Web Origins**: `+`
    - **Backchannel Logout URL**:
-     - *In-Cluster (Evaluations & Internal Mesh)*: `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (or release-prefixed `http://<release>-vuhive-cloud-bff:8081/...`)
+     - *In-Cluster (Evaluations & Internal Mesh)*: `http://<release>-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (e.g. `http://vuhive-vuhive-cloud-bff:8081/...` when release name is `vuhive`, or `http://vuhive-cloud-bff:8081/...` when release name is `vuhive-cloud`)
      - *External Ingress (Production IdP)*: `https://<dashboard-domain>/api/v1/bff/auth/backchannel-logout`
    - **Backchannel Logout Session Required**: `On` (Mandatory: instructs Keycloak to embed the `sid` session ID claim in signed `logout_token` payloads, enabling targeted revocation of user sessions in PostgreSQL across all BFF replicas)
    - **Backchannel Logout Revoke Offline Sessions**: `On`
@@ -644,7 +662,7 @@ The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway an
   - `SESSION_COOKIE_SECRET`: Encryption key for securing `HttpOnly` session cookies in browser clients.
   - `SESSION_ENCRYPTION_KEY`: 32-byte AES-256-GCM encryption key for stored OAuth tokens at rest in PostgreSQL.
   - `DATABASE_URL`: PostgreSQL connection string. When provided, the BFF executes automatic startup migrations for `bff_sessions` using table `bff_goose_db_version`, enabling seamless horizontal scaling across multi-pod BFF deployments (`bff.replicaCount: 2+`).
-  - **Service Discovery**: The chart automatically creates both `<release>-bff` and `vuhive-cloud-bff` Service objects, ensuring Keycloak OIDC backchannel logout requests (`http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`) resolve seamlessly in cluster DNS.
+  - **Service Discovery**: The chart creates a single canonical Service named `{{ include "vuhive-cloud.bff.fullname" . }}` (e.g. `<release>-vuhive-cloud-bff` or `vuhive-cloud-bff`). Keycloak OIDC backchannel logout requests should target the canonical service URL (e.g., `http://<release>-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`).
 
 #### Progressive Web App (PWA) & HTTPS / Ingress Requirements
 
@@ -664,6 +682,51 @@ The control plane includes an automated retention lifecycle worker and housekeep
 - **Orphaned & Expired Artifact Cleanup**: Abandoned or failed builds with no referring test runs are automatically purged, and expired binaries are dereferenced safely without violating foreign key constraints.
 - **Native S3 Bucket Lifecycle Synchronization**: When `housekeeping.applyS3Lifecycle: true`, the control plane configures native S3 bucket lifecycle rules on startup and during housekeeping cycles, delegating automated object expiration directly to the storage subsystem (AWS S3 or MinIO).
 - **On-Demand API Triggers**: Operators can trigger immediate ad-hoc housekeeping sweeps or test dry-run simulations via `POST /api/v1/system/housekeeping` and inspect active policies via `GET /api/v1/system/housekeeping/policy`.
+
+### Runner Pod Security Hardening & Egress NetworkPolicies
+
+The control plane enforces strict Kubernetes security standards for all spawned runner workloads:
+
+#### 1. Pod Security Standards (Restricted Profile) Compliance
+All generated runner Jobs and scheduled CronJobs comply out-of-the-box with Kubernetes **Restricted** Pod Security Standards (PSS):
+- **Unprivileged User & Group**: Pods run as dedicated non-root UID/GID `10001` (`runAsNonRoot: true`, `runAsUser: 10001`, `runAsGroup: 10001`, `fsGroup: 10001`).
+- **Privilege Escalation Disabled**: `allowPrivilegeEscalation: false`.
+- **Capability Dropping**: All Linux kernel capabilities are dropped (`capabilities.drop: ["ALL"]`).
+- **Seccomp Profile**: Default seccomp isolation enabled (`seccompProfile: { type: "RuntimeDefault" }`).
+- **Read-Only Root Filesystems**: Both init container (`runner-init`) and workload container (`runner-wrapper`) enforce `readOnlyRootFilesystem: true`. Writable scratch spaces are provided exclusively via ephemeral `emptyDir` memory/disk volume mounts at `/shared` (for artifact transfer) and `/tmp` (for temporary scratch space and system temp files).
+
+#### 2. Egress NetworkPolicy Isolation (`networkPolicy.enabled`)
+When multi-tenant or hardened cluster security is required, enable runner NetworkPolicies to isolate test traffic and prevent lateral movement or metadata credential exfiltration:
+
+```yaml
+networkPolicy:
+  enabled: true
+  denyMetadata: true
+  denyClusterCIDR: true
+  clusterCIDRs:
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+  targetCIDR: "0.0.0.0/0"
+  additionalEgress: []
+```
+
+- **Cloud Metadata Protection (`denyMetadata: true`)**: Blocks requests to cloud provider instance metadata endpoints (`169.254.169.254/32`), preventing SSRF attacks against AWS IAM / GCP / Azure instance metadata services.
+- **Internal Cluster Isolation (`denyClusterCIDR: true`)**: Prevents test runner containers from scanning or interacting with internal cluster services, Kubernetes API servers, or adjacent pods.
+- **Permitted Traffic**:
+  - DNS resolution (UDP/TCP port 53).
+  - Outbound telemetry to the control plane callback URL (`apiCallbackUrl`).
+  - Outbound object storage access to AWS S3 or MinIO endpoints.
+  - Test target egress defined by `targetCIDR` or custom CIDR/port rules in `additionalEgress`.
+
+#### 3. Execution Timeouts & Deadlines
+To guard against hanging processes or runaway load tests, the control plane injects `spec.activeDeadlineSeconds` into every runner Job. The deadline is determined using the following precedence hierarchy:
+1. Ad-hoc test run options (`ActiveDeadlineSeconds` override if specified).
+2. Runner Profile setting (`active_deadline_seconds`).
+3. Helm chart / server global default (`runner.activeDeadlineSeconds`, default `3600s`).
+
+#### 4. Container Sandboxing with RuntimeClass
+For sensitive or untrusted load test workloads requiring hypervisor or gVisor kernel isolation, specify `runtime_class_name` on a `RunnerProfile` (e.g. `gvisor`, `runsc`, `kata`). The control plane automatically propagates `spec.template.spec.runtimeClassName` to runner Jobs.
 
 ## Configuration Parameters
 
@@ -701,6 +764,13 @@ The control plane includes an automated retention lifecycle worker and housekeep
 | `runner.createNamespace` | Automatically create `runner.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release namespace) | `true` |
 | `runner.initImage` | Init container image fetching binaries from S3 | `ghcr.io/morphy76/vuhive-cloud/runner-init:latest` |
 | `runner.defaultImage` | Default runner base image | `alpine:3.20` |
+| `runner.activeDeadlineSeconds` | Default active deadline timeout (seconds) injected into runner Jobs if unspecified on profile | `3600` |
+| `networkPolicy.enabled` | Enable egress NetworkPolicy for runner pods in `runner.namespace` | `false` |
+| `networkPolicy.denyMetadata` | Block egress access to cloud provider instance metadata (`169.254.169.254/32`) | `true` |
+| `networkPolicy.denyClusterCIDR` | Block egress access to internal Kubernetes cluster CIDRs | `true` |
+| `networkPolicy.clusterCIDRs` | Kubernetes cluster CIDRs blocked when `denyClusterCIDR: true` | `["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]` |
+| `networkPolicy.targetCIDR` | CIDR block representing test targets that runners are permitted to load test | `0.0.0.0/0` |
+| `networkPolicy.additionalEgress` | Additional custom egress rules appended to the runner NetworkPolicy | `[]` |
 | `builder.namespace` | Namespace where test builder jobs run | `vuhive-system` |
 | `builder.createNamespace` | Automatically create `builder.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release/runner namespace) | `true` |
 | `builder.image` | Builder container image | `golang:1.26-alpine` |

@@ -51,9 +51,10 @@ func (r *RunnerProfileRepository) Save(ctx context.Context, profile *model.Runne
 			id, name, description, runner_image,
 			cpu_request, cpu_limit, memory_request, memory_limit,
 			node_selector, affinity, tolerations,
+			active_deadline_seconds, runtime_class_name,
 			created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			description = EXCLUDED.description,
@@ -65,6 +66,8 @@ func (r *RunnerProfileRepository) Save(ctx context.Context, profile *model.Runne
 			node_selector = EXCLUDED.node_selector,
 			affinity = EXCLUDED.affinity,
 			tolerations = EXCLUDED.tolerations,
+			active_deadline_seconds = EXCLUDED.active_deadline_seconds,
+			runtime_class_name = EXCLUDED.runtime_class_name,
 			updated_at = EXCLUDED.updated_at
 	`
 	_, err = r.pool.Exec(ctx, query,
@@ -79,6 +82,8 @@ func (r *RunnerProfileRepository) Save(ctx context.Context, profile *model.Runne
 		nodeSelectorJSON,
 		affinityJSON,
 		tolerationsJSON,
+		profile.ActiveDeadlineSeconds(),
+		profile.RuntimeClassName(),
 		profile.CreatedAt(),
 		profile.UpdatedAt(),
 	)
@@ -101,29 +106,33 @@ func (r *RunnerProfileRepository) FindByID(ctx context.Context, id string) (*mod
 		SELECT id, name, description, runner_image,
 		       cpu_request, cpu_limit, memory_request, memory_limit,
 		       node_selector, affinity, tolerations,
+		       active_deadline_seconds, runtime_class_name,
 		       created_at, updated_at
 		FROM runner_profiles
 		WHERE id = $1
 	`
 	var (
-		profileID        string
-		name             string
-		description      string
-		runnerImage      string
-		cpuRequest       string
-		cpuLimit         string
-		memoryRequest    string
-		memoryLimit      string
-		nodeSelectorJSON []byte
-		affinityJSON     []byte
-		tolerationsJSON  []byte
-		createdAt        time.Time
-		updatedAt        time.Time
+		profileID             string
+		name                  string
+		description           string
+		runnerImage           string
+		cpuRequest            string
+		cpuLimit              string
+		memoryRequest         string
+		memoryLimit           string
+		nodeSelectorJSON      []byte
+		affinityJSON          []byte
+		tolerationsJSON       []byte
+		activeDeadlineSeconds *int64
+		runtimeClassName      *string
+		createdAt             time.Time
+		updatedAt             time.Time
 	)
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&profileID, &name, &description, &runnerImage,
 		&cpuRequest, &cpuLimit, &memoryRequest, &memoryLimit,
 		&nodeSelectorJSON, &affinityJSON, &tolerationsJSON,
+		&activeDeadlineSeconds, &runtimeClassName,
 		&createdAt, &updatedAt,
 	)
 	if err != nil {
@@ -135,6 +144,7 @@ func (r *RunnerProfileRepository) FindByID(ctx context.Context, id string) (*mod
 		profileID, name, description, runnerImage,
 		cpuRequest, cpuLimit, memoryRequest, memoryLimit,
 		nodeSelectorJSON, affinityJSON, tolerationsJSON,
+		activeDeadlineSeconds, runtimeClassName,
 		createdAt, updatedAt,
 	)
 	if err != nil {
@@ -156,29 +166,33 @@ func (r *RunnerProfileRepository) FindByName(ctx context.Context, name string) (
 		SELECT id, name, description, runner_image,
 		       cpu_request, cpu_limit, memory_request, memory_limit,
 		       node_selector, affinity, tolerations,
+		       active_deadline_seconds, runtime_class_name,
 		       created_at, updated_at
 		FROM runner_profiles
 		WHERE name = $1
 	`
 	var (
-		profileID        string
-		profileName      string
-		description      string
-		runnerImage      string
-		cpuRequest       string
-		cpuLimit         string
-		memoryRequest    string
-		memoryLimit      string
-		nodeSelectorJSON []byte
-		affinityJSON     []byte
-		tolerationsJSON  []byte
-		createdAt        time.Time
-		updatedAt        time.Time
+		profileID             string
+		profileName           string
+		description           string
+		runnerImage           string
+		cpuRequest            string
+		cpuLimit              string
+		memoryRequest         string
+		memoryLimit           string
+		nodeSelectorJSON      []byte
+		affinityJSON          []byte
+		tolerationsJSON       []byte
+		activeDeadlineSeconds *int64
+		runtimeClassName      *string
+		createdAt             time.Time
+		updatedAt             time.Time
 	)
 	err := r.pool.QueryRow(ctx, query, name).Scan(
 		&profileID, &profileName, &description, &runnerImage,
 		&cpuRequest, &cpuLimit, &memoryRequest, &memoryLimit,
 		&nodeSelectorJSON, &affinityJSON, &tolerationsJSON,
+		&activeDeadlineSeconds, &runtimeClassName,
 		&createdAt, &updatedAt,
 	)
 	if err != nil {
@@ -190,6 +204,7 @@ func (r *RunnerProfileRepository) FindByName(ctx context.Context, name string) (
 		profileID, profileName, description, runnerImage,
 		cpuRequest, cpuLimit, memoryRequest, memoryLimit,
 		nodeSelectorJSON, affinityJSON, tolerationsJSON,
+		activeDeadlineSeconds, runtimeClassName,
 		createdAt, updatedAt,
 	)
 	if err != nil {
@@ -211,6 +226,7 @@ func (r *RunnerProfileRepository) List(ctx context.Context) ([]*model.RunnerProf
 		SELECT id, name, description, runner_image,
 		       cpu_request, cpu_limit, memory_request, memory_limit,
 		       node_selector, affinity, tolerations,
+		       active_deadline_seconds, runtime_class_name,
 		       created_at, updated_at
 		FROM runner_profiles
 		ORDER BY created_at ASC
@@ -225,24 +241,27 @@ func (r *RunnerProfileRepository) List(ctx context.Context) ([]*model.RunnerProf
 	var profiles []*model.RunnerProfile
 	for rows.Next() {
 		var (
-			profileID        string
-			name             string
-			description      string
-			runnerImage      string
-			cpuRequest       string
-			cpuLimit         string
-			memoryRequest    string
-			memoryLimit      string
-			nodeSelectorJSON []byte
-			affinityJSON     []byte
-			tolerationsJSON  []byte
-			createdAt        time.Time
-			updatedAt        time.Time
+			profileID             string
+			name                  string
+			description           string
+			runnerImage           string
+			cpuRequest            string
+			cpuLimit              string
+			memoryRequest         string
+			memoryLimit           string
+			nodeSelectorJSON      []byte
+			affinityJSON          []byte
+			tolerationsJSON       []byte
+			activeDeadlineSeconds *int64
+			runtimeClassName      *string
+			createdAt             time.Time
+			updatedAt             time.Time
 		)
 		if err := rows.Scan(
 			&profileID, &name, &description, &runnerImage,
 			&cpuRequest, &cpuLimit, &memoryRequest, &memoryLimit,
 			&nodeSelectorJSON, &affinityJSON, &tolerationsJSON,
+			&activeDeadlineSeconds, &runtimeClassName,
 			&createdAt, &updatedAt,
 		); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan runner profile row")
@@ -253,6 +272,7 @@ func (r *RunnerProfileRepository) List(ctx context.Context) ([]*model.RunnerProf
 			profileID, name, description, runnerImage,
 			cpuRequest, cpuLimit, memoryRequest, memoryLimit,
 			nodeSelectorJSON, affinityJSON, tolerationsJSON,
+			activeDeadlineSeconds, runtimeClassName,
 			createdAt, updatedAt,
 		)
 		if err != nil {
@@ -296,6 +316,7 @@ func unmarshalProfile(
 	profileID, name, description, runnerImage string,
 	cpuRequest, cpuLimit, memoryRequest, memoryLimit string,
 	nodeSelectorJSON, affinityJSON, tolerationsJSON []byte,
+	activeDeadlineSeconds *int64, runtimeClassName *string,
 	createdAt, updatedAt time.Time,
 ) (*model.RunnerProfile, error) {
 	resources, err := model.NewResourceRequirements(cpuRequest, cpuLimit, memoryRequest, memoryLimit)
@@ -324,11 +345,16 @@ func unmarshalProfile(
 		}
 	}
 
-	return model.NewRunnerProfileWithID(
+	p, err := model.NewRunnerProfileWithID(
 		profileID, name, description, runnerImage,
 		resources, nodeSelector, affinity, tolerations,
 		createdAt, updatedAt,
 	)
+	if err != nil {
+		return nil, err
+	}
+	p.WithActiveDeadlineSeconds(activeDeadlineSeconds).WithRuntimeClassName(runtimeClassName)
+	return p, nil
 }
 
 // Static compile-time interface assertion
