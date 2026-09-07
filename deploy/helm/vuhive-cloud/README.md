@@ -121,14 +121,227 @@ helm install vuhive deploy/helm/vuhive-cloud \
 
 For full details on local container building, BuildKit cache pruning (`make docker-prune`), and troubleshooting `ImagePullBackOff` / Kubelet ImageGC eviction issues, see [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
-### 5. Production Deployment (with External PostgreSQL, S3 & OIDC)
+### 5. External Infrastructure & Production Deployment Scenarios
 
-In production environments, backing services should be provisioned via managed cloud infrastructure (e.g. AWS Aurora / RDS, GCP Cloud SQL, CloudNativePG), dedicated object storage (AWS S3, Cloudflare R2, Ceph), and enterprise Identity Providers (production Keycloak, Okta, Auth0, Microsoft Entra ID).
+In production environments, backing services should be provisioned via managed cloud infrastructure (e.g. AWS Aurora / RDS, GCP Cloud SQL, CloudNativePG), dedicated object storage (AWS S3, Cloudflare R2, Ceph), and enterprise Identity Providers (production Keycloak cluster, Okta, Auth0, Microsoft Entra ID).
 
-> [!TIP]
-> For high-level architectural comparison and provider options (AWS RDS, CloudNativePG, Cloudflare R2, Ceph, Okta, Keycloak), see the [External Infrastructure & Third-Party Deployment Scenarios section in root README.md](../../README.md#external-infrastructure--third-party-deployment-scenarios).
+#### Architectural Boundary: Local Evaluation vs. Production
 
-#### Step 1: Create Kubernetes Secrets for External Credentials
+| Capability | Local Evaluation (`vuhive-cloud-infra`) | Production & Enterprise Infrastructure |
+|---|---|---|
+| **Database** | Ephemeral, single-replica PostgreSQL 16 pod (`emptyDir` or local PVC) | High-availability PostgreSQL cluster (AWS Aurora / RDS, GCP Cloud SQL, CloudNativePG, Crunchy Data PGO) with automated backups, point-in-time recovery (PITR), and read replicas |
+| **Object Storage** | Standalone MinIO container | Resilient, distributed object storage (AWS S3, Cloudflare R2, Ceph Object Gateway, enterprise MinIO tenant) with multi-AZ replication, lifecycle expiration policies, and SSE encryption |
+| **Identity & IAM** | Ephemeral Keycloak instance with pre-imported realm and test credentials | Enterprise Identity Provider (production Keycloak cluster, Okta, Auth0, Microsoft Entra ID / Azure AD, AWS Cognito, Google Cloud Identity) with corporate SSO/MFA |
+| **Credential Management** | Plaintext Helm values with default development credentials | External Kubernetes Secrets (`database.existingSecret`, `s3.existingSecret`, `auth.runner.existingSecret`), AWS Secrets Manager, HashiCorp Vault, or External Secrets Operator (ESO) |
+| **Network & Transport** | Plaintext HTTP and non-TLS database connections (`sslmode=disable`) | End-to-end TLS encryption with enforced SSL (`sslmode=require` / `verify-full`) and HTTPS endpoints |
+
+---
+
+#### A. PostgreSQL Database Binding Scenarios
+
+The control plane stores test suites, runner profiles, schedules, test run metadata, and aggregated performance KPIs in PostgreSQL.
+
+##### Supported Third-Party Deployment Options
+- **Managed Cloud Databases**: AWS RDS / Aurora PostgreSQL, GCP Cloud SQL for PostgreSQL, Azure Database for PostgreSQL.
+- **Enterprise Kubernetes Operators**: [CloudNativePG (`cnpg`)](https://cloudnative-pg.io/), [Crunchy Data PGO](https://access.crunchydata.com/documentation/postgres-operator/latest/), [Bitnami PostgreSQL](https://github.com/bitnami/charts/tree/main/bitnami/postgresql).
+
+##### Secure Credential Management with `database.existingSecret`
+To avoid storing sensitive database connection strings in Helm values files or version control, pre-provision a Kubernetes Secret:
+
+```bash
+kubectl create secret generic vuhive-db-secret \
+  --namespace vuhive-system \
+  --from-literal=DATABASE_URL="postgres://vuhive_user:SecurePassword123@postgres.production.internal:5432/vuhive?sslmode=require"
+```
+
+Configure Helm to reference this secret:
+```yaml
+database:
+  existingSecret: "vuhive-db-secret"
+  existingSecretKey: "DATABASE_URL"
+  sslmode: "require"
+  autoMigrate: true
+```
+
+##### Automated Database Migrations (`database.autoMigrate`)
+When `database.autoMigrate: true` (default), the Helm chart automatically executes a pre-install and pre-upgrade Kubernetes `batch/v1` Job (`vuhive-cloud-migration`). This job uses the control plane server container with `--migrate-only` to apply all pending Goose schema migrations against the external database before rolling out new application pods, guaranteeing zero downtime and forward-compatible schema transitions.
+
+---
+
+#### B. S3 & Object Storage Binding Scenarios
+
+`vuhive-cloud` retains test source archives, compiled runner binaries, raw pod logs (`run.log`), and deterministic execution reports (`summary.json`) in S3-compatible object storage.
+
+##### Scenario 1: Native AWS S3 (with Virtual-Hosted Addressing & IRSA)
+For native AWS S3, bucket endpoints use AWS regional DNS. When accessing AWS S3:
+1. Leave `s3.endpoint: ""` (empty) so the AWS Go SDK automatically resolves regional endpoints (e.g. `https://s3.eu-west-1.amazonaws.com`).
+2. Set `s3.usePathStyle: false` to use AWS virtual-hosted addressing (`https://<bucket>.s3.<region>.amazonaws.com/`).
+3. Bind credentials using either **IAM Roles for Service Accounts (IRSA)** or Kubernetes Secrets:
+
+**Option 1: IAM Roles for Service Accounts (IRSA / EKS Pod Identity) — Recommended:**
+```yaml
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/vuhive-control-plane-s3-role"
+
+s3:
+  endpoint: ""
+  region: "eu-west-1"
+  bucket: "vuhive-production-artifacts"
+  usePathStyle: false
+  # Leave credentials empty; AWS SDK automatically acquires STS tokens via IRSA
+  existingSecret: ""
+```
+
+**Option 2: Static Credentials via Kubernetes Secret:**
+```bash
+kubectl create secret generic vuhive-s3-secret \
+  --namespace vuhive-system \
+  --from-literal=AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
+  --from-literal=AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+```
+
+```yaml
+s3:
+  endpoint: ""
+  region: "eu-west-1"
+  bucket: "vuhive-production-artifacts"
+  usePathStyle: false
+  existingSecret: "vuhive-s3-secret"
+  existingSecretAccessKey: "AWS_ACCESS_KEY_ID"
+  existingSecretSecretKey: "AWS_SECRET_ACCESS_KEY"
+```
+
+##### Scenario 2: Third-Party & S3-Compatible Storage (Cloudflare R2, Ceph, MinIO)
+For third-party object storage providers:
+- **Cloudflare R2**: `s3.endpoint: "https://<account-id>.r2.cloudflarestorage.com"`, `s3.region: "auto"`.
+- **Ceph Object Gateway (RGW)**: `s3.endpoint: "https://radosgw.storage.internal:7480"`.
+- **Enterprise MinIO Tenant**: `s3.endpoint: "https://minio-tenant.minio.svc.cluster.local:9000"`.
+
+> [!IMPORTANT]
+> **Path-Style Addressing Requirement (`s3.usePathStyle: true`)**:
+> Third-party and private S3-compatible endpoints typically lack wildcard DNS routing (`https://<bucket>.<endpoint>/`). You **must** set `s3.usePathStyle: true` so requests use path-style URLs (`https://<endpoint>/<bucket>/...`). When `s3.endpoint` is configured in the Helm chart, path-style addressing is automatically enabled for the control plane, runner init containers, and execution wrappers.
+
+```yaml
+s3:
+  endpoint: "https://<account-id>.r2.cloudflarestorage.com"
+  region: "auto"
+  bucket: "vuhive-production-artifacts"
+  usePathStyle: true
+  existingSecret: "vuhive-r2-secret"
+```
+
+---
+
+#### C. External IAM & Keycloak Realm Prerequisites
+
+When REST API security is enabled (`auth.enabled: true`), the control plane validates incoming JWT bearer tokens against standard OIDC endpoints and enforces Role-Based Access Control (RBAC) on all protected routes.
+
+To bind an external Keycloak instance or existing corporate realm, administrators must configure four dedicated clients, realm roles, and group mappings before deploying the Helm release.
+
+##### 1. Required Client Definitions
+
+| Client ID | Client Type | Authentication Flow | PKCE | Redirect URIs | Purpose |
+|---|---|---|---|---|---|
+| **`vuhive-cloud-api`** | Bearer-Only (`publicClient: false`) | N/A (Resource Server) | N/A | None | Backend resource server for `cmd/server`. Validates incoming JWT tokens issued by the realm. |
+| **`vuhive-cloud-cli`** | Public (`publicClient: true`) | Standard Flow & Device Authorization Grant | S256 (`required`) | `http://localhost:*`<br>`http://127.0.0.1:*` | CLI tool (`cmd/cli`) for local developers and automation scripts. Supports browser login and headless device code authentication. |
+| **`vuhive-runner`** | Confidential (`publicClient: false`) | Service Accounts (Client Credentials) | N/A | None | M2M service account for ephemeral runner containers. Authenticates run completion callbacks (`POST /api/v1/runs/complete`) and start barrier rendezvous. |
+| **`vuhive-cloud-bff`** | Confidential (`publicClient: false`) | Standard Authorization Code Flow | S256 (`required`) | `https://<dashboard-host>/*` (or `/*`) | Web UI BFF (`cmd/bff`). Implements the Token Handler pattern, holding tokens in a persistent PostgreSQL session store and supporting OIDC Backchannel Logout. |
+
+###### Keycloak Client Details & Settings:
+
+1. **`vuhive-cloud-api`**:
+   - **Client type**: OpenID Connect
+   - **Access Type**: `Bearer-only` (in Keycloak classic) or `Client authentication: Off` with standard flows disabled.
+   - **Audience**: Verify that incoming tokens carry `vuhive-cloud-api` in the `aud` claim or use a client audience mapper.
+
+2. **`vuhive-cloud-cli`**:
+   - **Client type**: OpenID Connect
+   - **Client authentication**: `Off` (Public Client)
+   - **Standard Flow**: `Enabled`
+   - **Direct Access Grants**: `Enabled`
+   - **OAuth 2.0 Device Authorization Grant**: `Enabled`
+   - **Proof Key for Code Exchange (PKCE)**: Code Challenge Method `S256`
+   - **Valid Redirect URIs**: `http://localhost:*`, `http://127.0.0.1:*`
+   - **Web Origins**: `+` (allow from valid redirect URIs)
+
+3. **`vuhive-runner`**:
+   - **Client type**: OpenID Connect
+   - **Client authentication**: `On` (Confidential Client)
+   - **Standard Flow**: `Disabled`
+   - **Direct Access Grants**: `Disabled`
+   - **Service Accounts Enabled**: `Enabled` (Client Credentials Grant)
+   - **Client Secret**: Generate a strong secret and store it in Kubernetes as `RUNNER_CLIENT_SECRET`.
+   - **Assigned Role**: Assign the `vuhive-runner` realm role to the service account user (`service-account-vuhive-runner`).
+
+4. **`vuhive-cloud-bff`**:
+   - **Client type**: OpenID Connect
+   - **Client authentication**: `On` (Confidential Client)
+   - **Standard Flow**: `Enabled` (Authorization Code Flow)
+   - **Proof Key for Code Exchange (PKCE)**: Code Challenge Method `S256`
+   - **Valid Redirect URIs**: `https://<dashboard-domain>/*` (for local evaluation: `/*` or `http://localhost:8081/*`)
+   - **Web Origins**: `+`
+   - **Backchannel Logout URL**:
+     - *In-Cluster (Evaluations & Internal Mesh)*: `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (or release-prefixed `http://<release>-vuhive-cloud-bff:8081/...`)
+     - *External Ingress (Production IdP)*: `https://<dashboard-domain>/api/v1/bff/auth/backchannel-logout`
+   - **Backchannel Logout Session Required**: `On` (Mandatory: instructs Keycloak to embed the `sid` session ID claim in signed `logout_token` payloads, enabling targeted revocation of user sessions in PostgreSQL across all BFF replicas)
+   - **Backchannel Logout Revoke Offline Sessions**: `On`
+   - **Client Secret**: Generate a strong secret and store it in Kubernetes as `KEYCLOAK_CLIENT_SECRET`.
+
+##### 2. RBAC Realm Roles & Permissions Matrix
+
+`vuhive-cloud` enforces five standard realm roles across its REST and BFF endpoints:
+
+| Realm Role | Scope & Permissions | Intended Assignees |
+|---|---|---|
+| **`vuhive-admin`** | Full superuser access across all control plane resources (suites, profiles, schedules, test runs, abort, delete, housekeeping). | Platform architects, SRE leads, cluster administrators |
+| **`vuhive-deployer`** | Execution management: trigger ad-hoc runs (`POST /api/v1/runs`), dispatch CronJobs, create/modify test schedules, abort running jobs. | QA leads, CI/CD automation pipelines, performance engineers |
+| **`vuhive-developer`** | Test suite authoring: upload Go source archives, trigger compilation jobs, create and update test suites and runner profiles. | Software developers, test automation engineers |
+| **`vuhive-viewer`** | Read-only access: view test suites, runner profiles, active/historical runs, pod logs, and aggregated KPI performance reports. | Stakeholders, managers, audit teams, guest users |
+| **`vuhive-runner`** | Internal machine-to-machine execution: register barrier participation, emit live telemetry, submit completion reports (`POST /api/v1/runs/complete`). | Bound strictly to the `vuhive-runner` service account |
+
+##### 3. Recommended Group Hierarchy
+
+To streamline team onboarding, create corresponding user groups in the realm:
+
+```text
+/administrators  -->  vuhive-admin, vuhive-deployer, vuhive-developer, vuhive-viewer
+/deployers       -->  vuhive-deployer, vuhive-viewer
+/developers      -->  vuhive-developer, vuhive-viewer
+/viewers         -->  vuhive-viewer
+```
+
+##### 4. Token Claims & Client Scope Configuration
+
+The control plane authentication middleware inspects the standard `realm_access.roles` or `roles` claim in incoming JWT access tokens.
+
+To ensure tokens issued by Keycloak contain these claims:
+1. Ensure the default **`roles`** client scope is assigned to `vuhive-cloud-cli` and `vuhive-cloud-bff`.
+2. Verify the built-in **`realm roles`** protocol mapper is configured within the `roles` scope with:
+   - **Token Claim Name**: `roles` (or default `realm_access.roles`)
+   - **Add to ID token**: `On`
+   - **Add to access token**: `On`
+   - **Add to userinfo**: `On`
+3. Include standard OIDC scopes: `openid`, `profile`, and `email`.
+
+##### 5. Starter Realm Template (`vuhive-realm.json`)
+
+A fully configured reference realm definition is provided in the repository at:
+[`deploy/helm/vuhive-cloud-infra/files/vuhive-realm.json`](../vuhive-cloud-infra/files/vuhive-realm.json)
+
+This JSON manifest defines the `vuhive` realm, all four clients, roles, groups, and scope mappers. Keycloak administrators can import it directly into existing Keycloak clusters:
+- **Keycloak Admin Console**: `Create Realm` $\to$ `Import from file` $\to$ select `vuhive-realm.json`.
+- **Keycloak CLI (`kcadm.sh`)**:
+  ```bash
+  kcadm.sh create realms -f deploy/helm/vuhive-cloud-infra/files/vuhive-realm.json
+  ```
+
+---
+
+#### D. Production Deployment Step-by-Step Walkthrough
+
+##### Step 1: Create Kubernetes Secrets for External Credentials
 
 Do not commit plaintext passwords or access keys into values files or version control. Pre-create Kubernetes Secrets in the release namespace (`vuhive-system`):
 
@@ -144,13 +357,20 @@ kubectl create secret generic vuhive-s3-secret \
   --from-literal=AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
   --from-literal=AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
-# 3. Runner M2M OAuth2 Client Secret (when auth.enabled=true)
+# 3. Runner M2M OAuth2 Client Secret (matching Keycloak 'vuhive-runner' client)
 kubectl create secret generic vuhive-runner-auth \
   --namespace vuhive-system \
   --from-literal=RUNNER_CLIENT_SECRET="SecretRunnerKey987"
+
+# 4. Web UI BFF Credentials & Session Encryption Secret (matching Keycloak 'vuhive-cloud-bff' client)
+kubectl create secret generic vuhive-bff-auth \
+  --namespace vuhive-system \
+  --from-literal=KEYCLOAK_CLIENT_SECRET="SecretBffClientKey123" \
+  --from-literal=SESSION_COOKIE_SECRET="$(openssl rand -hex 16)" \
+  --from-literal=SESSION_ENCRYPTION_KEY="$(openssl rand -hex 16)"
 ```
 
-#### Step 2: Configure Cloud IAM / IRSA (Optional for AWS S3)
+##### Step 2: Configure Cloud IAM / IRSA (Optional for AWS S3)
 
 When running on Amazon EKS, authenticate against AWS S3 without static access keys by using **IAM Roles for Service Accounts (IRSA)** or **EKS Pod Identity**:
 
@@ -178,7 +398,7 @@ When running on Amazon EKS, authenticate against AWS S3 without static access ke
        eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/vuhive-control-plane-s3-role"
    ```
 
-#### Step 3: Configure Production Values (`values-production.yaml`)
+##### Step 3: Configure Production Values (`values-production.yaml`)
 
 Use the template provided at [`values-production.yaml`](./values-production.yaml) or customize your values:
 
@@ -208,7 +428,7 @@ s3:
   existingSecretAccessKey: "AWS_ACCESS_KEY_ID"
   existingSecretSecretKey: "AWS_SECRET_ACCESS_KEY"
 
-# Identity & Access Management (OIDC)
+# Identity & Access Management (OIDC / Keycloak)
 auth:
   enabled: true
   issuerUrl: "https://auth.production.internal/realms/vuhive"
@@ -218,6 +438,29 @@ auth:
     tokenUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/token"
     existingSecret: "vuhive-runner-auth"
     existingSecretKey: "RUNNER_CLIENT_SECRET"
+
+# Backend-For-Frontend (BFF) & Web Dashboard
+bff:
+  enabled: true
+  replicaCount: 2
+  database:
+    # Uses external PostgreSQL database with isolated schema migrations (bff_goose_db_version)
+    existingSecret: "vuhive-db-secret"
+    existingSecretKey: "DATABASE_URL"
+    autoMigrate: true
+  session:
+    ttl: "24h"
+    slidingThreshold: "15m"
+    cleanerInterval: "10m"
+    encryptionKeyExistingSecret: "vuhive-bff-auth"
+    encryptionKeyKey: "SESSION_ENCRYPTION_KEY"
+  keycloak:
+    issuerUrl: "https://auth.production.internal/realms/vuhive"
+    clientId: "vuhive-cloud-bff"
+    clientSecretExistingSecret: "vuhive-bff-auth"
+    clientSecretKey: "KEYCLOAK_CLIENT_SECRET"
+    sessionCookieSecretRef: "vuhive-bff-auth"
+    sessionCookieSecretKey: "SESSION_COOKIE_SECRET"
 
 # Production Sizing & High Availability
 resources:
@@ -237,9 +480,17 @@ affinity:
             matchLabels:
               app.kubernetes.io/name: vuhive-cloud
           topologyKey: kubernetes.io/hostname
+
+runner:
+  namespace: "vuhive-runners"
+  createNamespace: true
+
+builder:
+  namespace: "vuhive-system"
+  createNamespace: true
 ```
 
-#### Step 4: Install or Upgrade with Helm
+##### Step 4: Install or Upgrade with Helm
 
 Execute the Helm installation:
 
@@ -255,7 +506,7 @@ During deployment:
 1. **Automated Schema Migrations (`database.autoMigrate`)**: Helm runs the `vuhive-cloud-migration` pre-install/pre-upgrade hook Job, applying Goose database schema migrations before updating the Deployment pods.
 2. **Readiness Probing**: The deployment awaits database connectivity and S3 storage bucket verification before marking pods ready.
 
-#### Step 5: Post-Install Verification
+##### Step 5: Post-Install Verification
 
 Verify deployment health and migration job completion:
 

@@ -11,7 +11,7 @@ This chart bundles backing infrastructure dependencies for the `vuhive-cloud` co
 - **OpenAPI Viewer (`swaggerapi/swagger-ui`)**: Optional third-party interactive UI viewer for testing and exploring control plane APIs without bundling UI assets into the core Go control plane binary.
 
 > [!WARNING]
-> This chart is intended for **local development and evaluation** only (e.g., Rancher Desktop, Kind, Minikube). For production deployments, provision PostgreSQL, S3/Object Storage, and OIDC Identity Providers via managed cloud services or enterprise clusters, and reference them from the [`vuhive-cloud`](../vuhive-cloud/README.md) chart using `existingSecret` and `values-production.yaml`. See [External Infrastructure & Third-Party Deployment Scenarios](../../README.md#external-infrastructure--third-party-deployment-scenarios) for architecture and deployment guidance.
+> This chart is intended for **local development and evaluation** only (e.g., Rancher Desktop, Kind, Minikube). For production deployments, provision PostgreSQL, S3/Object Storage, and OIDC Identity Providers via managed cloud services or enterprise clusters, and reference them from the [`vuhive-cloud`](../vuhive-cloud/README.md) chart using `existingSecret` and `values-production.yaml`. See [External Infrastructure & Production Deployment Scenarios](../vuhive-cloud/README.md#5-external-infrastructure--production-deployment-scenarios) for architecture and deployment guidance.
 
 > **Documentation Navigation**:
 > - **System Architecture & Overview**: [`README.md`](../../README.md) and [`ARCHITECTURE_SPEC.md`](../../ARCHITECTURE_SPEC.md)

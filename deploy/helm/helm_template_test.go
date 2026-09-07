@@ -306,4 +306,49 @@ func TestHelmChart_BFF_PostgresSessionAndServiceAlias(t *testing.T) {
 	require.NotNil(t, aliasSvc)
 }
 
+func TestHelmChart_ValuesProduction_BFFRendering(t *testing.T) {
+	rendered := runHelmTemplate(t, "-f", "vuhive-cloud/values-production.yaml")
+	docs := splitManifests(rendered)
+
+	// Verify BFF Deployment rendered with 2 replicas
+	bffDep := findResource(docs, "Deployment", "vuhive-vuhive-cloud-bff")
+	require.NotNil(t, bffDep)
+	spec := bffDep["spec"].(map[string]interface{})
+	assert.Equal(t, 2, spec["replicas"])
+
+	tmpl := spec["template"].(map[string]interface{})
+	podSpec := tmpl["spec"].(map[string]interface{})
+	containers := podSpec["containers"].([]interface{})
+	bffContainer := containers[0].(map[string]interface{})
+	envList := bffContainer["env"].([]interface{})
+
+	findEnvSecretRef := func(envName string) (string, string) {
+		for _, e := range envList {
+			eMap := e.(map[string]interface{})
+			if eMap["name"] == envName {
+				valFrom := eMap["valueFrom"].(map[string]interface{})
+				secRef := valFrom["secretKeyRef"].(map[string]interface{})
+				return secRef["name"].(string), secRef["key"].(string)
+			}
+		}
+		return "", ""
+	}
+
+	kcSecret, kcKey := findEnvSecretRef("KEYCLOAK_CLIENT_SECRET")
+	assert.Equal(t, "vuhive-bff-auth", kcSecret)
+	assert.Equal(t, "KEYCLOAK_CLIENT_SECRET", kcKey)
+
+	sessionCookieSecret, sessionCookieKey := findEnvSecretRef("SESSION_COOKIE_SECRET")
+	assert.Equal(t, "vuhive-bff-auth", sessionCookieSecret)
+	assert.Equal(t, "SESSION_COOKIE_SECRET", sessionCookieKey)
+
+	sessionEncSecret, sessionEncKey := findEnvSecretRef("SESSION_ENCRYPTION_KEY")
+	assert.Equal(t, "vuhive-bff-auth", sessionEncSecret)
+	assert.Equal(t, "SESSION_ENCRYPTION_KEY", sessionEncKey)
+
+	dbSecret, dbKey := findEnvSecretRef("DATABASE_URL")
+	assert.Equal(t, "vuhive-db-secret", dbSecret)
+	assert.Equal(t, "DATABASE_URL", dbKey)
+}
+
 
