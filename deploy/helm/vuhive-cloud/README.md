@@ -479,8 +479,10 @@ The control plane includes an automated retention lifecycle worker and housekeep
 | `bff.controlPlaneUrl` | Upstream control plane URL override (defaults to `http://<fullname>:8080`) | `""` |
 | `bff.controlPlaneToken` | Bearer token for control plane if required | `""` |
 | `bff.ssePollInterval` | Polling frequency for upstream run/build status transitions | `2s` |
-| `bff.sseHeartbeatInterval` | Keep-alive heartbeat interval for SSE client streams | `15s` |
+| `bff.keycloak.baseUrl` | Base Keycloak root URL (e.g. `https://auth.example.com`) | `""` |
+| `bff.keycloak.realm` | Keycloak realm name | `vuhive` |
 | `bff.keycloak.issuerUrl` | Keycloak realm endpoint for BFF Token Handler | `""` |
+| `bff.keycloak.jwksUrl` | Custom Keycloak JWKS public certs endpoint override | `""` |
 | `bff.keycloak.clientId` | Keycloak confidential client ID for BFF | `vuhive-cloud-bff` |
 | `bff.keycloak.clientSecret` | Keycloak confidential client secret for BFF | `""` |
 | `bff.keycloak.clientSecretExistingSecret` | Name of existing Secret containing BFF client secret | `""` |
