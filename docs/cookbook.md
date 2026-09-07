@@ -1935,6 +1935,77 @@ The BFF fetches Keycloak's public signing keys on startup from `/protocol/openid
 
 ---
 
+### Recipe 15: BFF Token Handler, Authentication Endpoints & Transparent Token Refresh
+
+The Go BFF implements the OAuth 2.0 Token Handler pattern, insulating frontend browser environments (React 19 SPA) from managing raw OAuth2 tokens. Instead, the browser receives an encrypted, `HttpOnly`, `SameSite=Lax` cookie (`vuhive_session`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Browser / React SPA
+    participant BFF as Go BFF Gateway
+    participant DB as PostgreSQL (bff_sessions)
+    participant KC as Keycloak IdP
+    participant CP as Control Plane
+
+    Note over User,KC: 1. Login & Code Exchange
+    User->>BFF: GET /api/v1/bff/auth/login
+    BFF-->>User: 302 Redirect to Keycloak + Cookies (state, code_verifier)
+    User->>KC: Authenticate with credentials
+    KC-->>User: 302 Redirect /api/v1/bff/auth/callback?code=...&state=...
+    User->>BFF: GET /api/v1/bff/auth/callback
+    BFF->>KC: POST /token (Exchange code + PKCE verifier)
+    KC-->>BFF: {access_token, refresh_token, id_token}
+    BFF->>DB: Store session (tokens encrypted with AES-256-GCM)
+    BFF-->>User: 302 Redirect / + Set-Cookie: vuhive_session (HttpOnly, SameSite=Lax)
+
+    Note over User,CP: 2. Protected Request & Transparent Refresh
+    User->>BFF: GET /api/bff/v1/dashboard (Cookie: vuhive_session)
+    BFF->>DB: GetSession & extend sliding expiration
+    alt Access Token Expiring Soon (< 60s)
+        BFF->>KC: POST /token (refresh_token grant)
+        KC-->>BFF: {access_token, refresh_token}
+        BFF->>DB: RotateSessionTokens (atomic update)
+    end
+    BFF->>CP: GET /api/v1/... (Header: Authorization: Bearer <access_token>)
+    CP-->>BFF: 200 OK Response
+    BFF-->>User: 200 OK Dashboard Data
+
+    Note over User,KC: 3. Logout & Backchannel Logout
+    User->>BFF: POST /api/v1/bff/auth/logout (Cookie: vuhive_session)
+    BFF->>KC: POST /revoke (Revoke refresh token)
+    BFF->>DB: DeleteSession
+    BFF-->>User: 200 OK + Clear-Cookie: vuhive_session
+
+    KC->>BFF: POST /api/v1/bff/auth/backchannel-logout (logout_token)
+    BFF->>BFF: Verify RS256 signature against Keycloak JWKS
+    BFF->>DB: RevokeByKeycloakSID (Invalidate all sessions for user SID)
+    BFF-->>KC: 200 OK
+```
+
+#### 1. Available Authentication Endpoints
+
+The BFF registers the following endpoints under both `/api/bff/v1/auth/` and `/api/v1/bff/auth/`:
+
+| Endpoint | Method | Purpose | Response |
+| :--- | :--- | :--- | :--- |
+| `/login` | `GET` | Initiates OIDC flow with PKCE, sets transient state/verifier cookies, redirects to Keycloak | `302 Found` (Location: Keycloak) |
+| `/callback` | `GET` | Validates PKCE/state, exchanges code for tokens, persists encrypted session in PostgreSQL, issues `HttpOnly` cookie | `302 Found` (Location: `/`) |
+| `/logout` | `POST` | Revokes Keycloak refresh token, deletes persistent session, clears session cookie | `200 OK` (`{"message":"logged out successfully"}`) |
+| `/me` | `GET` | Returns sanitized user profile (`user_id`, `email`, `name`, `roles`) without exposing raw tokens | `200 OK` (`AuthUserResponse`) |
+| `/backchannel-logout` | `POST` | Receives signed logout token from Keycloak, verifies signature, invalidates sessions matching `sid` | `200 OK` |
+
+#### 2. Inbound Session Middleware & Transparent Token Refresh
+
+All protected BFF aggregate endpoints (`/api/bff/v1/dashboard`, `/api/bff/v1/runs/{id}`, `/api/bff/v1/events`) and reverse proxy routes (`/api/bff/v1/suites`, `/api/bff/v1/profiles`, `/api/bff/v1/schedules`, `/api/bff/v1/runs`) are guarded by `SessionMiddleware`:
+- **Cookie Extraction**: Reads `vuhive_session` cookie (or falls back to an existing `Authorization: Bearer` header if present).
+- **Session Verification**: Validates session validity and sliding expiration with `SessionService`.
+- **Pre-emptive Token Refresh**: Inspects the unverified access token `exp` claim. If the access token expires within **60 seconds**, the middleware asynchronously executes a token refresh with Keycloak, rotates the stored tokens in PostgreSQL atomically, and updates the in-memory session.
+- **Header Injection**: Transparently injects `Authorization: Bearer <access_token>` into the request, ensuring upstream control plane proxies receive valid JWTs.
+- **Context Injection**: Sets `user_id`, `roles`, and the `ClientSession` into the Gin context for downstream handler consumption.
+
+---
+
 ## 4. Next Steps
 
 - **[OpenAPI 3.1 Specification (`api/openapi.yaml`)](../api/openapi.yaml)**: Complete REST API contract, machine-readable schemas, and live endpoints (`GET /openapi.yaml`, `GET /openapi.json`).
