@@ -34,7 +34,11 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
     - [Recipe 13: Inspecting Control Plane Version Metadata & Health in Automated Pipelines](#recipe-13-inspecting-control-plane-version-metadata--health-in-automated-pipelines)
     - [Recipe 14: Execution Artifact Housekeeping, Storage Retention Policies & Automated Pruning](#recipe-14-execution-artifact-housekeeping-storage-retention-policies--automated-pruning)
     - [Recipe 15: Web UI Micro-Guidance & Domain Concepts Adoption Guide](#recipe-15-web-ui-micro-guidance--domain-concepts-adoption-guide)
-    - [Recipe 16: Adopting the Developer CLI (vuhive) & Keycloak OIDC Authentication](#recipe-16-adopting-the-developer-cli-vuhive--keycloak-oidc-authentication)
+    - [Recipe 16: Adopting the Developer CLI (`vuhive`) & Keycloak OIDC Authentication](#recipe-16-adopting-the-developer-cli-vuhive--keycloak-oidc-authentication)
+    - [Recipe 17: Deploying Web UI & Go BFF with Helm and Unified Ingress Routing](#recipe-17-deploying-web-ui--go-bff-with-helm-and-unified-ingress-routing)
+    - [Recipe 18: BFF Session Management, Sliding Expiration Tuning & Background Janitor Operations](#recipe-18-bff-session-management-sliding-expiration-tuning--background-janitor-operations)
+    - [Recipe 19: Keycloak OIDC Client Configuration with PKCE & Backchannel Logout](#recipe-19-keycloak-oidc-client-configuration-with-pkce--backchannel-logout)
+    - [Recipe 20: BFF Token Handler, Authentication Endpoints & Transparent Token Refresh](#recipe-20-bff-token-handler-authentication-endpoints--transparent-token-refresh)
 
 ---
 
@@ -1839,7 +1843,7 @@ helm install vuhive deploy/helm/vuhive-cloud \
 
 ---
 
-### Recipe 13: BFF Session Management, Sliding Expiration Tuning & Background Janitor Operations
+### Recipe 18: BFF Session Management, Sliding Expiration Tuning & Background Janitor Operations
 
 The Go BFF manages persistent client sessions in PostgreSQL (`bff_sessions`) using AES-256-GCM encrypted token storage at rest. To ensure optimal database performance under high read throughput while maintaining seamless session continuity, the BFF provides sliding expiration write-throttling and an automated background janitor.
 
@@ -1859,8 +1863,8 @@ bff:
     ttl: "12h"                  # 12-hour session lifetime
     slidingThreshold: "30m"     # Only write to DB once every 30 minutes per active session
     cleanerInterval: "15m"      # Janitor purge frequency
-    encryptionKeyExistingSecret: "vuhive-session-crypto"
-    encryptionKeyKey: "encryption-key"
+    encryptionKeyExistingSecret: "vuhive-bff-auth"
+    encryptionKeyKey: "SESSION_ENCRYPTION_KEY"
 ```
 
 #### 3. Monitoring & Operational Logs
@@ -1875,7 +1879,7 @@ The session subsystem emits structured `zerolog` events with operation names, se
 
 ---
 
-### Recipe 14: Keycloak OIDC Client Configuration with PKCE & Backchannel Logout
+### Recipe 19: Keycloak OIDC Client Configuration with PKCE & Backchannel Logout
 
 The Go BFF functions as an OAuth 2.0 / OIDC confidential client implementing the Token Handler pattern. It interfaces directly with Keycloak to exchange authorization codes with PKCE, refresh active user tokens, revoke credentials on logout, and validate cryptographically signed Backchannel Logout tokens.
 
@@ -1902,18 +1906,22 @@ Within your Keycloak realm (e.g., `vuhive`), configure the BFF client:
    - **Web origins**: `+` (or `https://loadtest.example.com`)
 4. **Advanced Settings & PKCE**:
    - **Proof Key for Code Exchange (PKCE) Code Challenge Method**: `S256` (enforces SHA-256 code challenge verification)
-   - **Backchannel logout URL**: `https://loadtest.example.com/api/v1/bff/auth/backchannel-logout`
+   - **Backchannel logout URL**:
+     - *In-Cluster (Evaluations & Internal Mesh)*: `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (or release-prefixed `http://<release>-vuhive-cloud-bff:8081/...`)
+     - *External Ingress (Production IdP)*: `https://loadtest.example.com/api/v1/bff/auth/backchannel-logout`
    - **Backchannel logout session required**: `ON` (ensures Keycloak includes the `sid` claim in logout tokens)
    - **Backchannel logout revoke offline sessions**: `ON`
 
 #### 2. Helm Configuration for Production
 
-Bind the Keycloak confidential client credentials to the BFF deployment:
+Bind the Keycloak confidential client credentials to the BFF deployment via a Kubernetes Secret (see [Helm Chart README](../deploy/helm/vuhive-cloud/README.md#5-external-infrastructure--production-deployment-scenarios)):
 
 ```bash
-kubectl create secret generic vuhive-bff-keycloak-secret \
+kubectl create secret generic vuhive-bff-auth \
   --namespace vuhive-system \
-  --from-literal=client-secret="KeycloakGeneratedClientSecret456"
+  --from-literal=KEYCLOAK_CLIENT_SECRET="KeycloakGeneratedClientSecret456" \
+  --from-literal=SESSION_COOKIE_SECRET="$(openssl rand -hex 16)" \
+  --from-literal=SESSION_ENCRYPTION_KEY="$(openssl rand -hex 16)"
 ```
 
 Configure `values-production.yaml`:
@@ -1921,12 +1929,12 @@ Configure `values-production.yaml`:
 ```yaml
 bff:
   keycloak:
-    baseUrl: "https://auth.example.com"
-    realm: "vuhive"
     issuerUrl: "https://auth.example.com/realms/vuhive"
     clientId: "vuhive-cloud-bff"
-    clientSecretExistingSecret: "vuhive-bff-keycloak-secret"
-    clientSecretKey: "client-secret"
+    clientSecretExistingSecret: "vuhive-bff-auth"
+    clientSecretKey: "KEYCLOAK_CLIENT_SECRET"
+    sessionCookieSecretRef: "vuhive-bff-auth"
+    sessionCookieSecretKey: "SESSION_COOKIE_SECRET"
 ```
 
 #### 3. Automatic JWKS Key Rotation Verification
@@ -1935,7 +1943,7 @@ The BFF fetches Keycloak's public signing keys on startup from `/protocol/openid
 
 ---
 
-### Recipe 15: BFF Token Handler, Authentication Endpoints & Transparent Token Refresh
+### Recipe 20: BFF Token Handler, Authentication Endpoints & Transparent Token Refresh
 
 The Go BFF implements the OAuth 2.0 Token Handler pattern, insulating frontend browser environments (React 19 SPA) from managing raw OAuth2 tokens. Instead, the browser receives an encrypted, `HttpOnly`, `SameSite=Lax` cookie (`vuhive_session`).
 

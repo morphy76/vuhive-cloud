@@ -282,8 +282,11 @@ To bind an external Keycloak instance or existing corporate realm, administrator
    - **Proof Key for Code Exchange (PKCE)**: Code Challenge Method `S256`
    - **Valid Redirect URIs**: `https://<dashboard-domain>/*` (for local evaluation: `/*` or `http://localhost:8081/*`)
    - **Web Origins**: `+`
-   - **Backchannel Logout URL**: `http://vuhive-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (or fully-qualified ingress URL).
-   - **Backchannel Logout Session Required**: `On`
+   - **Backchannel Logout URL**:
+     - *In-Cluster (Evaluations & Internal Mesh)*: `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (or release-prefixed `http://<release>-vuhive-cloud-bff:8081/...`)
+     - *External Ingress (Production IdP)*: `https://<dashboard-domain>/api/v1/bff/auth/backchannel-logout`
+   - **Backchannel Logout Session Required**: `On` (Mandatory: instructs Keycloak to embed the `sid` session ID claim in signed `logout_token` payloads, enabling targeted revocation of user sessions in PostgreSQL across all BFF replicas)
+   - **Backchannel Logout Revoke Offline Sessions**: `On`
    - **Client Secret**: Generate a strong secret and store it in Kubernetes as `KEYCLOAK_CLIENT_SECRET`.
 
 ##### 2. RBAC Realm Roles & Permissions Matrix
@@ -358,6 +361,13 @@ kubectl create secret generic vuhive-s3-secret \
 kubectl create secret generic vuhive-runner-auth \
   --namespace vuhive-system \
   --from-literal=RUNNER_CLIENT_SECRET="SecretRunnerKey987"
+
+# 4. Web UI BFF Credentials & Session Encryption Secret (matching Keycloak 'vuhive-cloud-bff' client)
+kubectl create secret generic vuhive-bff-auth \
+  --namespace vuhive-system \
+  --from-literal=KEYCLOAK_CLIENT_SECRET="SecretBffClientKey123" \
+  --from-literal=SESSION_COOKIE_SECRET="$(openssl rand -hex 16)" \
+  --from-literal=SESSION_ENCRYPTION_KEY="$(openssl rand -hex 16)"
 ```
 
 ##### Step 2: Configure Cloud IAM / IRSA (Optional for AWS S3)
@@ -428,6 +438,29 @@ auth:
     tokenUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/token"
     existingSecret: "vuhive-runner-auth"
     existingSecretKey: "RUNNER_CLIENT_SECRET"
+
+# Backend-For-Frontend (BFF) & Web Dashboard
+bff:
+  enabled: true
+  replicaCount: 2
+  database:
+    # Uses external PostgreSQL database with isolated schema migrations (bff_goose_db_version)
+    existingSecret: "vuhive-db-secret"
+    existingSecretKey: "DATABASE_URL"
+    autoMigrate: true
+  session:
+    ttl: "24h"
+    slidingThreshold: "15m"
+    cleanerInterval: "10m"
+    encryptionKeyExistingSecret: "vuhive-bff-auth"
+    encryptionKeyKey: "SESSION_ENCRYPTION_KEY"
+  keycloak:
+    issuerUrl: "https://auth.production.internal/realms/vuhive"
+    clientId: "vuhive-cloud-bff"
+    clientSecretExistingSecret: "vuhive-bff-auth"
+    clientSecretKey: "KEYCLOAK_CLIENT_SECRET"
+    sessionCookieSecretRef: "vuhive-bff-auth"
+    sessionCookieSecretKey: "SESSION_COOKIE_SECRET"
 
 # Production Sizing & High Availability
 resources:

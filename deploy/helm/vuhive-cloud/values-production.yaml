@@ -71,6 +71,49 @@ auth:
     existingSecret: "vuhive-runner-auth"
     existingSecretKey: "RUNNER_CLIENT_SECRET"
 
+# ── Backend-For-Frontend (BFF) & Web UI Dashboard ─────────────────────────
+# Deploys the Go BFF proxying API requests and serving the embedded React 19 PWA.
+# Operates the OAuth 2.0 Token Handler pattern with persistent PostgreSQL sessions.
+bff:
+  enabled: true
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Persistent PostgreSQL session store (bff_sessions)
+  database:
+    existingSecret: "vuhive-db-secret"
+    existingSecretKey: "DATABASE_URL"
+    autoMigrate: true
+
+  # Session lifecycle, sliding expiration, and token encryption settings
+  session:
+    ttl: "24h"
+    slidingThreshold: "15m"
+    cleanerInterval: "10m"
+    # Reference pre-existing Kubernetes Secret containing the AES-256 session token encryption key
+    encryptionKeyExistingSecret: "vuhive-bff-auth"
+    encryptionKeyKey: "SESSION_ENCRYPTION_KEY"
+
+  # Keycloak OIDC Token Handler configuration
+  keycloak:
+    realm: "vuhive"
+    issuerUrl: "https://auth.production.internal/realms/vuhive"
+    clientId: "vuhive-cloud-bff"
+    # Reference pre-existing Kubernetes Secret containing the Keycloak confidential client secret
+    clientSecretExistingSecret: "vuhive-bff-auth"
+    clientSecretKey: "KEYCLOAK_CLIENT_SECRET"
+    # Reference pre-existing Kubernetes Secret containing the session cookie signing key
+    sessionCookieSecretRef: "vuhive-bff-auth"
+    sessionCookieSecretKey: "SESSION_COOKIE_SECRET"
+    sessionCookieName: "vuhive_session"
+
 # ── Service Account & Cloud IAM (IRSA / Workload Identity) ────────────────
 serviceAccount:
   create: true
