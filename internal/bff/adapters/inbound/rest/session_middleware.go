@@ -64,7 +64,7 @@ func SessionMiddleware(sessionService inbound.SessionService, oidcClient outboun
 		session, err := sessionService.GetSession(ctx, model.SessionID(cookieVal))
 		if err != nil || session == nil || session.IsExpired() {
 			log.Info().Err(err).Str("session_id", cookieVal).Msg("session missing or expired; clearing cookie")
-			c.SetCookie(cookieName, "", -1, "/", "", false, true)
+			c.SetCookie(cookieName, "", -1, "/", "", true, true)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
