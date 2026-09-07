@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -284,8 +286,17 @@ func main() {
 	var cipher *crypto.TokenCipher
 	if sessionEncKey != "" {
 		var err error
+		var keyBytes []byte
 		if len([]byte(sessionEncKey)) == 32 {
-			cipher, err = crypto.NewTokenCipher([]byte(sessionEncKey))
+			keyBytes = []byte(sessionEncKey)
+		} else if hexBytes, errHex := hex.DecodeString(sessionEncKey); errHex == nil && len(hexBytes) == 32 {
+			keyBytes = hexBytes
+		} else if b64Bytes, errB64 := base64.StdEncoding.DecodeString(sessionEncKey); errB64 == nil && len(b64Bytes) == 32 {
+			keyBytes = b64Bytes
+		}
+
+		if len(keyBytes) == 32 {
+			cipher, err = crypto.NewTokenCipher(keyBytes)
 		} else {
 			cipher, err = crypto.NewTokenCipherFromPassphrase(sessionEncKey)
 		}

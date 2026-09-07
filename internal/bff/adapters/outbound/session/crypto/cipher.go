@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -14,6 +15,12 @@ import (
 
 // KeySize represents the required key length for AES-256 (32 bytes).
 const KeySize = 32
+
+// pbkdf2Salt is the domain-separation salt for session token cipher key derivation.
+var pbkdf2Salt = []byte("vuhive-cloud-bff-session-token-cipher-v1")
+
+// pbkdf2Iterations is the iteration count for PBKDF2 key derivation (NIST SP 800-132 recommendation).
+const pbkdf2Iterations = 100_000
 
 // TokenCipher provides authenticated AES-256-GCM symmetric encryption for OAuth tokens.
 type TokenCipher struct {
@@ -39,13 +46,16 @@ func NewTokenCipher(key []byte) (*TokenCipher, error) {
 	return &TokenCipher{aead: gcm}, nil
 }
 
-// NewTokenCipherFromPassphrase derives a 32-byte AES-256 key from an arbitrary string using SHA-256.
+// NewTokenCipherFromPassphrase derives a 32-byte AES-256 key from a passphrase using PBKDF2 (HMAC-SHA-256, 100,000 iterations).
 func NewTokenCipherFromPassphrase(passphrase string) (*TokenCipher, error) {
 	if passphrase == "" {
 		return nil, fmt.Errorf("%w: passphrase cannot be empty", model.ErrInvalidParameter)
 	}
-	hash := sha256.Sum256([]byte(passphrase))
-	return NewTokenCipher(hash[:])
+	key, err := pbkdf2.Key(sha256.New, passphrase, pbkdf2Salt, pbkdf2Iterations, KeySize)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed deriving cipher key from passphrase: %v", model.ErrInternal, err)
+	}
+	return NewTokenCipher(key)
 }
 
 // Encrypt encrypts a plaintext string with AES-256-GCM and returns a base64-encoded ciphertext.
