@@ -1839,6 +1839,42 @@ helm install vuhive deploy/helm/vuhive-cloud \
 
 ---
 
+### Recipe 13: BFF Session Management, Sliding Expiration Tuning & Background Janitor Operations
+
+The Go BFF manages persistent client sessions in PostgreSQL (`bff_sessions`) using AES-256-GCM encrypted token storage at rest. To ensure optimal database performance under high read throughput while maintaining seamless session continuity, the BFF provides sliding expiration write-throttling and an automated background janitor.
+
+#### 1. Understanding Session Inactivity TTL vs. Sliding Write-Throttling
+
+- **Session Inactivity Timeout (`bff.session.ttl`, default `24h`)**: The maximum idle time before a session expires if no user interaction occurs.
+- **Sliding Write-Throttling Threshold (`bff.session.slidingThreshold`, default `15m`)**: When an active session is accessed (`GetSession`), the BFF checks if `time.Since(updated_at) >= slidingThreshold`. If the elapsed time is less than the threshold, the session is returned without triggering a PostgreSQL `UPDATE`. If equal to or exceeding the threshold, `expires_at` is extended by the session TTL and written back to PostgreSQL. This eliminates write-churn while ensuring actively used sessions never expire.
+- **Background Cleaner Interval (`bff.session.cleanerInterval`, default `10m`)**: The ticker frequency at which the `SessionCleaner` janitor executes `DeleteExpired(ctx, time.Now())` in PostgreSQL, purging abandoned or expired sessions and freeing database storage.
+
+#### 2. Tuning Session Policies via Helm Values
+
+In high-traffic environments where thousands of concurrent dashboard users interact simultaneously, tune the sliding window and cleaner cadence in `values.yaml`:
+
+```yaml
+bff:
+  session:
+    ttl: "12h"                  # 12-hour session lifetime
+    slidingThreshold: "30m"     # Only write to DB once every 30 minutes per active session
+    cleanerInterval: "15m"      # Janitor purge frequency
+    encryptionKeyExistingSecret: "vuhive-session-crypto"
+    encryptionKeyKey: "encryption-key"
+```
+
+#### 3. Monitoring & Operational Logs
+
+The session subsystem emits structured `zerolog` events with operation names, session IDs, and durations:
+
+```json
+{"level":"info","op":"SessionService.GetSession","session_id":"sess-9b4e...","user_id":"admin@corp","duration_ms":1.2,"time":"2026-09-07T12:00:00Z","message":"completed session lookup"}
+{"level":"debug","op":"SessionService.GetSession","session_id":"sess-9b4e...","new_expires_at":"2026-09-08T00:00:00Z","message":"sliding expiration extended in store"}
+{"level":"info","op":"SessionCleaner.CleanOnce","deleted_sessions":42,"duration_ms":12.8,"time":"2026-09-07T12:10:00Z","message":"completed expired session cleanup cycle"}
+```
+
+---
+
 ## 4. Next Steps
 
 - **[OpenAPI 3.1 Specification (`api/openapi.yaml`)](../api/openapi.yaml)**: Complete REST API contract, machine-readable schemas, and live endpoints (`GET /openapi.yaml`, `GET /openapi.json`).

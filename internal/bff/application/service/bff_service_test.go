@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/session/memory"
 	"github.com/morphy76/vuhive-cloud/internal/bff/application/ports/inbound"
 	"github.com/morphy76/vuhive-cloud/internal/bff/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/bff/application/service"
@@ -232,6 +233,27 @@ func TestBFFService_SessionLifecycle(t *testing.T) {
 
 		assert.ErrorIs(t, err, model.ErrSessionNotFound)
 		mockCache.AssertExpectations(t)
+	})
+
+	t.Run("delegates to injected SessionService when present", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		memStore := memory.NewMemorySessionStore()
+		sessionSvc := service.NewSessionService(memStore)
+
+		svc := service.NewBFFService(mockCP, nil, "0.1.0").WithSessionService(sessionSvc)
+
+		cmd := inbound.CreateSessionCommand{
+			SessionID: "sess-delegated",
+			UserID:    "user-del",
+			TTL:       1 * time.Hour,
+		}
+		created, err := svc.CreateSession(ctx, cmd)
+		require.NoError(t, err)
+		assert.Equal(t, model.SessionID("sess-delegated"), created.ID)
+
+		retrieved, err := svc.GetSession(ctx, "sess-delegated")
+		require.NoError(t, err)
+		assert.Equal(t, model.SessionID("sess-delegated"), retrieved.ID)
 	})
 }
 

@@ -20,10 +20,15 @@ type SystemStatus struct {
 
 // CreateSessionCommand encapsulates payload parameters for initiating a client session.
 type CreateSessionCommand struct {
-	SessionID string
-	UserID    string
-	TTL       time.Duration
-	Metadata  map[string]string
+	SessionID    string
+	UserID       string
+	KeycloakSID  string
+	AccessToken  string
+	RefreshToken string
+	IDToken      string
+	Roles        []string
+	TTL          time.Duration
+	Metadata     map[string]string
 }
 
 // DashboardOverview represents the composite telemetry and overview for the dashboard view.
