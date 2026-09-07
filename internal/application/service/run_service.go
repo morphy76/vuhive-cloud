@@ -26,8 +26,9 @@ type RunService struct {
 	profileRepo    outbound.RunnerProfileRepository
 	runRepo        outbound.TestRunRepository
 	orchestrator   outbound.RunnerOrchestratorPort
-	storage        outbound.StoragePort
-	eventPublisher outbound.EventPublisher
+	storage         outbound.StoragePort
+	eventPublisher  outbound.EventPublisher
+	runnerNamespace string
 }
 
 // RunServiceOption defines functional options for configuring RunService.
@@ -37,6 +38,13 @@ type RunServiceOption func(*RunService)
 func WithEventPublisher(p outbound.EventPublisher) RunServiceOption {
 	return func(s *RunService) {
 		s.eventPublisher = p
+	}
+}
+
+// WithRunnerNamespace configures the default Kubernetes runner namespace for spawned test runs.
+func WithRunnerNamespace(namespace string) RunServiceOption {
+	return func(s *RunService) {
+		s.runnerNamespace = strings.TrimSpace(namespace)
 	}
 }
 
@@ -141,7 +149,12 @@ func (s *RunService) TriggerRun(ctx context.Context, cmd inbound.TriggerRunComma
 	}
 
 	// 5. Create TestRun aggregate in QUEUED status
-	run, err := model.NewTestRun(suite.ID(), artifact.ID(), cmd.ConfigurationID, profile.ID(), nil)
+	targetNamespace := s.runnerNamespace
+	if cmd.RunnerNamespace != nil && strings.TrimSpace(*cmd.RunnerNamespace) != "" {
+		targetNamespace = strings.TrimSpace(*cmd.RunnerNamespace)
+	}
+
+	run, err := model.NewTestRun(suite.ID(), artifact.ID(), cmd.ConfigurationID, profile.ID(), nil, targetNamespace)
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed creating test run aggregate")
 		return nil, err

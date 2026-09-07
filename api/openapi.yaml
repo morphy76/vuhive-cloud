@@ -2074,6 +2074,12 @@ components:
           format: uuid
           description: Unique identifier of the RunnerProfile specifying execution resources
           example: "e8d665b1-2e67-4228-8ab6-79c5b248a31e"
+        runner_namespace:
+          type: string
+          description: |
+            Optional Kubernetes namespace override where the runner Job executes.
+            When omitted, defaults to the control plane's configured RUNNER_NAMESPACE or vuhive-runners.
+          example: "vuhive-runners"
 
     CompleteRunRequest:
       type: object

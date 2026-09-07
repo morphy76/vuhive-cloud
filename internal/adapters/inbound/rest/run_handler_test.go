@@ -650,6 +650,37 @@ func TestRunHandler_TriggerRun(t *testing.T) {
 		assert.Equal(t, "vuhive-job-999", res.K8sJobName)
 	})
 
+	t.Run("successful trigger run with optional runner_namespace passes override to use case", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			triggerRunFunc: func(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error) {
+				assert.Equal(t, "suite-100", cmd.SuiteID)
+				assert.Equal(t, "art-200", cmd.ArtifactID)
+				assert.Equal(t, "prof-300", cmd.RunnerProfileID)
+				require.NotNil(t, cmd.RunnerNamespace)
+				assert.Equal(t, "ephemeral-test-ns", *cmd.RunnerNamespace)
+				return queuedRunNoConfig, nil
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+
+		body := map[string]interface{}{
+			"suite_id":          "suite-100",
+			"artifact_id":       "art-200",
+			"runner_profile_id": "prof-300",
+			"runner_namespace":  "ephemeral-test-ns",
+		}
+		raw, err := json.Marshal(body)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+		assert.Equal(t, http.StatusCreated, resp.Code)
+	})
+
 	t.Run("successful trigger run without optional configuration_id returns HTTP 201 Created", func(t *testing.T) {
 		mockUC := &mockRunsUseCase{
 			triggerRunFunc: func(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error) {

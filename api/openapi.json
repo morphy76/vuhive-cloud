@@ -1749,6 +1749,11 @@
             "format": "uuid",
             "type": "string"
           },
+          "runner_namespace": {
+            "description": "Optional Kubernetes namespace override where the runner Job executes. When omitted, defaults to the control plane's configured RUNNER_NAMESPACE or vuhive-runners.",
+            "example": "vuhive-runners",
+            "type": "string"
+          },
           "suite_id": {
             "description": "Unique identifier of the target TestSuite",
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",

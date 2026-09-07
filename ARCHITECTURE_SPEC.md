@@ -375,7 +375,7 @@ All endpoints require Header `Authorization: Bearer <token>` or `X-API-Key: <key
 
 ## 7. Kubernetes Runner Pod Specification & Hardening
 
-A generated execution Job in `vuhive-runners` namespace conforming to Kubernetes Pod Security Standards (`restricted`):
+A generated execution Job in the configured runner namespace (honoring `runner_namespace` from request, `RUNNER_NAMESPACE` from server configuration, or defaulting to `vuhive-runners`) conforming to Kubernetes Pod Security Standards (`restricted`):
 
 ```yaml
 apiVersion: batch/v1

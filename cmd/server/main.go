@@ -289,7 +289,11 @@ func main() {
 	configService := service.NewConfigService(suiteRepo, configRepo, storageAdapter)
 	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator, staticAnalyzer)
 	profileService := service.NewProfileService(profileRepo)
-	runService := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, runnerOrchestrator, storageAdapter)
+	var runServiceOpts []service.RunServiceOption
+	if runnerNs := strings.TrimSpace(os.Getenv("RUNNER_NAMESPACE")); runnerNs != "" {
+		runServiceOpts = append(runServiceOpts, service.WithRunnerNamespace(runnerNs))
+	}
+	runService := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, runnerOrchestrator, storageAdapter, runServiceOpts...)
 	scheduleService := service.NewScheduleService(suiteRepo, artifactRepo, configRepo, profileRepo, scheduleRepo, scheduleOrchestrator)
 	barrierCoordinator := coordinatoradapter.NewMemoryBarrierCoordinator()
 	barrierService := service.NewBarrierService(barrierCoordinator)

@@ -374,5 +374,38 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		require.NotNil(t, job2.Spec.ActiveDeadlineSeconds)
 		assert.Equal(t, int64(600), *job2.Spec.ActiveDeadlineSeconds)
 	})
+
+	t.Run("generate job respects configured runner namespace over default vuhive-runners", func(t *testing.T) {
+		customCfg := k8s.DefaultConfig()
+		customCfg.RunnerNamespace = "custom-orchestrator-ns"
+		customGen := k8s.NewRunnerJobGenerator(customCfg)
+
+		// 1. Run has default namespace (model.DefaultRunnerNamespace "vuhive-runners") -> fallback to generator cfg.RunnerNamespace
+		runDefault, err := model.NewTestRun("suite-1", "art-1", nil, profile.ID(), nil)
+		require.NoError(t, err)
+		assert.Equal(t, model.DefaultRunnerNamespace, runDefault.K8sNamespace())
+
+		job1, err := customGen.GenerateJob(runDefault, profile, outbound.RunnerJobOptions{S3BinaryKey: "key"})
+		require.NoError(t, err)
+		assert.Equal(t, "custom-orchestrator-ns", job1.Namespace)
+
+		// 2. Run has explicit custom namespace -> preserves run's custom namespace
+		runExplicit, err := model.NewTestRun("suite-1", "art-1", nil, profile.ID(), nil, "explicit-run-ns")
+		require.NoError(t, err)
+		assert.Equal(t, "explicit-run-ns", runExplicit.K8sNamespace())
+
+		job2, err := customGen.GenerateJob(runExplicit, profile, outbound.RunnerJobOptions{S3BinaryKey: "key"})
+		require.NoError(t, err)
+		assert.Equal(t, "explicit-run-ns", job2.Namespace)
+
+		// 3. Both run and generator config have default/empty -> fallback to model.DefaultRunnerNamespace
+		emptyCfg := k8s.DefaultConfig()
+		emptyCfg.RunnerNamespace = ""
+		emptyGen := k8s.NewRunnerJobGenerator(emptyCfg)
+
+		job3, err := emptyGen.GenerateJob(runDefault, profile, outbound.RunnerJobOptions{S3BinaryKey: "key"})
+		require.NoError(t, err)
+		assert.Equal(t, model.DefaultRunnerNamespace, job3.Namespace)
+	})
 }
 

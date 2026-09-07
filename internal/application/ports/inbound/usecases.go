@@ -47,6 +47,7 @@ type TriggerRunCommand struct {
 	ArtifactID      string
 	ConfigurationID *string
 	RunnerProfileID string
+	RunnerNamespace *string
 }
 
 // CompleteRunCommand encapsulates input parameters for finalizing a completed test run.

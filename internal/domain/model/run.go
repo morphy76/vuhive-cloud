@@ -93,6 +93,7 @@ func NewTestRun(
 	configurationID *string,
 	runnerProfileID string,
 	scheduleID *string,
+	runnerNamespace ...string,
 ) (*TestRun, error) {
 	trimmedSuiteID := strings.TrimSpace(suiteID)
 	trimmedArtifactID := strings.TrimSpace(artifactID)
@@ -114,6 +115,11 @@ func NewTestRun(
 		schedID = &s
 	}
 
+	ns := DefaultRunnerNamespace
+	if len(runnerNamespace) > 0 && strings.TrimSpace(runnerNamespace[0]) != "" {
+		ns = strings.TrimSpace(runnerNamespace[0])
+	}
+
 	now := time.Now().UTC()
 	return &TestRun{
 		id:              uuid.NewString(),
@@ -123,7 +129,7 @@ func NewTestRun(
 		runnerProfileID: trimmedProfileID,
 		scheduleID:      schedID,
 		status:          RunStatusQueued,
-		k8sNamespace:    DefaultRunnerNamespace,
+		k8sNamespace:    ns,
 		createdAt:       now,
 	}, nil
 }
