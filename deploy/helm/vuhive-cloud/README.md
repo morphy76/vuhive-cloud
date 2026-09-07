@@ -17,7 +17,7 @@ Official Helm chart for the `vuhive-cloud` control plane.
 ### Architecture Components
 
 - **Control Plane (`cmd/server`)**: Core engine orchestrating ephemeral compilation jobs, runner profiles, `batch/v1` Jobs, native CronJobs, and KPI indexing.
-- **Backend-For-Frontend (`cmd/bff`)**: High-throughput composite gateway serving the embedded React 19 SPA web dashboard and PWA assets directly via Go `embed.FS`, managing client sessions, providing sub-50ms parallel aggregation (`GET /api/bff/v1/dashboard`), unified run detail endpoints with presigned S3 links (`GET /api/bff/v1/runs/{id}`), and transparent reverse proxying for entity CRUD operations (`/api/bff/v1/suites`, `/api/bff/v1/profiles`, `/api/bff/v1/schedules`, `/api/bff/v1/runs`) to the upstream control plane. The embedded frontend includes full offline-capable domain concept micro-guidance and accessible help tooltips (`<HelpTooltip />`, `<InfoBadge />`) with zero external CDN dependencies.
+- **Backend-For-Frontend (`cmd/bff`)**: High-throughput composite gateway serving the embedded React 19 SPA web dashboard and PWA assets directly via Go `embed.FS`, managing client sessions, providing sub-50ms parallel aggregation (`GET /api/bff/v1/dashboard`), unified run detail endpoints with presigned S3 links (`GET /api/bff/v1/runs/{id}`), and transparent reverse proxying for entity CRUD operations (`/api/bff/v1/suites`, `/api/bff/v1/profiles`, `/api/bff/v1/schedules`, `/api/bff/v1/runs`) to the upstream control plane. The embedded frontend includes full offline-capable domain concept micro-guidance (`<HelpTooltip />`, `<InfoBadge />`) and contextual slide-over recipe guidance panels with dynamic cURL generation (`<RecipeDrawer />`) with zero external CDN dependencies.
 
 ## Prerequisites
 

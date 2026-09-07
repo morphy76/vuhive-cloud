@@ -1,5 +1,5 @@
 import React from 'react'
-import { Menu, FileCode, CheckCircle2 } from 'lucide-react'
+import { Menu, FileCode, CheckCircle2, BookOpen } from 'lucide-react'
 import { ThemeToggle } from './ThemeToggle'
 import { PRIMARY_NAV_ITEMS, RouteId } from '@/types/navigation'
 import { Button } from '@/components/ui/button'
@@ -10,9 +10,10 @@ import { InstallButton } from '@/components/ui/install-button'
 interface TopHeaderProps {
   currentRoute: RouteId
   onOpenDrawer: () => void
+  onOpenRecipes?: () => void
 }
 
-export const TopHeader: React.FC<TopHeaderProps> = ({ currentRoute, onOpenDrawer }) => {
+export const TopHeader: React.FC<TopHeaderProps> = ({ currentRoute, onOpenDrawer, onOpenRecipes }) => {
   const currentNav = PRIMARY_NAV_ITEMS.find((item) => item.id === currentRoute)
 
   return (
@@ -52,6 +53,23 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ currentRoute, onOpenDrawer
           <CheckCircle2 className="w-3.5 h-3.5" />
           <span>Control Plane Connected</span>
         </Badge>
+
+        {/* API Recipes Link */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenRecipes}
+              aria-label="Open API Recipe Guidance"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 h-8 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
+              <span className="hidden sm:inline">Recipes</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>API Recipes & cURL Generator</TooltipContent>
+        </Tooltip>
 
         {/* OpenAPI Link */}
         <Tooltip>

@@ -1695,6 +1695,23 @@ The UI introduces two core guidance primitives adhering strictly to **WCAG 2.1 A
 | **KPI Latency Percentiles** | Runs View & Dashboard Metrics | Explains $p_{50}$ (median duration), $p_{90}$ (90% threshold), $p_{95}$ (SLA benchmark threshold), and $p_{99}$ (worst 1% tail latency identifying lock contention and GC pauses). |
 | **Throughput & Error Rate** | Runs View & Dashboard Metrics | Explains Transactions Per Second (TPS) as the average rate of successfully completed requests, and error rate percentage as the proportion of HTTP 5xx responses or connection timeouts. |
 
+#### 3. Contextual Recipe Guidance Slide-Over Drawer & Dynamic cURL Generator
+
+To bridge these API recipes directly into operator and developer workflows, the Web UI provides an accessible slide-over **`<RecipeDrawer />`** panel accessible from any view via the header `Recipes` button or the persistent floating action button:
+
+- **Contextual Synchronization**: When opened, the drawer automatically detects the current route and displays the corresponding cookbook recipe:
+  - **Suites View** $\to$ **Recipe 1**: Registering a Test Suite & Uploading Source Packages
+  - **Builds View** $\to$ **Recipe 2**: Monitoring Build Status & Inspecting Logs
+  - **Profiles View** $\to$ **Recipe 3**: Defining Reusable Runner Profiles
+  - **Runs View** $\to$ **Recipe 4**: Triggering Ad-Hoc Test Runs
+  - **Schedules View** $\to$ **Recipe 5**: Setting Up Scheduled Test Runs
+  - **Results View** $\to$ **Recipe 6**: Querying Test Results, Logs & KPI Metrics
+  - **Active Run** $\to$ **Recipe 7**: Cancelling / Aborting Running Executions
+- **Recipe Switcher**: A dropdown select allows operators to switch to any recipe on demand without navigating away from their current page.
+- **Dynamic Parameter Binding**: Interactive form fields (Base URL, Suite Name, Suite ID, Artifact ID, Runner Profile ID, Run ID, Cron Expression, Source Archive path) dynamically update the generated cURL code blocks in real time as the user types.
+- **One-Click Clipboard Export**: Each step features a **Copy as cURL** button copying the exact executable terminal command to the system clipboard with an accessible toast confirmation.
+- **Accessibility & Dismissal**: Built with Radix UI Dialog primitives conforming to **WCAG 2.1 AA** with accessible focus trapping, keyboard `Esc` dismissal, backdrop light-dismiss, and mobile touch swipe-to-close gestures.
+
 ---
 
 ### Recipe 16: Adopting the Developer CLI (`vuhive`) & Keycloak OIDC Authentication

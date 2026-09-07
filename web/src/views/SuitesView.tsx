@@ -1,14 +1,16 @@
 import React, { useState } from 'react'
-import { Layers, Plus } from 'lucide-react'
+import { Layers, Plus, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { CreateSuiteDialog } from '@/components/dialogs/CreateSuiteDialog'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
+import { useRecipe } from '@/context/RecipeContext'
 
 export const SuitesView: React.FC = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const { openRecipe } = useRecipe()
 
   const sampleSuites = [
     {
@@ -51,6 +53,15 @@ export const SuitesView: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <OfflinePreviewBadge />
+          <Button
+            variant="outline"
+            onClick={() => openRecipe('recipe-1')}
+            className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800"
+            aria-label="View Suites API Recipe"
+          >
+            <BookOpen className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+            <span className="hidden sm:inline">API Recipe</span>
+          </Button>
           <Button
             onClick={() => setIsCreateOpen(true)}
             className="min-h-[44px] gap-2"
