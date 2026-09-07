@@ -40,7 +40,7 @@ func NewAuthCommand(store CredentialStore, httpClient *http.Client) *AuthCommand
 
 func (a *AuthCommand) Execute(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "Usage: vuhive auth <login|status|logout> [flags]")
+		fprintln(stderr, "Usage: vuhive auth <login|status|logout> [flags]")
 		return 1
 	}
 
@@ -52,7 +52,7 @@ func (a *AuthCommand) Execute(args []string, stdout, stderr io.Writer) int {
 	case "logout":
 		return a.logout(args[1:], stdout, stderr)
 	default:
-		fmt.Fprintf(stderr, "Unknown auth subcommand: %s\n", args[0])
+		fprintf(stderr, "Unknown auth subcommand: %s\n", args[0])
 		return 1
 	}
 }
@@ -60,38 +60,38 @@ func (a *AuthCommand) Execute(args []string, stdout, stderr io.Writer) int {
 func (a *AuthCommand) status(_ []string, stdout, stderr io.Writer) int {
 	creds, err := a.store.Load()
 	if err != nil {
-		fmt.Fprintf(stderr, "Error reading credentials: %v\n", err)
+		fprintf(stderr, "Error reading credentials: %v\n", err)
 		return 1
 	}
 
 	if creds == nil || creds.AccessToken == "" {
-		fmt.Fprintln(stdout, "Not authenticated. Run 'vuhive auth login' to authenticate.")
+		fprintln(stdout, "Not authenticated. Run 'vuhive auth login' to authenticate.")
 		return 0
 	}
 
 	claims, err := creds.Claims()
 	if err != nil {
-		fmt.Fprintf(stderr, "Error parsing token claims: %v\n", err)
+		fprintf(stderr, "Error parsing token claims: %v\n", err)
 		return 1
 	}
 
-	fmt.Fprintln(stdout, "=== vuhive-cloud Authentication Status ===")
-	fmt.Fprintf(stdout, "User:       %s (%s)\n", claims.Username(), claims.Subject())
+	fprintln(stdout, "=== vuhive-cloud Authentication Status ===")
+	fprintf(stdout, "User:       %s (%s)\n", claims.Username(), claims.Subject())
 	if claims.Email() != "" {
-		fmt.Fprintf(stdout, "Email:      %s\n", claims.Email())
+		fprintf(stdout, "Email:      %s\n", claims.Email())
 	}
-	fmt.Fprintf(stdout, "Roles:      %s\n", strings.Join(claims.Roles(), ", "))
+	fprintf(stdout, "Roles:      %s\n", strings.Join(claims.Roles(), ", "))
 	if len(claims.Groups()) > 0 {
-		fmt.Fprintf(stdout, "Groups:     %s\n", strings.Join(claims.Groups(), ", "))
+		fprintf(stdout, "Groups:     %s\n", strings.Join(claims.Groups(), ", "))
 	}
 	if creds.ServerURL != "" {
-		fmt.Fprintf(stdout, "Server URL: %s\n", creds.ServerURL)
+		fprintf(stdout, "Server URL: %s\n", creds.ServerURL)
 	}
 
 	if claims.IsExpired() {
-		fmt.Fprintf(stdout, "Status:     EXPIRED (expired at %s). Run 'vuhive auth login' to refresh.\n", claims.ExpiresAt().Format(time.RFC3339))
+		fprintf(stdout, "Status:     EXPIRED (expired at %s). Run 'vuhive auth login' to refresh.\n", claims.ExpiresAt().Format(time.RFC3339))
 	} else {
-		fmt.Fprintf(stdout, "Status:     ACTIVE (expires at %s)\n", claims.ExpiresAt().Format(time.RFC3339))
+		fprintf(stdout, "Status:     ACTIVE (expires at %s)\n", claims.ExpiresAt().Format(time.RFC3339))
 	}
 
 	return 0
@@ -117,11 +117,11 @@ func (a *AuthCommand) logout(_ []string, stdout, stderr io.Writer) int {
 	}
 
 	if err := a.store.Clear(); err != nil {
-		fmt.Fprintf(stderr, "Error clearing credentials: %v\n", err)
+		fprintf(stderr, "Error clearing credentials: %v\n", err)
 		return 1
 	}
 
-	fmt.Fprintln(stdout, "Successfully logged out and cleared credentials.")
+	fprintln(stdout, "Successfully logged out and cleared credentials.")
 	return 0
 }
 
@@ -163,7 +163,7 @@ func (a *AuthCommand) login(args []string, stdout, stderr io.Writer) int {
 	// 3. Start local loopback HTTP listener
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		fmt.Fprintf(stderr, "Failed starting local loopback server: %v\nFalling back to Device Flow...\n", err)
+		fprintf(stderr, "Failed starting local loopback server: %v\nFalling back to Device Flow...\n", err)
 		return a.deviceFlow(issuerURL, serverURL, clientID, stdout, stderr)
 	}
 	defer func() { _ = listener.Close() }()
@@ -189,7 +189,7 @@ func (a *AuthCommand) login(args []string, stdout, stderr io.Writer) int {
 
 	relyingParty, err := rp.NewRelyingPartyOAuth(oauthCfg, rpOpts...)
 	if err != nil {
-		fmt.Fprintf(stderr, "Failed initializing OIDC RelyingParty: %v\n", err)
+		fprintf(stderr, "Failed initializing OIDC RelyingParty: %v\n", err)
 		return 1
 	}
 
@@ -243,8 +243,8 @@ func (a *AuthCommand) login(args []string, stdout, stderr io.Writer) int {
 		_ = server.Serve(listener)
 	}()
 
-	fmt.Fprintln(stdout, "Opening browser for authentication...")
-	fmt.Fprintf(stdout, "If browser does not open automatically, navigate to:\n%s\n\n", authURL)
+	fprintln(stdout, "Opening browser for authentication...")
+	fprintf(stdout, "If browser does not open automatically, navigate to:\n%s\n\n", authURL)
 
 	if !*noBrowserFlag {
 		_ = openBrowser(authURL)
@@ -254,17 +254,17 @@ func (a *AuthCommand) login(args []string, stdout, stderr io.Writer) int {
 	select {
 	case code = <-codeChan:
 	case err := <-errChan:
-		fmt.Fprintf(stderr, "Authentication failed: %v\n", err)
+		fprintf(stderr, "Authentication failed: %v\n", err)
 		return 1
 	case <-time.After(2 * time.Minute):
-		fmt.Fprintln(stderr, "Authentication timed out waiting for browser callback.")
+		fprintln(stderr, "Authentication timed out waiting for browser callback.")
 		return 1
 	}
 
 	// 4. Exchange authorization code for tokens via zitadel RelyingParty
 	tokens, err := rp.CodeExchange[*oidc.IDTokenClaims](context.Background(), code, relyingParty, rp.WithCodeVerifier(codeVerifier))
 	if err != nil {
-		fmt.Fprintf(stderr, "Token exchange failed: %v\n", err)
+		fprintf(stderr, "Token exchange failed: %v\n", err)
 		return 1
 	}
 
@@ -282,19 +282,19 @@ func (a *AuthCommand) login(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if err := a.store.Save(creds); err != nil {
-		fmt.Fprintf(stderr, "Failed saving credentials: %v\n", err)
+		fprintf(stderr, "Failed saving credentials: %v\n", err)
 		return 1
 	}
 
 	claims, err := creds.Claims()
 	if err == nil && claims != nil {
-		fmt.Fprintf(stdout, "Successfully authenticated as %s (%s)!\n", claims.Username(), claims.Email())
-		fmt.Fprintf(stdout, "Assigned Roles: %s\n", strings.Join(claims.Roles(), ", "))
+		fprintf(stdout, "Successfully authenticated as %s (%s)!\n", claims.Username(), claims.Email())
+		fprintf(stdout, "Assigned Roles: %s\n", strings.Join(claims.Roles(), ", "))
 		if len(claims.Groups()) > 0 {
-			fmt.Fprintf(stdout, "Groups:         %s\n", strings.Join(claims.Groups(), ", "))
+			fprintf(stdout, "Groups:         %s\n", strings.Join(claims.Groups(), ", "))
 		}
 	} else {
-		fmt.Fprintln(stdout, "Successfully authenticated!")
+		fprintln(stdout, "Successfully authenticated!")
 	}
 
 	return 0
@@ -308,21 +308,21 @@ func (a *AuthCommand) deviceFlow(issuerURL, serverURL, clientID string, stdout, 
 
 	req, err := http.NewRequest(http.MethodPost, deviceURL, strings.NewReader(data.Encode()))
 	if err != nil {
-		fmt.Fprintf(stderr, "Failed creating device authorization request: %v\n", err)
+		fprintf(stderr, "Failed creating device authorization request: %v\n", err)
 		return 1
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		fmt.Fprintf(stderr, "Failed requesting device code: %v\n", err)
+		fprintf(stderr, "Failed requesting device code: %v\n", err)
 		return 1
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(stderr, "Device flow request failed (HTTP %d): %s\n", resp.StatusCode, string(body))
+		fprintf(stderr, "Device flow request failed (HTTP %d): %s\n", resp.StatusCode, string(body))
 		return 1
 	}
 
@@ -336,7 +336,7 @@ func (a *AuthCommand) deviceFlow(issuerURL, serverURL, clientID string, stdout, 
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&devResp); err != nil {
-		fmt.Fprintf(stderr, "Failed decoding device authorization response: %v\n", err)
+		fprintf(stderr, "Failed decoding device authorization response: %v\n", err)
 		return 1
 	}
 
@@ -345,10 +345,10 @@ func (a *AuthCommand) deviceFlow(issuerURL, serverURL, clientID string, stdout, 
 		uri = devResp.VerificationURI
 	}
 
-	fmt.Fprintln(stdout, "=== Device Authorization Flow ===")
-	fmt.Fprintf(stdout, "Navigate to: %s\n", uri)
-	fmt.Fprintf(stdout, "Enter User Code: %s\n\n", devResp.UserCode)
-	fmt.Fprintln(stdout, "Waiting for verification in browser...")
+	fprintln(stdout, "=== Device Authorization Flow ===")
+	fprintf(stdout, "Navigate to: %s\n", uri)
+	fprintf(stdout, "Enter User Code: %s\n\n", devResp.UserCode)
+	fprintln(stdout, "Waiting for verification in browser...")
 
 	interval := time.Duration(devResp.Interval) * time.Second
 	if interval <= 0 {
@@ -395,7 +395,7 @@ func (a *AuthCommand) deviceFlow(issuerURL, serverURL, clientID string, stdout, 
 				ExpiresAt:    time.Now().Add(time.Duration(tokenResult.ExpiresIn) * time.Second),
 			}
 			_ = a.store.Save(creds)
-			fmt.Fprintln(stdout, "Successfully authenticated via Device Flow!")
+			fprintln(stdout, "Successfully authenticated via Device Flow!")
 			return 0
 		}
 
@@ -413,11 +413,11 @@ func (a *AuthCommand) deviceFlow(issuerURL, serverURL, clientID string, stdout, 
 			continue
 		}
 
-		fmt.Fprintf(stderr, "Device authorization failed: %s\n", errResp.Error)
+		fprintf(stderr, "Device authorization failed: %s\n", errResp.Error)
 		return 1
 	}
 
-	fmt.Fprintln(stderr, "Device code expired before authorization was completed.")
+	fprintln(stderr, "Device code expired before authorization was completed.")
 	return 1
 }
 

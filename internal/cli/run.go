@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -26,7 +25,7 @@ func NewRunCommand(store CredentialStore, httpClient *http.Client) *RunCommand {
 
 func (r *RunCommand) Execute(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "Usage: vuhive run <start|status|logs|report> [flags]")
+		fprintln(stderr, "Usage: vuhive run <start|status|logs|report> [flags]")
 		return 1
 	}
 
@@ -40,7 +39,7 @@ func (r *RunCommand) Execute(args []string, stdout, stderr io.Writer) int {
 	case "report":
 		return r.report(args[1:], stdout, stderr)
 	default:
-		fmt.Fprintf(stderr, "Unknown run subcommand: %s\n", args[0])
+		fprintf(stderr, "Unknown run subcommand: %s\n", args[0])
 		return 1
 	}
 }
@@ -69,7 +68,7 @@ func (r *RunCommand) start(args []string, stdout, stderr io.Writer) int {
 	if creds != nil && creds.AccessToken != "" {
 		if claims, err := creds.Claims(); err == nil && claims != nil {
 			if !claims.HasRole(model.RoleDeployer) && !claims.HasRole(model.RoleAdmin) {
-				fmt.Fprintf(stderr, "Error: role guard violation: user %q lacks required 'vuhive-deployer' role\n", claims.Username())
+				fprintf(stderr, "Error: role guard violation: user %q lacks required 'vuhive-deployer' role\n", claims.Username())
 				return 1
 			}
 		}
@@ -89,7 +88,7 @@ func (r *RunCommand) start(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if len(positional) == 0 {
-		fmt.Fprintln(stderr, "Error: missing suite ID argument. Usage: vuhive run start <suite-id> --profile-id <id> --artifact-id <id>")
+		fprintln(stderr, "Error: missing suite ID argument. Usage: vuhive run start <suite-id> --profile-id <id> --artifact-id <id>")
 		return 1
 	}
 	suiteID := strings.TrimSpace(positional[0])
@@ -97,7 +96,7 @@ func (r *RunCommand) start(args []string, stdout, stderr io.Writer) int {
 	profileID := strings.TrimSpace(*profileIDFlag)
 	artifactID := strings.TrimSpace(*artifactIDFlag)
 	if profileID == "" || artifactID == "" {
-		fmt.Fprintln(stderr, "Error: --profile-id and --artifact-id are required")
+		fprintln(stderr, "Error: --profile-id and --artifact-id are required")
 		return 1
 	}
 
@@ -115,14 +114,14 @@ func (r *RunCommand) start(args []string, stdout, stderr io.Writer) int {
 
 	resp, err := client.PostJSON(context.Background(), "/api/v1/runs", payload)
 	if err != nil {
-		fmt.Fprintf(stderr, "Failed triggering run: %v\n", err)
+		fprintf(stderr, "Failed triggering run: %v\n", err)
 		return 1
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusCreated {
-		fmt.Fprintf(stderr, "Run trigger failed (HTTP %d): %s\n", resp.StatusCode, string(body))
+		fprintf(stderr, "Run trigger failed (HTTP %d): %s\n", resp.StatusCode, string(body))
 		return 1
 	}
 
@@ -134,11 +133,11 @@ func (r *RunCommand) start(args []string, stdout, stderr io.Writer) int {
 	}
 	_ = json.Unmarshal(body, &runResp)
 
-	fmt.Fprintln(stdout, "=== Test Run Triggered ===")
-	fmt.Fprintf(stdout, "Run ID:     %s\n", runResp.ID)
-	fmt.Fprintf(stdout, "Suite ID:   %s\n", runResp.SuiteID)
-	fmt.Fprintf(stdout, "Status:     %s\n", runResp.Status)
-	fmt.Fprintf(stdout, "Created At: %s\n", runResp.CreatedAt)
+	fprintln(stdout, "=== Test Run Triggered ===")
+	fprintf(stdout, "Run ID:     %s\n", runResp.ID)
+	fprintf(stdout, "Suite ID:   %s\n", runResp.SuiteID)
+	fprintf(stdout, "Status:     %s\n", runResp.Status)
+	fprintf(stdout, "Created At: %s\n", runResp.CreatedAt)
 
 	return 0
 }
@@ -153,7 +152,7 @@ func (r *RunCommand) status(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if len(positional) == 0 {
-		fmt.Fprintln(stderr, "Error: missing run ID. Usage: vuhive run status <run-id>")
+		fprintln(stderr, "Error: missing run ID. Usage: vuhive run status <run-id>")
 		return 1
 	}
 	runID := strings.TrimSpace(positional[0])
@@ -167,14 +166,14 @@ func (r *RunCommand) status(args []string, stdout, stderr io.Writer) int {
 
 	resp, err := client.Get(context.Background(), "/api/v1/runs/"+runID)
 	if err != nil {
-		fmt.Fprintf(stderr, "Failed fetching run status: %v\n", err)
+		fprintf(stderr, "Failed fetching run status: %v\n", err)
 		return 1
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(stderr, "Get run failed (HTTP %d): %s\n", resp.StatusCode, string(body))
+		fprintf(stderr, "Get run failed (HTTP %d): %s\n", resp.StatusCode, string(body))
 		return 1
 	}
 
@@ -187,15 +186,15 @@ func (r *RunCommand) status(args []string, stdout, stderr io.Writer) int {
 	}
 	_ = json.Unmarshal(body, &runResp)
 
-	fmt.Fprintln(stdout, "=== Test Run Details ===")
-	fmt.Fprintf(stdout, "Run ID:     %s\n", runResp.ID)
-	fmt.Fprintf(stdout, "Suite ID:   %s\n", runResp.SuiteID)
-	fmt.Fprintf(stdout, "Status:     %s\n", runResp.Status)
+	fprintln(stdout, "=== Test Run Details ===")
+	fprintf(stdout, "Run ID:     %s\n", runResp.ID)
+	fprintf(stdout, "Suite ID:   %s\n", runResp.SuiteID)
+	fprintf(stdout, "Status:     %s\n", runResp.Status)
 	if runResp.ExitCode != nil {
-		fmt.Fprintf(stdout, "Exit Code:  %d\n", *runResp.ExitCode)
+		fprintf(stdout, "Exit Code:  %d\n", *runResp.ExitCode)
 	}
 	if runResp.SLAPassed != nil {
-		fmt.Fprintf(stdout, "SLA Passed: %v\n", *runResp.SLAPassed)
+		fprintf(stdout, "SLA Passed: %v\n", *runResp.SLAPassed)
 	}
 
 	return 0
@@ -211,7 +210,7 @@ func (r *RunCommand) logs(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if len(positional) == 0 {
-		fmt.Fprintln(stderr, "Error: missing run ID. Usage: vuhive run logs <run-id>")
+		fprintln(stderr, "Error: missing run ID. Usage: vuhive run logs <run-id>")
 		return 1
 	}
 	runID := strings.TrimSpace(positional[0])
@@ -225,14 +224,14 @@ func (r *RunCommand) logs(args []string, stdout, stderr io.Writer) int {
 
 	resp, err := client.Get(context.Background(), "/api/v1/runs/"+runID+"/logs")
 	if err != nil {
-		fmt.Fprintf(stderr, "Failed fetching run logs: %v\n", err)
+		fprintf(stderr, "Failed fetching run logs: %v\n", err)
 		return 1
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(stderr, "Failed fetching logs (HTTP %d): %s\n", resp.StatusCode, string(body))
+		fprintf(stderr, "Failed fetching logs (HTTP %d): %s\n", resp.StatusCode, string(body))
 		return 1
 	}
 
@@ -250,7 +249,7 @@ func (r *RunCommand) report(args []string, stdout, stderr io.Writer) int {
 	}
 
 	if len(positional) == 0 {
-		fmt.Fprintln(stderr, "Error: missing run ID. Usage: vuhive run report <run-id>")
+		fprintln(stderr, "Error: missing run ID. Usage: vuhive run report <run-id>")
 		return 1
 	}
 	runID := strings.TrimSpace(positional[0])
@@ -264,14 +263,14 @@ func (r *RunCommand) report(args []string, stdout, stderr io.Writer) int {
 
 	resp, err := client.Get(context.Background(), "/api/v1/runs/"+runID+"/report")
 	if err != nil {
-		fmt.Fprintf(stderr, "Failed fetching report: %v\n", err)
+		fprintf(stderr, "Failed fetching report: %v\n", err)
 		return 1
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(stderr, "Failed fetching report (HTTP %d): %s\n", resp.StatusCode, string(body))
+		fprintf(stderr, "Failed fetching report (HTTP %d): %s\n", resp.StatusCode, string(body))
 		return 1
 	}
 

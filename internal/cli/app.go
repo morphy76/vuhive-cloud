@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 
@@ -57,7 +56,7 @@ func (a *App) Execute(args []string, stdout, stderr io.Writer) int {
 		return schedCmd.Execute(subArgs, stdout, stderr)
 
 	case "version", "--version", "-v":
-		fmt.Fprintf(stdout, "vuhive CLI %s (commit: %s, built: %s)\n", version.Version, version.Commit, version.BuildTime)
+		fprintf(stdout, "vuhive CLI %s (commit: %s, built: %s)\n", version.Version, version.Commit, version.BuildTime)
 		return 0
 
 	case "help", "--help", "-h":
@@ -65,13 +64,13 @@ func (a *App) Execute(args []string, stdout, stderr io.Writer) int {
 		return 0
 
 	default:
-		fmt.Fprintf(stderr, "Unknown command: %s\nRun 'vuhive --help' for usage.\n", cmd)
+		fprintf(stderr, "Unknown command: %s\nRun 'vuhive --help' for usage.\n", cmd)
 		return 1
 	}
 }
 
 func (a *App) printHelp(w io.Writer) {
-	fmt.Fprintln(w, `vuhive — Developer CLI for the vuhive-cloud load testing orchestration platform
+	fprintln(w, `vuhive — Developer CLI for the vuhive-cloud load testing orchestration platform
 
 Usage:
   vuhive <command> [subcommand] [flags]
