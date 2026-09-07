@@ -10,16 +10,20 @@ import { RunsView } from '@/views/RunsView'
 import { SchedulesView } from '@/views/SchedulesView'
 import { queryClient, idbPersister } from '@/lib/query-client'
 
+import { RecipeProvider } from '@/context/RecipeContext'
+
 export const AppContent: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<RouteId>('dashboard')
 
   return (
-    <Shell currentRoute={currentRoute} onSelectRoute={setCurrentRoute}>
-      {currentRoute === 'dashboard' && <DashboardView onNavigate={setCurrentRoute} />}
-      {currentRoute === 'suites' && <SuitesView />}
-      {currentRoute === 'runs' && <RunsView />}
-      {currentRoute === 'schedules' && <SchedulesView />}
-    </Shell>
+    <RecipeProvider>
+      <Shell currentRoute={currentRoute} onSelectRoute={setCurrentRoute}>
+        {currentRoute === 'dashboard' && <DashboardView onNavigate={setCurrentRoute} />}
+        {currentRoute === 'suites' && <SuitesView />}
+        {currentRoute === 'runs' && <RunsView />}
+        {currentRoute === 'schedules' && <SchedulesView />}
+      </Shell>
+    </RecipeProvider>
   )
 }
 
