@@ -2004,6 +2004,33 @@ All protected BFF aggregate endpoints (`/api/bff/v1/dashboard`, `/api/bff/v1/run
 - **Header Injection**: Transparently injects `Authorization: Bearer <access_token>` into the request, ensuring upstream control plane proxies receive valid JWTs.
 - **Context Injection**: Sets `user_id`, `roles`, and the `ClientSession` into the Gin context for downstream handler consumption.
 
+#### 3. Production Multi-Replica Resilience & Pod Eviction Survivability
+
+In Kubernetes production clusters, configure the BFF with multiple replicas (`bff.replicaCount: 2` or higher) alongside persistent PostgreSQL session storage:
+
+```yaml
+bff:
+  replicaCount: 2
+  database:
+    autoMigrate: true
+  session:
+    ttl: "24h"
+    slidingThreshold: "15m"
+    cleanerInterval: "10m"
+    encryptionKeyExistingSecret: "vuhive-session-crypto"
+    encryptionKeyKey: "session-encryption-key"
+  keycloak:
+    issuerUrl: "https://auth.example.com/realms/vuhive"
+    clientId: "vuhive-cloud-bff"
+    clientSecretExistingSecret: "vuhive-bff-keycloak-secret"
+    clientSecretKey: "client-secret"
+```
+
+**Key Operational Capabilities:**
+1. **Shared State & Zero Session Drop on Pod Restarts**: Because sessions and rotated OAuth tokens persist in PostgreSQL (`bff_sessions`) with AES-256-GCM encryption, ingress traffic can be routed round-robin to any BFF replica. If a pod terminates, crashes, or is rescheduled during rolling deployments, active user sessions continue without interruption.
+2. **Cluster-Wide Backchannel Logout**: When Keycloak issues an HTTP POST to `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`, any receiving BFF pod verifies the cryptographic RS256 token and invokes `RevokeByKeycloakSID`. This immediately invalidates the user's session record in PostgreSQL, immediately terminating authorization across all cluster pods.
+3. **Automated Schema Evolution**: The BFF automatically checks and applies database migrations on startup using an isolated migration tracking table (`bff_goose_db_version`), allowing seamless parallel deployments with the core control plane.
+
 ---
 
 ## 4. Next Steps

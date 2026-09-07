@@ -132,7 +132,7 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "backchannel.logout.url": "http://vuhive-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout",
+        "backchannel.logout.url": "http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout",
         "backchannel.logout.session.required": "true"
       },
       "defaultClientScopes": [

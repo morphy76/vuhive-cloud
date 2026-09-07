@@ -11,7 +11,15 @@ data:
   CONTROL_PLANE_URL: {{ include "vuhive-cloud.bff.controlPlaneUrl" . | quote }}
   SSE_POLL_INTERVAL: {{ .Values.bff.ssePollInterval | default "2s" | quote }}
   SSE_HEARTBEAT_INTERVAL: {{ .Values.bff.sseHeartbeatInterval | default "15s" | quote }}
-  KEYCLOAK_ISSUER_URL: {{ (default (dict) (default (dict) .Values.bff).keycloak).issuerUrl | default "" | quote }}
+  KEYCLOAK_ISSUER_URL: {{ default ((default (dict) .Values.auth).issuerUrl | default "") (default (dict) (default (dict) .Values.bff).keycloak).issuerUrl | quote }}
+  KEYCLOAK_BASE_URL: {{ (default (dict) (default (dict) .Values.bff).keycloak).baseUrl | default "" | quote }}
+  KEYCLOAK_REALM: {{ (default (dict) (default (dict) .Values.bff).keycloak).realm | default "vuhive" | quote }}
   KEYCLOAK_CLIENT_ID: {{ (default (dict) (default (dict) .Values.bff).keycloak).clientId | default "vuhive-cloud-bff" | quote }}
+  KEYCLOAK_JWKS_URL: {{ default ((default (dict) .Values.auth).jwksUrl | default "") (default (dict) (default (dict) .Values.bff).keycloak).jwksUrl | quote }}
   SESSION_COOKIE_NAME: {{ (default (dict) (default (dict) .Values.bff).keycloak).sessionCookieName | default "vuhive_session" | quote }}
+  SESSION_TTL: {{ (default (dict) (default (dict) .Values.bff).session).ttl | default "24h" | quote }}
+  SESSION_SLIDING_THRESHOLD: {{ (default (dict) (default (dict) .Values.bff).session).slidingThreshold | default "15m" | quote }}
+  SESSION_CLEANER_INTERVAL: {{ (default (dict) (default (dict) .Values.bff).session).cleanerInterval | default "10m" | quote }}
+  AUTO_MIGRATE: {{ (default (dict) (default (dict) .Values.bff).database).autoMigrate | default true | toString | quote }}
+  AUTH_ENABLED: {{ (default (dict) .Values.auth).enabled | default false | toString | quote }}
 {{- end }}

@@ -261,11 +261,32 @@ bff:
   # Optional bearer token for control plane if required
   controlPlaneToken: ""
 
-  # Keycloak OIDC Token Handler & session encryption configuration
+  # Persistent PostgreSQL session storage configuration (bff_sessions)
+  database:
+    # Optional PostgreSQL connection URL override for BFF sessions.
+    # If empty, defaults to chart's PostgreSQL connection (vuhive-cloud.databaseUrl).
+    url: ""
+    existingSecret: ""
+    existingSecretKey: "DATABASE_URL"
+    autoMigrate: true
+
+  # Session lifecycle, sliding expiration, and token encryption settings
+  session:
+    ttl: "24h"
+    slidingThreshold: "15m"
+    cleanerInterval: "10m"
+    encryptionKey: ""
+    encryptionKeyExistingSecret: ""
+    encryptionKeyKey: "session-encryption-key"
+
+  # Keycloak OIDC Token Handler configuration
   keycloak:
+    baseUrl: ""
+    realm: "vuhive"
     issuerUrl: ""
+    jwksUrl: ""
     clientId: "vuhive-cloud-bff"
-    clientSecret: ""
+    clientSecret: "vuhive-bff-secret"
     clientSecretExistingSecret: ""
     clientSecretKey: "client-secret"
     sessionCookieSecret: ""
@@ -279,13 +300,5 @@ bff:
   extraEnv: []
   extraEnvFrom: []
 
-nodeSelector: {}
-
-tolerations: []
-
-affinity: {}
-
-extraEnv: []
-extraEnvFrom: []
 
 
