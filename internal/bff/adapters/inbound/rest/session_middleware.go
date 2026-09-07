@@ -78,7 +78,7 @@ func SessionMiddleware(sessionService inbound.SessionService, oidcClient outboun
 				if refreshErr != nil {
 					log.Warn().Err(refreshErr).Str("session_id", string(session.ID)).Msg("failed transparent token refresh; invalidating session")
 					_ = sessionService.RevokeSession(ctx, session.ID)
-					c.SetCookie(cookieName, "", -1, "/", "", false, true)
+					c.SetCookie(cookieName, "", -1, "/", "", true, true)
 					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 					return
 				}
