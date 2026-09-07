@@ -234,9 +234,200 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/bff/auth/backchannel-logout:
+  /api/bff/v1/auth/login:
+    get:
+      summary: Initiate OIDC login with PKCE
+      description: Generates PKCE parameters, sets state/verifier cookies, and redirects the browser to the Keycloak authorization URL.
+      tags:
+        - Authentication
+        - BFF
+      responses:
+        '302':
+          description: Redirect to Keycloak authorization endpoint
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Keycloak authorization URL
+
+  /api/bff/v1/auth/callback:
+    get:
+      summary: OIDC authorization code callback
+      description: Validates PKCE and state cookies, exchanges authorization code for tokens, creates an encrypted server-side session, and sets the HttpOnly session cookie.
+      tags:
+        - Authentication
+        - BFF
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorization code issued by Keycloak
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: CSRF state parameter matching cookie
+      responses:
+        '302':
+          description: Redirect to application root with session cookie set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Encrypted HttpOnly session cookie (vuhive_session)
+            Location:
+              schema:
+                type: string
+              description: Application root (/)
+        '400':
+          description: Invalid state or authorization code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/bff/v1/auth/logout:
+    post:
+      summary: Terminate user session
+      description: Revokes the Keycloak refresh token, deletes the server-side session from PostgreSQL, and clears the session cookie.
+      tags:
+        - Authentication
+        - BFF
+      responses:
+        '200':
+          description: Successfully logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: logged out successfully
+        '401':
+          description: Unauthenticated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/bff/v1/auth/me:
+    get:
+      summary: Retrieve authenticated user identity
+      description: Returns the user ID, email, name, and RBAC roles associated with the active session without exposing tokens.
+      tags:
+        - Authentication
+        - BFF
+      responses:
+        '200':
+          description: User identity and roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserResponse'
+        '401':
+          description: Unauthenticated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/bff/v1/auth/backchannel-logout:
     post:
       summary: OIDC Backchannel Logout
+      description: Receives signed logout tokens from Keycloak to invalidate user sessions across the cluster.
+      tags:
+        - Authentication
+        - BFF
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                logout_token:
+                  type: string
+                  description: Signed JWT logout token issued by Keycloak
+              required:
+                - logout_token
+      responses:
+        '200':
+          description: Session successfully invalidated
+        '400':
+          description: Invalid logout token
+
+  /api/v1/bff/auth/login:
+    get:
+      summary: Initiate OIDC login with PKCE (alias)
+      description: Backwards-compatible alias for /api/bff/v1/auth/login.
+      tags:
+        - Authentication
+        - BFF
+      responses:
+        '302':
+          description: Redirect to Keycloak authorization endpoint
+
+  /api/v1/bff/auth/callback:
+    get:
+      summary: OIDC authorization code callback (alias)
+      description: Backwards-compatible alias for /api/bff/v1/auth/callback.
+      tags:
+        - Authentication
+        - BFF
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to application root with session cookie set
+        '400':
+          description: Invalid state or authorization code
+
+  /api/v1/bff/auth/logout:
+    post:
+      summary: Terminate user session (alias)
+      description: Backwards-compatible alias for /api/bff/v1/auth/logout.
+      tags:
+        - Authentication
+        - BFF
+      responses:
+        '200':
+          description: Successfully logged out
+        '401':
+          description: Unauthenticated session
+
+  /api/v1/bff/auth/me:
+    get:
+      summary: Retrieve authenticated user identity (alias)
+      description: Backwards-compatible alias for /api/bff/v1/auth/me.
+      tags:
+        - Authentication
+        - BFF
+      responses:
+        '200':
+          description: User identity and roles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserResponse'
+        '401':
+          description: Unauthenticated session
+
+  /api/v1/bff/auth/backchannel-logout:
+    post:
+      summary: OIDC Backchannel Logout (alias)
       description: Receives signed logout tokens from Keycloak to invalidate user sessions across the cluster.
       tags:
         - Authentication
@@ -1913,6 +2104,34 @@ components:
             $ref: '#/components/schemas/BarrierParticipantResponse'
 
     # ── BFF ────────────────────────────────────────────────────────────────
+    AuthUserResponse:
+      type: object
+      required:
+        - user_id
+        - roles
+        - session_id
+      properties:
+        user_id:
+          type: string
+          example: usr_12345
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        name:
+          type: string
+          example: Jane Doe
+        roles:
+          type: array
+          items:
+            type: string
+          example:
+            - vuhive-developer
+            - vuhive-viewer
+        session_id:
+          type: string
+          example: sess-a1b2c3d4e5f6
+
     BFFStatusResponse:
       type: object
       required:

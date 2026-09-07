@@ -373,7 +373,7 @@ The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway an
 - **Transparent Reverse Proxying**: Routes under `/api/bff/v1/suites`, `/api/bff/v1/profiles`, `/api/bff/v1/schedules`, and `/api/bff/v1/runs` transparently proxy requests to the upstream control plane (`/api/v1/*`), handling HTTP header propagation (Bearer tokens, API keys) and connection pooling automatically.
 - **Unified Ingress Smart Routing**:
   When `ingress.enabled=true` and `bff.enabled=true` (default), the chart's Ingress resource automatically partitions traffic:
-  - `/api/v1/bff/auth` (and `/backchannel-logout`) → routed to the BFF service (port 8081) for OIDC session initiation, callbacks, token renewal, and backchannel logout.
+  - `/api/bff/v1/auth` and `/api/v1/bff/auth` → routed to the BFF service (port 8081) for OIDC PKCE login (`/login`), callback exchange (`/callback`), user identity (`/me`), logout (`/logout`), and Keycloak backchannel logout (`/backchannel-logout`).
   - `/api/bff/v1` → routed to the BFF service (port 8081) for sub-50ms dashboard aggregations, unified run details, and live SSE event streams.
   - `/api/v1/bff` → routed to the BFF service (port 8081) for legacy/backward-compatible endpoints.
   - `/api/v1` → routed directly to the control plane server (port 8080) for core runner callbacks, barrier rendezvous, developer CLI, and REST API access.
