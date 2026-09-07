@@ -88,3 +88,42 @@ service name (http://<fullname>:<port>/api/v1/runs/complete).
 {{- printf "http://%s:%d/api/v1/runs/complete" (include "vuhive-cloud.fullname" .) (.Values.service.port | int) }}
 {{- end }}
 {{- end }}
+
+{{/*
+Create a default fully qualified bff name.
+*/}}
+{{- define "vuhive-cloud.bff.fullname" -}}
+{{- printf "%s-bff" (include "vuhive-cloud.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+BFF selector labels
+*/}}
+{{- define "vuhive-cloud.bff.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "vuhive-cloud.name" . }}-bff
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: bff
+{{- end }}
+
+{{/*
+BFF common labels
+*/}}
+{{- define "vuhive-cloud.bff.labels" -}}
+helm.sh/chart: {{ include "vuhive-cloud.chart" . }}
+{{ include "vuhive-cloud.bff.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Construct the BFF upstream control plane URL.
+*/}}
+{{- define "vuhive-cloud.bff.controlPlaneUrl" -}}
+{{- if (default (dict) .Values.bff).controlPlaneUrl }}
+{{- .Values.bff.controlPlaneUrl }}
+{{- else }}
+{{- printf "http://%s:%d" (include "vuhive-cloud.fullname" .) (.Values.service.port | int) }}
+{{- end }}
+{{- end }}

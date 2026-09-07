@@ -1,0 +1,17 @@
+{{- if (default (dict) .Values.bff).enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vuhive-cloud.bff.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud.bff.labels" . | nindent 4 }}
+data:
+  PORT: {{ .Values.bff.service.targetPort | toString | quote }}
+  CONTROL_PLANE_URL: {{ include "vuhive-cloud.bff.controlPlaneUrl" . | quote }}
+  SSE_POLL_INTERVAL: {{ .Values.bff.ssePollInterval | default "2s" | quote }}
+  SSE_HEARTBEAT_INTERVAL: {{ .Values.bff.sseHeartbeatInterval | default "15s" | quote }}
+  KEYCLOAK_ISSUER_URL: {{ (default (dict) (default (dict) .Values.bff).keycloak).issuerUrl | default "" | quote }}
+  KEYCLOAK_CLIENT_ID: {{ (default (dict) (default (dict) .Values.bff).keycloak).clientId | default "vuhive-cloud-bff" | quote }}
+  SESSION_COOKIE_NAME: {{ (default (dict) (default (dict) .Values.bff).keycloak).sessionCookieName | default "vuhive_session" | quote }}
+{{- end }}

@@ -234,6 +234,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/bff/auth/backchannel-logout:
+    post:
+      summary: OIDC Backchannel Logout
+      description: Receives signed logout tokens from Keycloak to invalidate user sessions across the cluster.
+      tags:
+        - Authentication
+        - BFF
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                logout_token:
+                  type: string
+                  description: Signed JWT logout token issued by Keycloak
+              required:
+                - logout_token
+      responses:
+        '200':
+          description: Session successfully invalidated
+        '400':
+          description: Invalid logout token
+
   /api/v1/bff/dashboard:
     get:
       summary: Aggregated composite dashboard overview (alias)

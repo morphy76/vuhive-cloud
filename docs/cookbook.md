@@ -1680,6 +1680,120 @@ Revokes the refresh token against Keycloak's token revocation endpoint and purge
 
 ---
 
+### Recipe 17: Deploying Web UI & Go BFF with Helm and Unified Ingress Routing
+
+The `vuhive-cloud` Helm chart deploys both the core control plane server (`cmd/server`) and the Go BFF (`cmd/bff`, enabled by default) with unified Kubernetes Ingress routing.
+
+#### Architecture & Ingress Traffic Partitioning
+
+```text
+                               ┌─────────────────────────────────────────────────────────────┐
+                               │                    Kubernetes Ingress                       │
+                               └──────────────┬──────────────────────────────┬───────────────┘
+                                              │                              │
+                ┌─────────────────────────────┴─────────────┐                │
+                │ Path: /                                   │                │
+                │ Path: /api/bff/v1                         │                │ Path: /api/v1
+                │ Path: /api/v1/bff/auth                    │                │ (Core REST API,
+                │ Path: /api/v1/bff                         │                │  CLI, Runner Callbacks)
+                ▼                                           ▼                ▼
+┌──────────────────────────────────────────────┐          ┌──────────────────────────────────────────────┐
+│        vuhive-cloud-bff (port 8081)          │          │        vuhive-cloud server (port 8080)       │
+│  - Embedded React 19 PWA Web Dashboard       │          │  - Test Suite & Build Orchestration          │
+│  - OIDC Token Handler & HttpOnly Cookies     │──HTTP───►│  - Runner Profiles & batch/v1 Jobs           │
+│  - Sub-50ms Dashboard Composite Aggregations │          │  - Native Kubernetes CronJobs                │
+│  - Real-Time SSE Telemetry Stream            │          │  - KPI Indexing & Housekeeping               │
+└──────────────────────────────────────────────┘          └──────────────────────────────────────────────┘
+```
+
+#### 1. Helm Values Configuration
+
+Create a custom `values-production.yaml`:
+
+```yaml
+# Core control plane configuration
+replicaCount: 2
+
+database:
+  host: "postgres.internal.net"
+  port: 5432
+  name: "vuhive"
+  existingSecret: "vuhive-db-credentials"
+
+s3:
+  endpoint: "https://s3.us-east-1.amazonaws.com"
+  region: "us-east-1"
+  bucket: "production-vuhive-artifacts"
+  existingSecret: "vuhive-s3-credentials"
+
+# Enable Keycloak OIDC Authentication on Core REST APIs
+auth:
+  enabled: true
+  issuerUrl: "https://auth.example.com/realms/vuhive"
+  jwksUrl: "https://auth.example.com/realms/vuhive/protocol/openid-connect/certs"
+  runner:
+    clientId: "vuhive-runner"
+    existingSecret: "vuhive-runner-credentials"
+
+# Go BFF & Web Dashboard Sub-Deployment (enabled by default)
+bff:
+  enabled: true
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Keycloak OIDC Token Handler Configuration
+  keycloak:
+    issuerUrl: "https://auth.example.com/realms/vuhive"
+    clientId: "vuhive-cloud-bff"
+    clientSecretExistingSecret: "vuhive-bff-credentials"
+    clientSecretKey: "client-secret"
+    sessionCookieSecretRef: "vuhive-bff-session-secret"
+    sessionCookieSecretKey: "session-cookie-secret"
+
+# Unified Ingress Routing
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  hosts:
+    - host: loadtest.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: loadtest-example-tls
+      hosts:
+        - loadtest.example.com
+```
+
+#### 2. Deploying via Helm
+
+```bash
+helm install vuhive deploy/helm/vuhive-cloud \
+  --namespace vuhive-system \
+  -f values-production.yaml
+```
+
+#### 3. Verification & Access
+
+1. Open `https://loadtest.example.com/` in your desktop or mobile browser.
+   - The Ingress directs `/` to the `vuhive-vuhive-cloud-bff` service.
+   - The embedded React 19 PWA loads with service worker caching and offline resilience.
+2. Click **Login** to initiate OAuth2 Authorization Code flow with PKCE via `/api/v1/bff/auth/login`.
+3. The BFF exchanges the authorization code for tokens server-side, encrypts the session, and sets a secure `HttpOnly` cookie.
+4. Core API calls or CLI interactions targeting `https://loadtest.example.com/api/v1/*` are routed directly to the control plane server with OIDC Bearer token verification.
+
+---
+
 ## 4. Next Steps
 
 - **[OpenAPI 3.1 Specification (`api/openapi.yaml`)](../api/openapi.yaml)**: Complete REST API contract, machine-readable schemas, and live endpoints (`GET /openapi.yaml`, `GET /openapi.json`).

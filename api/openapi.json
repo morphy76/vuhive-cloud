@@ -352,18 +352,26 @@
             "$ref": "#/components/schemas/AffinityDTO"
           },
           "cpu_limit": {
+            "description": "Kubernetes CPU limit in millicores to prevent noisy-neighbor throttling",
+            "example": "1000m",
             "type": "string"
           },
           "cpu_request": {
+            "description": "Kubernetes CPU allocation in millicores (e.g. 500m = 0.5 CPU, 1000m = 1 CPU)",
+            "example": "1000m",
             "type": "string"
           },
           "description": {
             "type": "string"
           },
           "memory_limit": {
+            "description": "Kubernetes memory boundary limit (exceeding triggers container OOMKilled)",
+            "example": "1Gi",
             "type": "string"
           },
           "memory_request": {
+            "description": "Kubernetes memory allocation using binary SI units (e.g. 512Mi, 1Gi, 2Gi)",
+            "example": "1Gi",
             "type": "string"
           },
           "name": {
@@ -400,6 +408,8 @@
             "type": "string"
           },
           "cron_expression": {
+            "description": "Standard 5-field CRON expression (minute hour day-of-month month day-of-week) executed in cluster UTC timezone",
+            "example": "0 2 * * *",
             "type": "string"
           },
           "name": {
@@ -985,37 +995,31 @@
       "RunMetrics": {
         "properties": {
           "avg_tps": {
-            "description": "Average Transactions Per Second (TPS) throughput rate",
             "example": 750.5,
             "format": "double",
             "type": "number"
           },
           "error_rate_pct": {
-            "description": "Percentage of failed HTTP transactions (5xx status or network timeouts)",
             "example": 0.02,
             "format": "double",
             "type": "number"
           },
           "p50_duration_ms": {
-            "description": "Median transaction duration (50th percentile latency) in milliseconds",
             "example": 12.4,
             "format": "double",
             "type": "number"
           },
           "p90_duration_ms": {
-            "description": "90th percentile latency duration in milliseconds",
             "example": 25.1,
             "format": "double",
             "type": "number"
           },
           "p95_duration_ms": {
-            "description": "95th percentile benchmark SLA latency threshold in milliseconds",
             "example": 38.6,
             "format": "double",
             "type": "number"
           },
           "p99_duration_ms": {
-            "description": "99th percentile worst 1% tail latency duration in milliseconds",
             "example": 85.2,
             "format": "double",
             "type": "number"
@@ -1046,31 +1050,37 @@
       "RunMetricsDTO": {
         "properties": {
           "avg_tps": {
+            "description": "Average Transactions Per Second (TPS) throughput rate",
             "example": 1666.67,
             "format": "double",
             "type": "number"
           },
           "error_rate_pct": {
+            "description": "Percentage of failed HTTP transactions (5xx status or network timeouts)",
             "example": 0.02,
             "format": "double",
             "type": "number"
           },
           "p50_duration_ms": {
+            "description": "Median transaction duration (50th percentile latency) in milliseconds",
             "example": 12.4,
             "format": "double",
             "type": "number"
           },
           "p90_duration_ms": {
+            "description": "90th percentile latency duration in milliseconds",
             "example": 28.1,
             "format": "double",
             "type": "number"
           },
           "p95_duration_ms": {
+            "description": "95th percentile benchmark SLA latency threshold in milliseconds",
             "example": 45.2,
             "format": "double",
             "type": "number"
           },
           "p99_duration_ms": {
+            "description": "99th percentile worst 1% tail latency duration in milliseconds",
             "example": 89.6,
             "format": "double",
             "type": "number"
@@ -1574,6 +1584,8 @@
       "UpdateScheduleRequest": {
         "properties": {
           "cron_expression": {
+            "description": "Standard 5-field CRON expression (minute hour day-of-month month day-of-week) executed in cluster UTC timezone",
+            "example": "0 2 * * *",
             "type": "string"
           }
         },
@@ -1868,6 +1880,43 @@
         },
         "summary": "Aggregated BFF and Control Plane status",
         "tags": [
+          "BFF"
+        ]
+      }
+    },
+    "/api/v1/bff/auth/backchannel-logout": {
+      "post": {
+        "description": "Receives signed logout tokens from Keycloak to invalidate user sessions across the cluster.",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "properties": {
+                  "logout_token": {
+                    "description": "Signed JWT logout token issued by Keycloak",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "logout_token"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Session successfully invalidated"
+          },
+          "400": {
+            "description": "Invalid logout token"
+          }
+        },
+        "summary": "OIDC Backchannel Logout",
+        "tags": [
+          "Authentication",
           "BFF"
         ]
       }
