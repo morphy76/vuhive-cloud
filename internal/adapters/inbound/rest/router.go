@@ -11,6 +11,19 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/version"
 )
 
+// RouterConfig encapsulates all use cases and dependencies for the control plane router.
+type RouterConfig struct {
+	BuildsUC       inbound.BuildsUseCase
+	ProfilesUC     inbound.ProfilesUseCase
+	SchedulesUC    inbound.SchedulesUseCase
+	RunsUC         inbound.RunsUseCase
+	BarrierUC      inbound.BarrierUseCase
+	HousekeepingUC inbound.HousekeepingUseCase
+	SuitesUC       inbound.SuitesUseCase
+	ConfigsUC      inbound.ConfigsUseCase
+	TokenVerifier  outbound.TokenVerifierPort
+}
+
 // SetupRouter initializes and configures the Gin HTTP engine with routes and middleware.
 func SetupRouter(
 	buildsUC inbound.BuildsUseCase,
@@ -18,7 +31,12 @@ func SetupRouter(
 	schedulesUC inbound.SchedulesUseCase,
 	runsUC inbound.RunsUseCase,
 ) *gin.Engine {
-	return SetupRouterWithBarrier(buildsUC, profilesUC, schedulesUC, runsUC, nil)
+	return SetupRouterWithConfig(RouterConfig{
+		BuildsUC:    buildsUC,
+		ProfilesUC:  profilesUC,
+		SchedulesUC: schedulesUC,
+		RunsUC:      runsUC,
+	})
 }
 
 // SetupRouterWithBarrier initializes and configures the Gin HTTP engine including optional barrier coordination.
@@ -29,7 +47,13 @@ func SetupRouterWithBarrier(
 	runsUC inbound.RunsUseCase,
 	barrierUC inbound.BarrierUseCase,
 ) *gin.Engine {
-	return SetupRouterWithAll(buildsUC, profilesUC, schedulesUC, runsUC, barrierUC, nil)
+	return SetupRouterWithConfig(RouterConfig{
+		BuildsUC:    buildsUC,
+		ProfilesUC:  profilesUC,
+		SchedulesUC: schedulesUC,
+		RunsUC:      runsUC,
+		BarrierUC:   barrierUC,
+	})
 }
 
 // SetupRouterWithAll initializes and configures the Gin HTTP engine with all use cases including housekeeping.
@@ -41,7 +65,14 @@ func SetupRouterWithAll(
 	barrierUC inbound.BarrierUseCase,
 	housekeepingUC inbound.HousekeepingUseCase,
 ) *gin.Engine {
-	return SetupRouterWithAuth(buildsUC, profilesUC, schedulesUC, runsUC, barrierUC, housekeepingUC, nil)
+	return SetupRouterWithConfig(RouterConfig{
+		BuildsUC:       buildsUC,
+		ProfilesUC:     profilesUC,
+		SchedulesUC:    schedulesUC,
+		RunsUC:         runsUC,
+		BarrierUC:      barrierUC,
+		HousekeepingUC: housekeepingUC,
+	})
 }
 
 // SetupRouterWithAuth initializes and configures the Gin HTTP engine with all use cases and optional OIDC JWT auth.
@@ -54,6 +85,19 @@ func SetupRouterWithAuth(
 	housekeepingUC inbound.HousekeepingUseCase,
 	tokenVerifier outbound.TokenVerifierPort,
 ) *gin.Engine {
+	return SetupRouterWithConfig(RouterConfig{
+		BuildsUC:       buildsUC,
+		ProfilesUC:     profilesUC,
+		SchedulesUC:    schedulesUC,
+		RunsUC:         runsUC,
+		BarrierUC:      barrierUC,
+		HousekeepingUC: housekeepingUC,
+		TokenVerifier:  tokenVerifier,
+	})
+}
+
+// SetupRouterWithConfig initializes and configures the Gin HTTP engine based on RouterConfig.
+func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
@@ -87,7 +131,7 @@ func SetupRouterWithAuth(
 
 	// Helper to enforce role guards if auth is configured
 	roleGuard := func(roles ...string) gin.HandlerFunc {
-		if tokenVerifier == nil {
+		if cfg.TokenVerifier == nil {
 			return func(c *gin.Context) { c.Next() }
 		}
 		return RequireRole(roles...)
@@ -95,21 +139,40 @@ func SetupRouterWithAuth(
 
 	// API v1 routes
 	v1 := router.Group("/api/v1")
-	if tokenVerifier != nil {
-		v1.Use(AuthMiddleware(tokenVerifier, false))
+	if cfg.TokenVerifier != nil {
+		v1.Use(AuthMiddleware(cfg.TokenVerifier, false))
 	}
 	{
-		if buildsUC != nil {
-			artifactHandler := NewArtifactHandler(buildsUC)
+		if cfg.SuitesUC != nil || cfg.ConfigsUC != nil || cfg.BuildsUC != nil {
 			suites := v1.Group("/suites")
 			{
-				suites.POST("/:id/builds", roleGuard(model.RoleDeveloper, model.RoleAdmin), artifactHandler.UploadAndBuild)
-				suites.GET("/:id/artifacts", roleGuard(model.RoleViewer, model.RoleDeveloper, model.RoleDeployer, model.RoleAdmin), artifactHandler.ListArtifacts)
+				if cfg.SuitesUC != nil {
+					suiteHandler := NewSuiteHandler(cfg.SuitesUC)
+					suites.POST("", roleGuard(model.RoleDeveloper, model.RoleAdmin), suiteHandler.CreateSuite)
+					suites.GET("", roleGuard(model.RoleViewer), suiteHandler.ListSuites)
+					suites.GET("/:id", roleGuard(model.RoleViewer), suiteHandler.GetSuite)
+					suites.PUT("/:id", roleGuard(model.RoleDeveloper, model.RoleAdmin), suiteHandler.UpdateSuite)
+					suites.DELETE("/:id", roleGuard(model.RoleDeveloper, model.RoleAdmin), suiteHandler.DeleteSuite)
+				}
+
+				if cfg.ConfigsUC != nil {
+					configHandler := NewConfigHandler(cfg.ConfigsUC)
+					suites.POST("/:id/configs", roleGuard(model.RoleDeveloper, model.RoleAdmin), configHandler.CreateConfig)
+					suites.GET("/:id/configs", roleGuard(model.RoleViewer), configHandler.ListConfigs)
+					suites.GET("/:id/configs/:configId", roleGuard(model.RoleViewer), configHandler.GetConfig)
+					suites.DELETE("/:id/configs/:configId", roleGuard(model.RoleDeveloper, model.RoleAdmin), configHandler.DeleteConfig)
+				}
+
+				if cfg.BuildsUC != nil {
+					artifactHandler := NewArtifactHandler(cfg.BuildsUC)
+					suites.POST("/:id/builds", roleGuard(model.RoleDeveloper, model.RoleAdmin), artifactHandler.UploadAndBuild)
+					suites.GET("/:id/artifacts", roleGuard(model.RoleViewer, model.RoleDeveloper, model.RoleDeployer, model.RoleAdmin), artifactHandler.ListArtifacts)
+				}
 			}
 		}
 
-		if profilesUC != nil {
-			profileHandler := NewProfileHandler(profilesUC)
+		if cfg.ProfilesUC != nil {
+			profileHandler := NewProfileHandler(cfg.ProfilesUC)
 			profiles := v1.Group("/profiles")
 			{
 				profiles.POST("", roleGuard(model.RoleAdmin), profileHandler.CreateProfile)
@@ -120,8 +183,8 @@ func SetupRouterWithAuth(
 			}
 		}
 
-		if schedulesUC != nil {
-			scheduleHandler := NewScheduleHandler(schedulesUC)
+		if cfg.SchedulesUC != nil {
+			scheduleHandler := NewScheduleHandler(cfg.SchedulesUC)
 			schedules := v1.Group("/schedules")
 			{
 				schedules.POST("", roleGuard(model.RoleDeployer, model.RoleAdmin), scheduleHandler.CreateSchedule)
@@ -132,8 +195,8 @@ func SetupRouterWithAuth(
 			}
 		}
 
-		if runsUC != nil {
-			runHandler := NewRunHandler(runsUC)
+		if cfg.RunsUC != nil {
+			runHandler := NewRunHandler(cfg.RunsUC)
 			runs := v1.Group("/runs")
 			{
 				runs.POST("", roleGuard(model.RoleDeployer, model.RoleAdmin), runHandler.TriggerRun)
@@ -147,8 +210,8 @@ func SetupRouterWithAuth(
 			}
 		}
 
-		if barrierUC != nil {
-			barrierHandler := NewBarrierHandler(barrierUC)
+		if cfg.BarrierUC != nil {
+			barrierHandler := NewBarrierHandler(cfg.BarrierUC)
 			runs := v1.Group("/runs")
 			{
 				runs.POST("/:id/barrier/await", roleGuard(model.RoleRunner, model.RoleAdmin), barrierHandler.AwaitBarrier)
@@ -157,8 +220,8 @@ func SetupRouterWithAuth(
 			}
 		}
 
-		if housekeepingUC != nil {
-			hkHandler := NewHousekeepingHandler(housekeepingUC)
+		if cfg.HousekeepingUC != nil {
+			hkHandler := NewHousekeepingHandler(cfg.HousekeepingUC)
 			sys := v1.Group("/system")
 			{
 				sys.POST("/housekeeping", roleGuard(model.RoleAdmin), hkHandler.RunHousekeeping)

@@ -8,12 +8,37 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 )
 
+// UpdateSuiteCommand encapsulates parameters for updating a TestSuite.
+type UpdateSuiteCommand struct {
+	Name        string
+	Description string
+	State       *model.TestSuiteState
+}
+
 // SuitesUseCase defines driving use cases for managing TestSuite aggregates.
 type SuitesUseCase interface {
 	CreateSuite(ctx context.Context, name, description string) (*model.TestSuite, error)
 	GetSuite(ctx context.Context, id string) (*model.TestSuite, error)
 	ListSuites(ctx context.Context) ([]*model.TestSuite, error)
+	UpdateSuite(ctx context.Context, id string, cmd UpdateSuiteCommand) (*model.TestSuite, error)
+	DeleteSuite(ctx context.Context, id string) error
 	ArchiveSuite(ctx context.Context, id string) error
+}
+
+// CreateConfigCommand encapsulates input parameters for creating and uploading a test configuration.
+type CreateConfigCommand struct {
+	SuiteID     string
+	Name        string
+	ContentYAML string
+	IsDefault   bool
+}
+
+// ConfigsUseCase defines driving use cases for managing test scenario configurations.
+type ConfigsUseCase interface {
+	CreateConfig(ctx context.Context, cmd CreateConfigCommand) (*model.Configuration, error)
+	GetConfig(ctx context.Context, suiteID, configID string) (*model.Configuration, error)
+	ListConfigs(ctx context.Context, suiteID string) ([]*model.Configuration, error)
+	DeleteConfig(ctx context.Context, suiteID, configID string) error
 }
 
 // TriggerRunCommand encapsulates input parameters for triggering a new test run.
@@ -133,4 +158,3 @@ type HousekeepingUseCase interface {
 	GetGlobalPolicy(ctx context.Context) model.RetentionPolicy
 	ConfigureBucketLifecycle(ctx context.Context) error
 }
-

@@ -96,6 +96,49 @@ func TestTestSuite_StateTransitions(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, model.TestSuiteStateActive, suite.State())
 	})
+
+	t.Run("transition from ACTIVE to DRAFT", func(t *testing.T) {
+		suite, err := model.NewTestSuite("test-suite", "desc")
+		require.NoError(t, err)
+		require.NoError(t, suite.Activate())
+
+		err = suite.SetDraft()
+		require.NoError(t, err)
+		assert.Equal(t, model.TestSuiteStateDraft, suite.State())
+	})
+
+	t.Run("fail setting DRAFT on already DRAFT suite", func(t *testing.T) {
+		suite, err := model.NewTestSuite("test-suite", "desc")
+		require.NoError(t, err)
+
+		err = suite.SetDraft()
+		assert.ErrorIs(t, err, model.ErrInvalidStateTransition)
+	})
+
+	t.Run("TransitionState transitions or remains idempotent", func(t *testing.T) {
+		suite, err := model.NewTestSuite("test-suite", "desc")
+		require.NoError(t, err)
+
+		// Idempotent DRAFT -> DRAFT
+		require.NoError(t, suite.TransitionState(model.TestSuiteStateDraft))
+		assert.Equal(t, model.TestSuiteStateDraft, suite.State())
+
+		// Transition DRAFT -> ACTIVE
+		require.NoError(t, suite.TransitionState(model.TestSuiteStateActive))
+		assert.Equal(t, model.TestSuiteStateActive, suite.State())
+
+		// Idempotent ACTIVE -> ACTIVE
+		require.NoError(t, suite.TransitionState(model.TestSuiteStateActive))
+		assert.Equal(t, model.TestSuiteStateActive, suite.State())
+
+		// Transition ACTIVE -> ARCHIVED
+		require.NoError(t, suite.TransitionState(model.TestSuiteStateArchived))
+		assert.Equal(t, model.TestSuiteStateArchived, suite.State())
+
+		// Fail invalid state
+		err = suite.TransitionState(model.TestSuiteState("INVALID"))
+		assert.ErrorIs(t, err, model.ErrInvalidStateTransition)
+	})
 }
 
 func TestTestSuite_UpdateDetails(t *testing.T) {
@@ -162,4 +205,3 @@ func TestTestSuite_RetentionPolicy(t *testing.T) {
 	suite.SetRetentionPolicy(policy)
 	assert.Equal(t, policy, suite.RetentionPolicy())
 }
-

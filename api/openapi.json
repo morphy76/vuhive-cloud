@@ -97,6 +97,43 @@
         ],
         "type": "object"
       },
+      "AuthUserResponse": {
+        "properties": {
+          "email": {
+            "example": "user@example.com",
+            "format": "email",
+            "type": "string"
+          },
+          "name": {
+            "example": "Jane Doe",
+            "type": "string"
+          },
+          "roles": {
+            "example": [
+              "vuhive-developer",
+              "vuhive-viewer"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "session_id": {
+            "example": "sess-a1b2c3d4e5f6",
+            "type": "string"
+          },
+          "user_id": {
+            "example": "usr_12345",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "roles",
+          "session_id"
+        ],
+        "type": "object"
+      },
       "BFFStatusResponse": {
         "properties": {
           "bff_status": {
@@ -346,6 +383,91 @@
         },
         "type": "object"
       },
+      "ConfigListResponse": {
+        "properties": {
+          "configs": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigResponse"
+            },
+            "type": "array"
+          },
+          "count": {
+            "example": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "configs",
+          "count"
+        ],
+        "type": "object"
+      },
+      "ConfigResponse": {
+        "properties": {
+          "content_yaml": {
+            "example": "vus: 50\nduration: 5m\n",
+            "type": "string"
+          },
+          "created_at": {
+            "example": "2026-09-07T12:00:00Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "example": "7fa1205c-d38e-4f51-b924-11883395bcf8",
+            "format": "uuid",
+            "type": "string"
+          },
+          "is_default": {
+            "example": true,
+            "type": "boolean"
+          },
+          "name": {
+            "example": "staging-profile",
+            "type": "string"
+          },
+          "s3_config_key": {
+            "example": "suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs/7fa1205c-d38e-4f51-b924-11883395bcf8.yaml",
+            "type": "string"
+          },
+          "suite_id": {
+            "example": "3e04a02e-bf34-4398-8b40-6389bca12c97",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "suite_id",
+          "name",
+          "content_yaml",
+          "s3_config_key",
+          "is_default",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "CreateConfigRequest": {
+        "properties": {
+          "content_yaml": {
+            "example": "vus: 50\nduration: 5m\n",
+            "type": "string"
+          },
+          "is_default": {
+            "example": true,
+            "type": "boolean"
+          },
+          "name": {
+            "example": "staging-profile",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "content_yaml"
+        ],
+        "type": "object"
+      },
       "CreateProfileRequest": {
         "properties": {
           "affinity": {
@@ -456,6 +578,22 @@
         "required": [
           "session_id",
           "user_id"
+        ],
+        "type": "object"
+      },
+      "CreateSuiteRequest": {
+        "properties": {
+          "description": {
+            "example": "Checkout service load test scenarios",
+            "type": "string"
+          },
+          "name": {
+            "example": "checkout-service-load",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -1417,6 +1555,70 @@
         ],
         "type": "object"
       },
+      "SuiteListResponse": {
+        "properties": {
+          "count": {
+            "example": 2,
+            "type": "integer"
+          },
+          "suites": {
+            "items": {
+              "$ref": "#/components/schemas/SuiteResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "suites",
+          "count"
+        ],
+        "type": "object"
+      },
+      "SuiteResponse": {
+        "properties": {
+          "created_at": {
+            "example": "2026-09-07T12:00:00Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "description": {
+            "example": "Checkout service load test scenarios",
+            "type": "string"
+          },
+          "id": {
+            "example": "3e04a02e-bf34-4398-8b40-6389bca12c97",
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "example": "checkout-service-load",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "ARCHIVED"
+            ],
+            "example": "ACTIVE",
+            "type": "string"
+          },
+          "updated_at": {
+            "example": "2026-09-07T12:30:00Z",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "state",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
       "SuiteSummary": {
         "properties": {
           "created_at": {
@@ -1594,6 +1796,31 @@
         ],
         "type": "object"
       },
+      "UpdateSuiteRequest": {
+        "properties": {
+          "description": {
+            "example": "Updated checkout load test scenarios",
+            "type": "string"
+          },
+          "name": {
+            "example": "checkout-service-load-v2",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "ARCHIVED"
+            ],
+            "example": "ACTIVE",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "VersionResponse": {
         "properties": {
           "build_time": {
@@ -1655,6 +1882,195 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/bff/v1/auth/backchannel-logout": {
+      "post": {
+        "description": "Receives signed logout tokens from Keycloak to invalidate user sessions across the cluster.",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "properties": {
+                  "logout_token": {
+                    "description": "Signed JWT logout token issued by Keycloak",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "logout_token"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Session successfully invalidated"
+          },
+          "400": {
+            "description": "Invalid logout token"
+          }
+        },
+        "summary": "OIDC Backchannel Logout",
+        "tags": [
+          "Authentication",
+          "BFF"
+        ]
+      }
+    },
+    "/api/bff/v1/auth/callback": {
+      "get": {
+        "description": "Validates PKCE and state cookies, exchanges authorization code for tokens, creates an encrypted server-side session, and sets the HttpOnly session cookie.",
+        "parameters": [
+          {
+            "description": "Authorization code issued by Keycloak",
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "CSRF state parameter matching cookie",
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to application root with session cookie set",
+            "headers": {
+              "Location": {
+                "description": "Application root (/)",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "Encrypted HttpOnly session cookie (vuhive_session)",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid state or authorization code"
+          }
+        },
+        "summary": "OIDC authorization code callback",
+        "tags": [
+          "Authentication",
+          "BFF"
+        ]
+      }
+    },
+    "/api/bff/v1/auth/login": {
+      "get": {
+        "description": "Generates PKCE parameters, sets state/verifier cookies, and redirects the browser to the Keycloak authorization URL.",
+        "responses": {
+          "302": {
+            "description": "Redirect to Keycloak authorization endpoint",
+            "headers": {
+              "Location": {
+                "description": "Keycloak authorization URL",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Initiate OIDC login with PKCE",
+        "tags": [
+          "Authentication",
+          "BFF"
+        ]
+      }
+    },
+    "/api/bff/v1/auth/logout": {
+      "post": {
+        "description": "Revokes the Keycloak refresh token, deletes the server-side session from PostgreSQL, and clears the session cookie.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "example": "logged out successfully",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successfully logged out"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthenticated session"
+          }
+        },
+        "summary": "Terminate user session",
+        "tags": [
+          "Authentication",
+          "BFF"
+        ]
+      }
+    },
+    "/api/bff/v1/auth/me": {
+      "get": {
+        "description": "Returns the user ID, email, name, and RBAC roles associated with the active session without exposing tokens.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserResponse"
+                }
+              }
+            },
+            "description": "User identity and roles"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthenticated session"
+          }
+        },
+        "summary": "Retrieve authenticated user identity",
+        "tags": [
+          "Authentication",
+          "BFF"
+        ]
+      }
+    },
     "/api/bff/v1/dashboard": {
       "get": {
         "description": "Returns an aggregated overview of system health/version, active test run count, recent test suites, and runner profiles concurrently.",
@@ -1914,7 +2330,101 @@
             "description": "Invalid logout token"
           }
         },
-        "summary": "OIDC Backchannel Logout",
+        "summary": "OIDC Backchannel Logout (alias)",
+        "tags": [
+          "Authentication",
+          "BFF"
+        ]
+      }
+    },
+    "/api/v1/bff/auth/callback": {
+      "get": {
+        "description": "Backwards-compatible alias for /api/bff/v1/auth/callback.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to application root with session cookie set"
+          },
+          "400": {
+            "description": "Invalid state or authorization code"
+          }
+        },
+        "summary": "OIDC authorization code callback (alias)",
+        "tags": [
+          "Authentication",
+          "BFF"
+        ]
+      }
+    },
+    "/api/v1/bff/auth/login": {
+      "get": {
+        "description": "Backwards-compatible alias for /api/bff/v1/auth/login.",
+        "responses": {
+          "302": {
+            "description": "Redirect to Keycloak authorization endpoint"
+          }
+        },
+        "summary": "Initiate OIDC login with PKCE (alias)",
+        "tags": [
+          "Authentication",
+          "BFF"
+        ]
+      }
+    },
+    "/api/v1/bff/auth/logout": {
+      "post": {
+        "description": "Backwards-compatible alias for /api/bff/v1/auth/logout.",
+        "responses": {
+          "200": {
+            "description": "Successfully logged out"
+          },
+          "401": {
+            "description": "Unauthenticated session"
+          }
+        },
+        "summary": "Terminate user session (alias)",
+        "tags": [
+          "Authentication",
+          "BFF"
+        ]
+      }
+    },
+    "/api/v1/bff/auth/me": {
+      "get": {
+        "description": "Backwards-compatible alias for /api/bff/v1/auth/me.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserResponse"
+                }
+              }
+            },
+            "description": "User identity and roles"
+          },
+          "401": {
+            "description": "Unauthenticated session"
+          }
+        },
+        "summary": "Retrieve authenticated user identity (alias)",
         "tags": [
           "Authentication",
           "BFF"
@@ -3151,6 +3661,326 @@
         ]
       }
     },
+    "/api/v1/suites": {
+      "get": {
+        "description": "Returns all test suites registered in the control plane ordered by creation timestamp.",
+        "operationId": "listSuites",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuiteListResponse"
+                }
+              }
+            },
+            "description": "List of test suites"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          }
+        },
+        "summary": "List all test suites",
+        "tags": [
+          "Suites"
+        ]
+      },
+      "post": {
+        "description": "Creates a new TestSuite aggregate in DRAFT state.",
+        "operationId": "createSuite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSuiteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuiteResponse"
+                }
+              }
+            },
+            "description": "Test suite created"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Suite name conflict"
+          }
+        },
+        "summary": "Create a test suite",
+        "tags": [
+          "Suites"
+        ]
+      }
+    },
+    "/api/v1/suites/{id}": {
+      "delete": {
+        "description": "Deletes a TestSuite and cascading records by ID.",
+        "operationId": "deleteSuite",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Test suite deleted successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test suite not found"
+          }
+        },
+        "summary": "Delete test suite",
+        "tags": [
+          "Suites"
+        ]
+      },
+      "get": {
+        "description": "Retrieves details of a specific TestSuite by ID.",
+        "operationId": "getSuite",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuiteResponse"
+                }
+              }
+            },
+            "description": "Test suite details"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test suite not found"
+          }
+        },
+        "summary": "Get test suite details",
+        "tags": [
+          "Suites"
+        ]
+      },
+      "put": {
+        "description": "Updates mutable properties (name, description, state) of a TestSuite.",
+        "operationId": "updateSuite",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSuiteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuiteResponse"
+                }
+              }
+            },
+            "description": "Test suite updated"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or state transition error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test suite not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Name collision conflict"
+          }
+        },
+        "summary": "Update test suite",
+        "tags": [
+          "Suites"
+        ]
+      }
+    },
     "/api/v1/suites/{id}/artifacts": {
       "get": {
         "description": "Returns all compiled binary artifacts associated with a test suite.",
@@ -3274,6 +4104,295 @@
         "summary": "Upload Go test source and trigger build Job",
         "tags": [
           "Builds"
+        ]
+      }
+    },
+    "/api/v1/suites/{id}/configs": {
+      "get": {
+        "description": "Retrieves all attached configurations for a test suite.",
+        "operationId": "listConfigs",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigListResponse"
+                }
+              }
+            },
+            "description": "List of attached configurations"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test suite not found"
+          }
+        },
+        "summary": "List scenario configurations",
+        "tags": [
+          "Configurations"
+        ]
+      },
+      "post": {
+        "description": "Uploads a vuhive.yaml test configuration, stages it in S3, and attaches it to the test suite.",
+        "operationId": "createConfig",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigResponse"
+                }
+              }
+            },
+            "description": "Configuration created and attached"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test suite not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Configuration name already exists for suite"
+          }
+        },
+        "summary": "Upload and attach scenario configuration",
+        "tags": [
+          "Configurations"
+        ]
+      }
+    },
+    "/api/v1/suites/{id}/configs/{configId}": {
+      "delete": {
+        "description": "Deletes an attached configuration and its backing S3 object.",
+        "operationId": "deleteConfig",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Configuration ID",
+            "in": "path",
+            "name": "configId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Configuration deleted successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Configuration or test suite not found"
+          }
+        },
+        "summary": "Delete scenario configuration",
+        "tags": [
+          "Configurations"
+        ]
+      },
+      "get": {
+        "description": "Retrieves details and content of a specific attached scenario configuration.",
+        "operationId": "getConfig",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Configuration ID",
+            "in": "path",
+            "name": "configId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigResponse"
+                }
+              }
+            },
+            "description": "Configuration details"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Configuration or test suite not found"
+          }
+        },
+        "summary": "Get scenario configuration",
+        "tags": [
+          "Configurations"
         ]
       }
     },
