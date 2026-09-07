@@ -153,9 +153,9 @@ kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -i 
 Execute full end-to-end verification following this sequential workflow:
 
 #### 1. Create Active Test Suite & Runner Profile
-Create a reusable runner profile via the control plane REST API:
+Create a reusable runner profile via the control plane REST API and capture the returned `PROFILE_ID`:
 ```bash
-kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -i -X POST http://vuhive-vuhive-cloud:8080/api/v1/profiles \
+PROFILE_RES=$(kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -X POST http://vuhive-vuhive-cloud:8080/api/v1/profiles \
   -H "Content-Type: application/json" \
   -d '{
     "name": "smoke-profile",
@@ -165,22 +165,39 @@ kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -i 
     "cpu_limit": "500m",
     "memory_request": "128Mi",
     "memory_limit": "512Mi"
-  }'
+  }')
+PROFILE_ID=$(echo "${PROFILE_RES}" | grep -o '"id":"[^"]*' | head -n1 | cut -d'"' -f4)
 ```
 
-Insert an `ACTIVE` test suite into the database:
+Register a test suite in `DRAFT` state via the REST API and capture `SUITE_ID`:
 ```bash
-kubectl --context rancher-desktop exec -i -n "${SMOKE_NS}" vuhive-infra-postgresql-0 -- psql -U vuhive -d vuhive -c \
-  "INSERT INTO test_suites (id, name, description, status, created_at, updated_at) VALUES ('smoke-suite-01', 'Smoke Suite', 'Local validation test suite', 'ACTIVE', NOW(), NOW()) ON CONFLICT (id) DO NOTHING;"
+SUITE_RES=$(kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -X POST http://vuhive-vuhive-cloud:8080/api/v1/suites \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "smoke-suite",
+    "description": "Local validation test suite"
+  }')
+SUITE_ID=$(echo "${SUITE_RES}" | grep -o '"id":"[^"]*' | head -n1 | cut -d'"' -f4)
+```
+
+Transition the test suite into the `ACTIVE` state required for execution:
+```bash
+kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- curl -s -i -X PUT "http://vuhive-vuhive-cloud:8080/api/v1/suites/${SUITE_ID}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "smoke-suite",
+    "description": "Local validation test suite",
+    "state": "ACTIVE"
+  }'
 ```
 
 #### 2. Build Subsystem Verification (File Staging & Ephemeral Compilation)
 
-Package a minimal Go load test module locally:
+Package a minimal Go load test module locally adhering to inverted control (`package scenario` with `func NewScenario()`):
 ```bash
 mkdir -p /tmp/smoke-test-module
-cat << 'EOF' > /tmp/smoke-test-module/main.go
-package main
+cat << 'EOF' > /tmp/smoke-test-module/scenario.go
+package scenario
 
 import (
 	"context"
@@ -191,24 +208,17 @@ import (
 	"github.com/morphy76/vuhive"
 )
 
-func main() {
-	scenario := vuhive.NewScenario("Smoke Test").
+func NewScenario() *vuhive.Scenario {
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	return vuhive.NewScenario("Smoke Test").
 		Step("Ping", func(ctx context.Context) error {
-			resp, err := http.Get("http://vuhive-vuhive-cloud:8080/healthz")
+			resp, err := client.Get("http://vuhive-vuhive-cloud:8080/healthz")
 			if err != nil || resp.StatusCode != http.StatusOK {
 				return fmt.Errorf("ping failed: %w", err)
 			}
 			return nil
 		})
-
-	engine := vuhive.NewEngine(vuhive.EngineConfig{
-		DefaultDuration: 5 * time.Second,
-		DefaultVUs:      1,
-	})
-
-	if err := engine.Run(scenario); err != nil {
-		panic(err)
-	}
 }
 EOF
 
@@ -220,7 +230,7 @@ go 1.26
 require github.com/morphy76/vuhive v1.1.5
 EOF
 
-tar -czf /tmp/smoke-suite.tar.gz -C /tmp/smoke-test-module main.go go.mod
+tar -czf /tmp/smoke-suite.tar.gz -C /tmp/smoke-test-module scenario.go go.mod
 ```
 
 **Stage the archive into the probe container**:
@@ -237,10 +247,11 @@ tar -czf /tmp/smoke-suite.tar.gz -C /tmp/smoke-test-module main.go go.mod
 **Trigger asynchronous build compilation**:
 ```bash
 # Target linux/arm64 for Apple Silicon Rancher Desktop, or linux/amd64 for x86_64
-kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
-  curl -s -i -X POST "http://vuhive-vuhive-cloud:8080/api/v1/suites/smoke-suite-01/builds" \
+BUILD_RES=$(kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
+  curl -s -X POST "http://vuhive-vuhive-cloud:8080/api/v1/suites/${SUITE_ID}/builds" \
   -F "source=@/tmp/smoke-suite.tar.gz" \
-  -F "platform=linux/arm64"
+  -F "platform=linux/arm64")
+ARTIFACT_ID=$(echo "${BUILD_RES}" | grep -o '"id":"[^"]*' | head -n1 | cut -d'"' -f4)
 ```
 
 **Await completion of ephemeral build job and assert artifact status**:
@@ -251,7 +262,7 @@ kubectl --context rancher-desktop wait --namespace "${SMOKE_NS}" \
 
 # Verify artifact is READY and checksum is populated
 kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
-  curl -s "http://vuhive-vuhive-cloud:8080/api/v1/suites/smoke-suite-01/artifacts"
+  curl -s "http://vuhive-vuhive-cloud:8080/api/v1/suites/${SUITE_ID}/artifacts"
 ```
 
 #### 3. Runner Job Completion Verification
@@ -261,10 +272,11 @@ Trigger an ad-hoc test run via REST API:
 kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
   curl -s -i -X POST "http://vuhive-vuhive-cloud:8080/api/v1/runs" \
   -H "Content-Type: application/json" \
-  -d '{
-    "suite_id": "smoke-suite-01",
-    "profile_id": "smoke-profile"
-  }'
+  -d "{
+    \"suite_id\": \"${SUITE_ID}\",
+    \"artifact_id\": \"${ARTIFACT_ID}\",
+    \"runner_profile_id\": \"${PROFILE_ID}\"
+  }"
 ```
 
 Alternatively, create a test schedule to verify native Kubernetes `CronJob` management:
@@ -272,11 +284,13 @@ Alternatively, create a test schedule to verify native Kubernetes `CronJob` mana
 kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
   curl -s -i -X POST "http://vuhive-vuhive-cloud:8080/api/v1/schedules" \
   -H "Content-Type: application/json" \
-  -d '{
-    "suite_id": "smoke-suite-01",
-    "profile_id": "smoke-profile",
-    "cron_expression": "0 0 31 2 *"
-  }'
+  -d "{
+    \"name\": \"smoke-schedule\",
+    \"suite_id\": \"${SUITE_ID}\",
+    \"artifact_id\": \"${ARTIFACT_ID}\",
+    \"runner_profile_id\": \"${PROFILE_ID}\",
+    \"cron_expression\": \"0 0 31 2 *\"
+  }"
 
 # Dispatch manual execution from CronJob
 kubectl --context rancher-desktop create job test-runner-exec --from=cronjob/<cronjob-name> -n "${SMOKE_NS}"
@@ -292,7 +306,7 @@ kubectl --context rancher-desktop wait --namespace "${SMOKE_NS}" \
 ```bash
 # Fetch latest runs and verify status is COMPLETED
 kubectl --context rancher-desktop exec -n "${SMOKE_NS}" curl-test -- \
-  curl -s "http://vuhive-vuhive-cloud:8080/api/v1/runs?suite_id=smoke-suite-01"
+  curl -s "http://vuhive-vuhive-cloud:8080/api/v1/runs?suite_id=${SUITE_ID}"
 ```
 
 ## 6. Failure Diagnostics Protocol (Dump Before Teardown)
