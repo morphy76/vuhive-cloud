@@ -495,5 +495,8 @@ The control plane includes an automated retention lifecycle worker and housekeep
 | `bff.session.encryptionKey` | 32-byte AES-256-GCM encryption key for stored OAuth tokens at rest | `""` |
 | `bff.session.encryptionKeyExistingSecret` | Name of existing Secret containing 32-byte session token encryption key | `""` |
 | `bff.session.encryptionKeyKey` | Key within `encryptionKeyExistingSecret` containing the encryption key | `session-encryption-key` |
+| `bff.session.ttl` | Default session inactivity timeout (duration) | `24h` |
+| `bff.session.slidingThreshold` | Sliding expiration write-throttling threshold (lazy update interval) | `15m` |
+| `bff.session.cleanerInterval` | Background expired session cleanup janitor ticker interval | `10m` |
 
 
