@@ -1091,6 +1091,24 @@ data: {"run_id":"3fa85f64-5717-4562-b3fc-2c963f66afa6","suite_id":"e8d665b1-2e67
 > [!NOTE]
 > All `/api/bff/v1/*` endpoints are also accessible via their backwards-compatible `/api/v1/bff/*` paths for legacy integrations.
 
+#### 5. Persistent Session Management & Token Handler Architecture
+
+The Go BFF implements the confidential Token Handler pattern, shielding raw OAuth 2.0 access and refresh tokens from browser storage by maintaining an encrypted, `HttpOnly`, `SameSite=Lax` cookie (`vuhive_session`).
+
+##### A. Domain Aggregate & Port Contracts
+
+The BFF encapsulates session state and lifecycle rules in a pure DDD aggregate:
+
+- **Domain Model (`internal/bff/domain/model/session.go`)**:
+  - Encapsulates `SessionID`, `UserID`, `KeycloakSID`, `AccessToken`, `RefreshToken`, `IDToken`, `Roles`, `CreatedAt`, `UpdatedAt`, `ExpiresAt`, and `Metadata`.
+  - Enforces domain invariants: `IsExpired() bool`, atomic `RotateTokens(accessToken, refreshToken, idToken, ttl)`, sliding expiration `Touch(ttl)`, and explicit `Revoke()`.
+  - Supports non-breaking functional options: `WithKeycloakSID`, `WithTokens`, `WithRoles`, `WithMetadata`.
+- **Outbound Driven Port (`internal/bff/application/ports/outbound/session_store.go`)**:
+  - Declares the `SessionStore` interface with methods: `Create`, `Get`, `Update`, `Delete`, `DeleteByKeycloakSID`, `DeleteByUserID`, and `DeleteExpired`.
+- **Storage Adapters**:
+  - `MemorySessionStore` (`internal/bff/adapters/outbound/session/memory`): Fast, thread-safe, deep-copying store for unit testing and local development.
+  - `PostgresSessionStore` (`internal/bff/adapters/outbound/session/postgres`): Clustered relational store supporting multi-pod horizontal scalability, AES-256-GCM token encryption at rest, and $O(1)$ Keycloak backchannel logout invalidation.
+
 ---
 
 

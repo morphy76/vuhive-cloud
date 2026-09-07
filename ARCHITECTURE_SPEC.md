@@ -122,6 +122,18 @@ vuhive-cloud/
 │   │       ├── run_service.go
 │   │       ├── schedule_service.go
 │   │       └── build_service.go
+│   ├── bff/                 # Backend-For-Frontend (BFF) Bounded Context
+│   │   ├── domain/          # Pure BFF domain layer
+│   │   │   ├── model/       # ClientSession aggregate, SessionID, Domain errors
+│   │   │   └── event/       # SSE telemetry events
+│   │   ├── application/     # Use case orchestration
+│   │   │   ├── ports/
+│   │   │   │   ├── inbound/ # BFFService, SessionUseCase
+│   │   │   │   └── outbound/# ControlPlaneClient, SessionStore, CachePort, EventHubPort
+│   │   │   └── service/     # BFF composite aggregator & session service
+│   │   └── adapters/        # Infrastructure & protocol adapters
+│   │       ├── inbound/rest/# Gin handlers (dashboard, SSE, sessions, auth proxy)
+│   │       └── outbound/    # Session stores (memory, postgres), CP HTTP client, SSE hub
 │   └── adapters/            # Infrastructure & I/O Adapters Layer
 │       ├── inbound/
 │       │   └── http/        # Gin REST handlers, DTOs, Auth middleware
@@ -188,6 +200,20 @@ vuhive-cloud/
 3. **Execution & Discovery:**
    - When the schedule fires, K8s creates a `Job` containing template labels referencing `schedule-id`.
    - A K8s Informer in `vuhive-cloud` detects the newly spawned Job, creates a corresponding `TestRun` record linked to the schedule, and begins tracking its lifecycle identically to an ad-hoc run.
+
+### 4.4 BFF Persistent Session Management & Token Handler Architecture
+1. **Token Handler Confidential Pattern:**
+   The Go BFF (`cmd/bff`) shields raw OAuth 2.0 access and refresh tokens from the browser runtime (`localStorage`/`sessionStorage`) to eliminate cross-site scripting (XSS) token theft vulnerabilities.
+   - The BFF establishes an encrypted, `HttpOnly`, `SameSite=Lax` cookie (`vuhive_session`) with the user's browser.
+   - All OAuth2 tokens (`access_token`, `refresh_token`, `id_token`) are held strictly server-side within the `ClientSession` aggregate.
+2. **Domain Aggregate Invariants (`domain/model/session.go`):**
+   - **Fields:** `ID` (`SessionID`), `UserID`, `KeycloakSID`, `AccessToken`, `RefreshToken`, `IDToken`, `Roles`, `CreatedAt`, `UpdatedAt`, `ExpiresAt`, `Metadata`.
+   - **Token Rotation (`RotateTokens`):** Safely updates tokens and resets session TTL upon token renewal, rejecting mutations on expired sessions.
+   - **Sliding Expiration (`Touch`):** Extends session TTL during active usage, throttled to prevent write amplification.
+   - **Explicit Revocation (`Revoke`):** Immediately expires the session on user logout or backchannel invalidation.
+3. **Driven Port Contract (`application/ports/outbound/session_store.go`):**
+   - Decouples use case orchestration from concrete storage backends through `SessionStore` (providing `Create`, `Get`, `Update`, `Delete`, `DeleteByKeycloakSID`, `DeleteByUserID`, and `DeleteExpired`).
+   - Adapters include `MemorySessionStore` (for fast in-memory execution and unit tests) and `PostgresSessionStore` (for production multi-pod cloud persistence and indexed $O(1)$ backchannel logout).
 
 ---
 
