@@ -97,7 +97,7 @@ For complete details on our development methodology, human oversight model, and 
 | **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** | **Developer & Contributor Guide** | Local environment setup, container builds with `--load`, local cluster validation, coding standards, and PR guidelines. |
 | **[`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md)** | **Engineering Philosophy & AI Disclosure** | Spec-Driven Development (SDD) paradigm, human vs. agent responsibility division, and quality gates. |
 | **[`deploy/helm/vuhive-cloud/README.md`](./deploy/helm/vuhive-cloud/README.md)** | **Control Plane Installation** | Installs control plane on Kubernetes; configuration values, external secrets, RBAC, and security hardening. |
-| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation** | Installs backing evaluation services (PostgreSQL + MinIO + optional OpenAPI Swagger UI viewer). |
+| **[`deploy/helm/vuhive-cloud-infra/README.md`](./deploy/helm/vuhive-cloud-infra/README.md)** | **Infrastructure Installation** | Installs backing evaluation services (PostgreSQL + MinIO + Keycloak IAM + optional OpenAPI Swagger UI viewer). |
 | **[`docs/cookbook.md`](./docs/cookbook.md)** | **Adoption Guide & Recipes** | Dedicated to `vuhive-cloud` adoption: end-to-end recipes for packaging test suites, profiles, schedules, and runs. |
 | **[`api/openapi.yaml`](./api/openapi.yaml)** | **REST API Reference** | Documents the APIs: complete OpenAPI 3.1 contract served live by control plane (`GET /openapi.yaml`, `GET /openapi.json`). |
 | **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)** | **Architectural Specification** | Bounded contexts, DDD domain aggregates, database schema (DDL), and security postures. |
@@ -162,6 +162,219 @@ curl -i http://localhost:8080/openapi.yaml
 ```
 
 To create your first runner profile, upload test suites, and trigger ad-hoc runs (`POST /api/v1/runs`), follow the **[Adoption Cookbook (`docs/cookbook.md`)](./docs/cookbook.md)**. For full REST API endpoint specifications, refer to the **[OpenAPI Reference (`api/openapi.yaml`)](./api/openapi.yaml)** or fetch it live at `/openapi.yaml` / `/openapi.json`.
+
+---
+
+## External Infrastructure & Third-Party Deployment Scenarios
+
+While the [Quickstart](#quickstart) uses the bundled evaluation chart (`deploy/helm/vuhive-cloud-infra`) to provision ephemeral, single-pod instances of PostgreSQL, MinIO, and Keycloak for local testing, **production deployments must bind to dedicated external infrastructure** provisioned via managed cloud providers, enterprise Kubernetes operators, or existing corporate clusters.
+
+### Architectural Boundary: Local Evaluation vs. Production
+
+| Capability | Local Evaluation (`vuhive-cloud-infra`) | Production & Enterprise Infrastructure |
+|---|---|---|
+| **Database** | Ephemeral, single-replica PostgreSQL 16 pod (`emptyDir` or local PVC) | High-availability PostgreSQL cluster (AWS Aurora / RDS, GCP Cloud SQL, CloudNativePG, Crunchy Data PGO) with automated backups, point-in-time recovery (PITR), and read replicas |
+| **Object Storage** | Standalone MinIO container | Resilient, distributed object storage (AWS S3, Cloudflare R2, Ceph Object Gateway, enterprise MinIO tenant) with multi-AZ replication, lifecycle expiration policies, and SSE encryption |
+| **Identity & IAM** | Ephemeral Keycloak instance with pre-imported realm and test credentials | Enterprise Identity Provider (production Keycloak cluster, Okta, Auth0, Microsoft Entra ID / Azure AD, AWS Cognito, Google Cloud Identity) with corporate SSO/MFA |
+| **Credential Management** | Plaintext Helm values with default development credentials | External Kubernetes Secrets (`database.existingSecret`, `s3.existingSecret`, `auth.runner.existingSecret`), AWS Secrets Manager, HashiCorp Vault, or External Secrets Operator (ESO) |
+| **Network & Transport** | Plaintext HTTP and non-TLS database connections (`sslmode=disable`) | End-to-end TLS encryption with enforced SSL (`sslmode=require` / `verify-full`) and HTTPS endpoints |
+
+---
+
+### 1. PostgreSQL Database Binding Scenarios
+
+The control plane stores test suites, runner profiles, schedules, test run metadata, and aggregated performance KPIs in PostgreSQL.
+
+#### Supported Third-Party Deployment Options
+- **Managed Cloud Databases**: AWS RDS / Aurora PostgreSQL, GCP Cloud SQL for PostgreSQL, Azure Database for PostgreSQL.
+- **Enterprise Kubernetes Operators**: [CloudNativePG (`cnpg`)](https://cloudnative-pg.io/), [Crunchy Data PGO](https://access.crunchydata.com/documentation/postgres-operator/latest/), [Bitnami PostgreSQL](https://github.com/bitnami/charts/tree/main/bitnami/postgresql).
+
+#### Secure Credential Management with `database.existingSecret`
+To avoid storing sensitive database connection strings in Helm values files or version control, pre-provision a Kubernetes Secret:
+
+```bash
+kubectl create secret generic vuhive-db-secret \
+  --namespace vuhive-system \
+  --from-literal=DATABASE_URL="postgres://vuhive_user:SecurePassword123@postgres.production.internal:5432/vuhive?sslmode=require"
+```
+
+Configure Helm to reference this secret:
+```yaml
+database:
+  existingSecret: "vuhive-db-secret"
+  existingSecretKey: "DATABASE_URL"
+  sslmode: "require"
+  autoMigrate: true
+```
+
+#### Automated Database Migrations (`database.autoMigrate`)
+When `database.autoMigrate: true` (default), the Helm chart automatically runs a pre-install and pre-upgrade Kubernetes `batch/v1` Job (`vuhive-cloud-migration`). This job uses the control plane server container with `--migrate-only` to apply all pending Goose schema migrations against the external database before rolling out new application pods, guaranteeing zero downtime and forward-compatible database schema transitions.
+
+---
+
+### 2. S3 & Object Storage Binding Scenarios
+
+`vuhive-cloud` retains test source archives, compiled runner binaries, raw pod logs (`run.log`), and deterministic execution reports (`summary.json`) in S3-compatible object storage.
+
+#### Scenario A: Native AWS S3 (with Virtual-Hosted Addressing & IRSA)
+For native AWS S3, bucket endpoints use AWS regional DNS. When accessing AWS S3:
+1. Leave `s3.endpoint: ""` (empty) so the AWS Go SDK automatically resolves regional endpoints (e.g. `https://s3.eu-west-1.amazonaws.com`).
+2. Set `s3.usePathStyle: false` to use AWS virtual-hosted addressing (`https://<bucket>.s3.<region>.amazonaws.com/`).
+3. Bind credentials using either **IAM Roles for Service Accounts (IRSA)** or Kubernetes Secrets:
+
+**Option 1: IAM Roles for Service Accounts (IRSA / EKS Pod Identity) — Recommended:**
+```yaml
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/vuhive-control-plane-s3-role"
+
+s3:
+  endpoint: ""
+  region: "eu-west-1"
+  bucket: "vuhive-production-artifacts"
+  usePathStyle: false
+  # Leave credentials empty; AWS SDK automatically acquires STS tokens via IRSA
+  existingSecret: ""
+```
+
+**Option 2: Static Credentials via Kubernetes Secret:**
+```bash
+kubectl create secret generic vuhive-s3-secret \
+  --namespace vuhive-system \
+  --from-literal=AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
+  --from-literal=AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+```
+
+```yaml
+s3:
+  endpoint: ""
+  region: "eu-west-1"
+  bucket: "vuhive-production-artifacts"
+  usePathStyle: false
+  existingSecret: "vuhive-s3-secret"
+  existingSecretAccessKey: "AWS_ACCESS_KEY_ID"
+  existingSecretSecretKey: "AWS_SECRET_ACCESS_KEY"
+```
+
+#### Scenario B: Third-Party & S3-Compatible Storage (Cloudflare R2, Ceph, MinIO)
+For third-party object storage providers:
+- **Cloudflare R2**: `s3.endpoint: "https://<account-id>.r2.cloudflarestorage.com"`, `s3.region: "auto"`.
+- **Ceph Object Gateway (RGW)**: `s3.endpoint: "https://radosgw.storage.internal:7480"`.
+- **Enterprise MinIO Tenant**: `s3.endpoint: "https://minio-tenant.minio.svc.cluster.local:9000"`.
+
+> [!IMPORTANT]
+> **Path-Style Addressing Requirement (`s3.usePathStyle: true`)**:
+> Third-party and private S3-compatible endpoints typically lack wildcard DNS routing (`https://<bucket>.<endpoint>/`). You **must** set `s3.usePathStyle: true` so requests use path-style URLs (`https://<endpoint>/<bucket>/...`). When `s3.endpoint` is configured in the Helm chart, path-style addressing is automatically enabled for the control plane, runner init containers, and execution wrappers.
+
+```yaml
+s3:
+  endpoint: "https://<account-id>.r2.cloudflarestorage.com"
+  region: "auto"
+  bucket: "vuhive-production-artifacts"
+  usePathStyle: true
+  existingSecret: "vuhive-r2-secret"
+```
+
+---
+
+### 3. Identity & Access Management (IAM / OIDC) Scenarios
+
+When REST API security is enabled (`auth.enabled: true`), the control plane validates incoming JWT bearer tokens against standard OIDC endpoints and authorizes operations based on role claims.
+
+#### Supported Identity Providers
+- **Enterprise Keycloak**: Clustered on-premise or cloud Keycloak deployments.
+- **Cloud Identity Providers**: Okta, Auth0, Microsoft Entra ID (Azure AD), AWS Cognito, Google Cloud Identity.
+
+#### Configuration & Runner M2M Authentication
+The control plane and runner workloads authenticate using two mechanisms:
+1. **User / Client Authentication**: API consumers (developer CLI, web dashboard, CI/CD pipelines) obtain standard OIDC tokens from the provider.
+2. **Runner M2M OAuth2 Authentication**: Runner pods require machine-to-machine (M2M) OAuth2 client credentials to authenticate completion callbacks (`POST /api/v1/runs/complete`) and barrier rendezvous.
+
+Store the runner client secret securely:
+```bash
+kubectl create secret generic vuhive-runner-auth \
+  --namespace vuhive-system \
+  --from-literal=RUNNER_CLIENT_SECRET="SecretRunnerKey987"
+```
+
+```yaml
+auth:
+  enabled: true
+  issuerUrl: "https://auth.production.internal/realms/vuhive"
+  jwksUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/certs"
+  runner:
+    clientId: "vuhive-runner"
+    tokenUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/token"
+    existingSecret: "vuhive-runner-auth"
+    existingSecretKey: "RUNNER_CLIENT_SECRET"
+```
+
+---
+
+### 4. Consolidated Production Deployment Values (`values-production.yaml`)
+
+The repository provides a production values template at [`deploy/helm/vuhive-cloud/values-production.yaml`](./deploy/helm/vuhive-cloud/values-production.yaml) binding external PostgreSQL, native AWS S3, and enterprise OIDC:
+
+```yaml
+replicaCount: 2
+
+database:
+  host: "postgres.production.internal"
+  port: 5432
+  name: "vuhive"
+  user: "vuhive"
+  sslmode: "require"
+  existingSecret: "vuhive-db-secret"
+  existingSecretKey: "DATABASE_URL"
+  autoMigrate: true
+
+s3:
+  endpoint: ""
+  region: "eu-west-1"
+  bucket: "vuhive-production-artifacts"
+  usePathStyle: false
+  existingSecret: "vuhive-s3-secret"
+  existingSecretAccessKey: "AWS_ACCESS_KEY_ID"
+  existingSecretSecretKey: "AWS_SECRET_ACCESS_KEY"
+
+auth:
+  enabled: true
+  issuerUrl: "https://auth.production.internal/realms/vuhive"
+  jwksUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/certs"
+  runner:
+    clientId: "vuhive-runner"
+    tokenUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/token"
+    existingSecret: "vuhive-runner-auth"
+    existingSecretKey: "RUNNER_CLIENT_SECRET"
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+runner:
+  namespace: "vuhive-runners"
+  createNamespace: true
+
+builder:
+  namespace: "vuhive-system"
+  createNamespace: true
+```
+
+Deploy the control plane to your production Kubernetes cluster:
+
+```bash
+helm install vuhive deploy/helm/vuhive-cloud \
+  --namespace vuhive-system \
+  --create-namespace \
+  -f deploy/helm/vuhive-cloud/values-production.yaml
+```
+
+For the complete reference of all Helm parameters, RBAC configuration, and runner isolation policies, consult the **[Control Plane Helm Installation Guide (`deploy/helm/vuhive-cloud/README.md`)](./deploy/helm/vuhive-cloud/README.md)**.
 
 ---
 

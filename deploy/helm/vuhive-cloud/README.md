@@ -121,9 +121,158 @@ helm install vuhive deploy/helm/vuhive-cloud \
 
 For full details on local container building, BuildKit cache pruning (`make docker-prune`), and troubleshooting `ImagePullBackOff` / Kubelet ImageGC eviction issues, see [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
-### 5. Production Deployment (with External PostgreSQL & S3)
+### 5. Production Deployment (with External PostgreSQL, S3 & OIDC)
 
-In production, backing services should be provisioned via managed cloud infrastructure (e.g., AWS Aurora PostgreSQL and AWS S3).
+In production environments, backing services should be provisioned via managed cloud infrastructure (e.g. AWS Aurora / RDS, GCP Cloud SQL, CloudNativePG), dedicated object storage (AWS S3, Cloudflare R2, Ceph), and enterprise Identity Providers (production Keycloak, Okta, Auth0, Microsoft Entra ID).
+
+> [!TIP]
+> For high-level architectural comparison and provider options (AWS RDS, CloudNativePG, Cloudflare R2, Ceph, Okta, Keycloak), see the [External Infrastructure & Third-Party Deployment Scenarios section in root README.md](../../README.md#external-infrastructure--third-party-deployment-scenarios).
+
+#### Step 1: Create Kubernetes Secrets for External Credentials
+
+Do not commit plaintext passwords or access keys into values files or version control. Pre-create Kubernetes Secrets in the release namespace (`vuhive-system`):
+
+```bash
+# 1. PostgreSQL Database URL Secret
+kubectl create secret generic vuhive-db-secret \
+  --namespace vuhive-system \
+  --from-literal=DATABASE_URL="postgres://vuhive_user:SecurePassword123@postgres.production.internal:5432/vuhive?sslmode=require"
+
+# 2. S3 Object Storage Credentials Secret (omit if using IRSA / Workload Identity)
+kubectl create secret generic vuhive-s3-secret \
+  --namespace vuhive-system \
+  --from-literal=AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE" \
+  --from-literal=AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+
+# 3. Runner M2M OAuth2 Client Secret (when auth.enabled=true)
+kubectl create secret generic vuhive-runner-auth \
+  --namespace vuhive-system \
+  --from-literal=RUNNER_CLIENT_SECRET="SecretRunnerKey987"
+```
+
+#### Step 2: Configure Cloud IAM / IRSA (Optional for AWS S3)
+
+When running on Amazon EKS, authenticate against AWS S3 without static access keys by using **IAM Roles for Service Accounts (IRSA)** or **EKS Pod Identity**:
+
+1. Create an AWS IAM Policy granting read/write access to your S3 bucket:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
+         "Resource": [
+           "arn:aws:s3:::vuhive-production-artifacts",
+           "arn:aws:s3:::vuhive-production-artifacts/*"
+         ]
+       }
+     ]
+   }
+   ```
+2. Annotate the control plane ServiceAccount in Helm values:
+   ```yaml
+   serviceAccount:
+     create: true
+     annotations:
+       eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/vuhive-control-plane-s3-role"
+   ```
+
+#### Step 3: Configure Production Values (`values-production.yaml`)
+
+Use the template provided at [`values-production.yaml`](./values-production.yaml) or customize your values:
+
+```yaml
+replicaCount: 2
+
+# PostgreSQL Database Binding
+database:
+  host: "postgres.production.internal"
+  port: 5432
+  name: "vuhive"
+  user: "vuhive_user"
+  sslmode: "require"
+  existingSecret: "vuhive-db-secret"
+  existingSecretKey: "DATABASE_URL"
+  autoMigrate: true
+
+# S3 Object Storage Binding
+s3:
+  # Leave empty for AWS S3 regional endpoints; set URL for Cloudflare R2 / Ceph / MinIO
+  endpoint: ""
+  region: "eu-west-1"
+  bucket: "vuhive-production-artifacts"
+  # Set false for AWS S3 virtual-hosted style; set true for Cloudflare R2, Ceph, MinIO
+  usePathStyle: false
+  existingSecret: "vuhive-s3-secret"
+  existingSecretAccessKey: "AWS_ACCESS_KEY_ID"
+  existingSecretSecretKey: "AWS_SECRET_ACCESS_KEY"
+
+# Identity & Access Management (OIDC)
+auth:
+  enabled: true
+  issuerUrl: "https://auth.production.internal/realms/vuhive"
+  jwksUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/certs"
+  runner:
+    clientId: "vuhive-runner"
+    tokenUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/token"
+    existingSecret: "vuhive-runner-auth"
+    existingSecretKey: "RUNNER_CLIENT_SECRET"
+
+# Production Sizing & High Availability
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vuhive-cloud
+          topologyKey: kubernetes.io/hostname
+```
+
+#### Step 4: Install or Upgrade with Helm
+
+Execute the Helm installation:
+
+```bash
+helm install vuhive deploy/helm/vuhive-cloud \
+  --namespace vuhive-system \
+  --create-namespace \
+  -f deploy/helm/vuhive-cloud/values-production.yaml \
+  --wait --timeout=180s
+```
+
+During deployment:
+1. **Automated Schema Migrations (`database.autoMigrate`)**: Helm runs the `vuhive-cloud-migration` pre-install/pre-upgrade hook Job, applying Goose database schema migrations before updating the Deployment pods.
+2. **Readiness Probing**: The deployment awaits database connectivity and S3 storage bucket verification before marking pods ready.
+
+#### Step 5: Post-Install Verification
+
+Verify deployment health and migration job completion:
+
+```bash
+# Check migration job completion status
+kubectl get jobs -n vuhive-system -l app.kubernetes.io/component=migration
+
+# Check control plane pods
+kubectl get pods -n vuhive-system -l app.kubernetes.io/name=vuhive-cloud
+
+# Verify service liveness
+kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080 &
+curl -i http://localhost:8080/healthz
+curl -i http://localhost:8080/version
+```
+
+
 
 ## Namespace Management
 
