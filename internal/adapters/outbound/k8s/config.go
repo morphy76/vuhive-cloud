@@ -29,6 +29,10 @@ type Config struct {
 	S3SecretAccessKey             string
 	S3UsePathStyle                bool
 	APICallbackURL                string
+	RunnerAuthToken               string
+	RunnerClientID                string
+	RunnerClientSecret            string
+	RunnerTokenURL                string
 }
 
 // DefaultConfig returns a Config initialized with production-grade defaults.

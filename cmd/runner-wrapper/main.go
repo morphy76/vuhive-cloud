@@ -32,6 +32,10 @@ func main() {
 	barrierTimeoutFlag := flag.Duration("barrier-timeout", 0, "Distributed barrier rendezvous timeout (defaults to VUHIVE_BARRIER_TIMEOUT)")
 	releaseDelayFlag := flag.Duration("release-delay", 0, "Rendezvous synchronized start delay (defaults to VUHIVE_RELEASE_DELAY)")
 	coordinatorURLFlag := flag.String("coordinator-url", "", "Coordinator barrier base URL (defaults to VUHIVE_COORDINATOR_URL)")
+	authTokenFlag := flag.String("auth-token", "", "M2M bearer auth token (defaults to VUHIVE_AUTH_TOKEN)")
+	clientIDFlag := flag.String("client-id", "", "OIDC client ID for M2M authentication (defaults to VUHIVE_CLIENT_ID)")
+	clientSecretFlag := flag.String("client-secret", "", "OIDC client secret for M2M authentication (defaults to VUHIVE_CLIENT_SECRET)")
+	tokenURLFlag := flag.String("token-url", "", "OIDC token endpoint for M2M authentication (defaults to VUHIVE_TOKEN_URL)")
 	flag.Parse()
 
 	if *showVersion {
@@ -153,6 +157,23 @@ func main() {
 		coordinatorURL = os.Getenv("VUHIVE_COORDINATOR_URL")
 	}
 
+	authToken := *authTokenFlag
+	if authToken == "" {
+		authToken = os.Getenv("VUHIVE_AUTH_TOKEN")
+	}
+	clientID := *clientIDFlag
+	if clientID == "" {
+		clientID = os.Getenv("VUHIVE_CLIENT_ID")
+	}
+	clientSecret := *clientSecretFlag
+	if clientSecret == "" {
+		clientSecret = os.Getenv("VUHIVE_CLIENT_SECRET")
+	}
+	tokenURL := *tokenURLFlag
+	if tokenURL == "" {
+		tokenURL = os.Getenv("VUHIVE_TOKEN_URL")
+	}
+
 	// S3 storage configuration
 	s3Bucket := os.Getenv("S3_BUCKET")
 	accessKey := os.Getenv("S3_ACCESS_KEY_ID")
@@ -196,6 +217,10 @@ func main() {
 		BarrierTimeout: barrierTimeout,
 		ReleaseDelay:   releaseDelay,
 		CoordinatorURL: strings.TrimSpace(coordinatorURL),
+		AuthToken:      strings.TrimSpace(authToken),
+		ClientID:       strings.TrimSpace(clientID),
+		ClientSecret:   strings.TrimSpace(clientSecret),
+		TokenURL:       strings.TrimSpace(tokenURL),
 		S3Config:       s3Cfg,
 	}
 

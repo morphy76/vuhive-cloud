@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/morphy76/vuhive-cloud/internal/adapters/inbound/rest"
+	authadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/auth"
 	coordinatoradapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/coordinator"
 	k8sadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/k8s"
 	pgadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/postgres"
@@ -244,6 +245,13 @@ func main() {
 				k8sCfg.S3UsePathStyle = os.Getenv("S3_USE_PATH_STYLE") == "true" || k8sCfg.S3Endpoint != ""
 			}
 			k8sCfg.APICallbackURL = os.Getenv("API_CALLBACK_URL")
+			k8sCfg.RunnerAuthToken = os.Getenv("RUNNER_AUTH_TOKEN")
+			k8sCfg.RunnerClientID = os.Getenv("RUNNER_CLIENT_ID")
+			k8sCfg.RunnerClientSecret = os.Getenv("RUNNER_CLIENT_SECRET")
+			k8sCfg.RunnerTokenURL = os.Getenv("RUNNER_TOKEN_URL")
+			if k8sCfg.RunnerTokenURL == "" && os.Getenv("OIDC_ISSUER_URL") != "" {
+				k8sCfg.RunnerTokenURL = strings.TrimRight(os.Getenv("OIDC_ISSUER_URL"), "/") + "/protocol/openid-connect/token"
+			}
 
 			buildOrchestrator = k8sadapter.NewBuildOrchestrator(k8sClientset, k8sCfg)
 			runnerOrchestrator = k8sadapter.NewRunnerOrchestrator(k8sClientset, k8sCfg)
@@ -335,8 +343,29 @@ func main() {
 		}()
 	}
 
+	// 4. OIDC Authentication & Security Verifier
+	var tokenVerifier outbound.TokenVerifierPort
+	authEnabled := os.Getenv("AUTH_ENABLED") != "false"
+	jwksURL := os.Getenv("OIDC_JWKS_URL")
+	issuerURL := os.Getenv("OIDC_ISSUER_URL")
+	if jwksURL == "" && issuerURL != "" {
+		jwksURL = strings.TrimRight(issuerURL, "/") + "/protocol/openid-connect/certs"
+	}
+	if authEnabled && jwksURL != "" {
+		tokenVerifier = authadapter.NewKeycloakTokenVerifier(authadapter.Config{
+			JWKSURL:   jwksURL,
+			IssuerURL: issuerURL,
+			ClientID:  os.Getenv("OIDC_CLIENT_ID"),
+		})
+		log.Info().Str("jwks_url", jwksURL).Msg("configured oidc token verifier with keycloak jwks")
+	} else if authEnabled {
+		log.Warn().Msg("AUTH_ENABLED is true but neither OIDC_JWKS_URL nor OIDC_ISSUER_URL is configured; running with open authentication")
+	} else {
+		log.Info().Msg("authentication explicitly disabled via AUTH_ENABLED=false")
+	}
+
 	// Router setup
-	router := rest.SetupRouterWithAll(buildService, profileService, scheduleService, runService, barrierService, housekeepingService)
+	router := rest.SetupRouterWithAuth(buildService, profileService, scheduleService, runService, barrierService, housekeepingService, tokenVerifier)
 
 	server := &http.Server{
 		Addr:         ":" + port,

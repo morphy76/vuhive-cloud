@@ -101,5 +101,17 @@ var (
 
 	// ErrInsecureOverrideForbidden indicates that overriding the import blocklist is not permitted by cluster policy.
 	ErrInsecureOverrideForbidden = errors.New("import blocklist override is forbidden by cluster policy")
+
+	// ErrUnauthorized indicates missing, expired, or invalid authentication credentials.
+	ErrUnauthorized = errors.New("unauthorized: authentication required")
+
+	// ErrForbidden indicates authenticated caller lacks required role or permission.
+	ErrForbidden = errors.New("forbidden: insufficient permissions")
+
+	// ErrTokenExpired indicates the authentication token has expired.
+	ErrTokenExpired = errors.New("token expired")
+
+	// ErrInvalidToken indicates the token format or signature is invalid.
+	ErrInvalidToken = errors.New("invalid token")
 )
 

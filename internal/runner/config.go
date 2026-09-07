@@ -64,6 +64,10 @@ type WrapperConfig struct {
 	BarrierTimeout time.Duration
 	ReleaseDelay   time.Duration
 	CoordinatorURL string
+	AuthToken      string
+	ClientID       string
+	ClientSecret   string
+	TokenURL       string
 	S3Config       s3.Config
 }
 

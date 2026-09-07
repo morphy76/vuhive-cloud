@@ -18,12 +18,20 @@ servers:
   - url: http://vuhive-cloud.vuhive-system.svc.cluster.local:8080
     description: In-cluster Kubernetes service
 
+security:
+  - BearerAuth: []
+  - OAuth2AuthorizationCode:
+      - openid
+      - profile
+      - email
+
 paths:
   /healthz:
     get:
       summary: Liveness / Readiness probe
       description: Returns service health status for Kubernetes probes.
       operationId: healthz
+      security: []
       responses:
         '200':
           description: Service is healthy and ready to accept requests
@@ -41,6 +49,7 @@ paths:
       summary: Component version
       description: Returns semantic version, git commit hash, and build timestamp.
       operationId: getVersion
+      security: []
       responses:
         '200':
           description: Build version details.
@@ -54,6 +63,7 @@ paths:
       summary: OpenAPI 3.1 YAML specification
       description: Returns raw OpenAPI 3.1 specification definition in YAML format.
       operationId: getOpenAPISpecYAML
+      security: []
       responses:
         '200':
           description: OpenAPI 3.1 YAML specification
@@ -67,6 +77,7 @@ paths:
       summary: OpenAPI 3.1 JSON specification
       description: Returns raw OpenAPI 3.1 specification definition in JSON format.
       operationId: getOpenAPISpecJSON
+      security: []
       responses:
         '200':
           description: OpenAPI 3.1 JSON specification
@@ -1200,6 +1211,32 @@ paths:
                 $ref: '#/components/schemas/RetentionPolicyResponse'
 
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC JWT access token issued by Keycloak. Pass in Authorization header as 'Bearer <token>'.
+    OAuth2AuthorizationCode:
+      type: oauth2
+      description: Keycloak Authorization Code flow with PKCE
+      flows:
+        authorizationCode:
+          authorizationUrl: http://localhost:8080/realms/vuhive/protocol/openid-connect/auth
+          tokenUrl: http://localhost:8080/realms/vuhive/protocol/openid-connect/token
+          scopes:
+            openid: OpenID Connect identity scope
+            profile: User profile and username
+            email: User email address
+    OAuth2ClientCredentials:
+      type: oauth2
+      description: Keycloak M2M Client Credentials grant for automated runners and background services
+      flows:
+        clientCredentials:
+          tokenUrl: http://localhost:8080/realms/vuhive/protocol/openid-connect/token
+          scopes:
+            openid: OpenID Connect identity scope
+
   schemas:
     ErrorResponse:
       type: object

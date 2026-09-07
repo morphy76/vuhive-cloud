@@ -285,5 +285,31 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		require.NotNil(t, workerIDRef)
 		assert.Equal(t, "metadata.name", workerIDRef.FieldPath)
 	})
+
+	t.Run("generate job injects runner m2m auth credentials when configured", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerAuthToken = "runner-m2m-jwt"
+		cfg.RunnerClientID = "vuhive-runner"
+		cfg.RunnerClientSecret = "vuhive-runner-secret"
+		cfg.RunnerTokenURL = "http://keycloak/token"
+		generator := k8s.NewRunnerJobGenerator(cfg)
+
+		run, err := model.NewTestRun("suite-123", "art-456", nil, profile.ID(), nil)
+		require.NoError(t, err)
+
+		job, err := generator.GenerateJob(run, profile, outbound.RunnerJobOptions{S3BinaryKey: "binaries/runner"})
+		require.NoError(t, err)
+
+		runnerC := job.Spec.Template.Spec.Containers[0]
+		envMap := make(map[string]string)
+		for _, e := range runnerC.Env {
+			envMap[e.Name] = e.Value
+		}
+
+		assert.Equal(t, "runner-m2m-jwt", envMap["VUHIVE_AUTH_TOKEN"])
+		assert.Equal(t, "vuhive-runner", envMap["VUHIVE_CLIENT_ID"])
+		assert.Equal(t, "vuhive-runner-secret", envMap["VUHIVE_CLIENT_SECRET"])
+		assert.Equal(t, "http://keycloak/token", envMap["VUHIVE_TOKEN_URL"])
+	})
 }
 

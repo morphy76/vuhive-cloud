@@ -83,6 +83,18 @@ Then navigate to `http://localhost:8081` in your desktop browser. Swagger UI ini
 
 Because modern web browsers enforce the Same-Origin Policy when fetching resources across different ports or hostnames, the `vuhive-cloud` control plane includes built-in Cross-Origin Resource Sharing (CORS) middleware and responds to HTTP `OPTIONS` preflight requests with `204 No Content` and standard CORS headers (`Access-Control-Allow-Origin: *`), ensuring seamless API exploration and ad-hoc request testing without browser blocks.
 
+### Keycloak (OIDC Identity Provider & Authorization Server)
+
+Keycloak provides OIDC authentication and token issuance for the control plane and developer CLI:
+- **Image**: `quay.io/keycloak/keycloak:26.1.0`
+- **Database Backend**: Automatically connects to the in-chart PostgreSQL instance (`vuhive-infra-postgresql`).
+- **Declarative Realm Import**: Imports `files/vuhive-realm.json` defining the `vuhive` realm with **zero pre-created users**, standard roles (`vuhive-admin`, `vuhive-deployer`, `vuhive-developer`, `vuhive-viewer`, `vuhive-runner`), groups (`/administrators`, `/deployers`, `/developers`, `/viewers`), and clients (`vuhive-cloud-api`, `vuhive-cloud-cli`, `vuhive-runner`).
+- **Accessing Keycloak Admin Console via Port-Forwarding**:
+  ```bash
+  kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-keycloak 8082:8080
+  ```
+  Navigate to `http://localhost:8082` and sign in with admin credentials (`admin` / `admin`).
+
 ## Configuration Parameters
 
 | Parameter | Description | Default |
@@ -95,6 +107,12 @@ Because modern web browsers enforce the Same-Origin Policy when fetching resourc
 | `minio.rootPassword` | MinIO root password | `vuhive-dev-secret` |
 | `minio.buckets[0].name` | Default artifact bucket name | `vuhive-artifacts` |
 | `minio.buckets[0].policy` | Default artifact bucket policy | `none` |
+| `keycloak.enabled` | Deploy Keycloak OIDC identity provider | `true` |
+| `keycloak.image.repository` | Container image repository for Keycloak | `quay.io/keycloak/keycloak` |
+| `keycloak.image.tag` | Container image tag | `26.1.0` |
+| `keycloak.adminUser` | Keycloak bootstrap administrator username | `admin` |
+| `keycloak.adminPassword` | Keycloak bootstrap administrator password | `admin` |
+| `keycloak.service.port` | Keycloak service port | `8080` |
 | `openapiViewer.enabled` | Deploy optional third-party OpenAPI viewer (Swagger UI) | `false` |
 | `openapiViewer.image.repository` | Container image repository for OpenAPI viewer | `swaggerapi/swagger-ui` |
 | `openapiViewer.image.tag` | Container image tag | `v5.18.2` |

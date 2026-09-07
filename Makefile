@@ -20,7 +20,7 @@ help: ## Display this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: build
-build: build-web build-server build-runner-wrapper build-runner-init build-bff ## Build all binaries and web assets
+build: build-web build-server build-runner-wrapper build-runner-init build-bff build-cli ## Build all binaries and web assets
 
 .PHONY: build-web
 build-web: ## Build web SPA static assets with pnpm
@@ -34,6 +34,11 @@ test-web: ## Run web unit and component tests
 build-server: ## Build control plane server binary
 	@mkdir -p bin
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/server ./cmd/server
+
+.PHONY: build-cli
+build-cli: ## Build developer CLI binary
+	@mkdir -p bin
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/vuhive ./cmd/cli
 
 .PHONY: build-bff
 build-bff: ## Build Backend-For-Frontend (BFF) service binary

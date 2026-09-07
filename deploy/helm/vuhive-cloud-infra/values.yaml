@@ -78,3 +78,33 @@ openapiViewer:
           - path: /
             pathType: ImplementationSpecific
     tls: []
+
+# ── Keycloak (OIDC Identity Provider & Authorization Server) ─────────────
+keycloak:
+  enabled: true
+  replicas: 1
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: 26.1.0
+    pullPolicy: IfNotPresent
+  adminUser: "admin"
+  adminPassword: "admin"
+  database:
+    # Defaults to PostgreSQL service deployed by this infra chart when left empty
+    host: ""
+    port: 5432
+    name: "vuhive"
+    user: "vuhive"
+    password: "vuhive-dev"
+  service:
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1024Mi
+

@@ -6,6 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/morphy76/vuhive-cloud/api"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/inbound"
+	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
+	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 	"github.com/morphy76/vuhive-cloud/internal/version"
 )
 
@@ -39,6 +41,19 @@ func SetupRouterWithAll(
 	barrierUC inbound.BarrierUseCase,
 	housekeepingUC inbound.HousekeepingUseCase,
 ) *gin.Engine {
+	return SetupRouterWithAuth(buildsUC, profilesUC, schedulesUC, runsUC, barrierUC, housekeepingUC, nil)
+}
+
+// SetupRouterWithAuth initializes and configures the Gin HTTP engine with all use cases and optional OIDC JWT auth.
+func SetupRouterWithAuth(
+	buildsUC inbound.BuildsUseCase,
+	profilesUC inbound.ProfilesUseCase,
+	schedulesUC inbound.SchedulesUseCase,
+	runsUC inbound.RunsUseCase,
+	barrierUC inbound.BarrierUseCase,
+	housekeepingUC inbound.HousekeepingUseCase,
+	tokenVerifier outbound.TokenVerifierPort,
+) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 
@@ -70,15 +85,26 @@ func SetupRouterWithAll(
 		c.Data(http.StatusOK, "application/json", api.OpenAPISpecJSON)
 	})
 
+	// Helper to enforce role guards if auth is configured
+	roleGuard := func(roles ...string) gin.HandlerFunc {
+		if tokenVerifier == nil {
+			return func(c *gin.Context) { c.Next() }
+		}
+		return RequireRole(roles...)
+	}
+
 	// API v1 routes
 	v1 := router.Group("/api/v1")
+	if tokenVerifier != nil {
+		v1.Use(AuthMiddleware(tokenVerifier, false))
+	}
 	{
 		if buildsUC != nil {
 			artifactHandler := NewArtifactHandler(buildsUC)
 			suites := v1.Group("/suites")
 			{
-				suites.POST("/:id/builds", artifactHandler.UploadAndBuild)
-				suites.GET("/:id/artifacts", artifactHandler.ListArtifacts)
+				suites.POST("/:id/builds", roleGuard(model.RoleDeveloper, model.RoleAdmin), artifactHandler.UploadAndBuild)
+				suites.GET("/:id/artifacts", roleGuard(model.RoleViewer, model.RoleDeveloper, model.RoleDeployer, model.RoleAdmin), artifactHandler.ListArtifacts)
 			}
 		}
 
@@ -86,11 +112,11 @@ func SetupRouterWithAll(
 			profileHandler := NewProfileHandler(profilesUC)
 			profiles := v1.Group("/profiles")
 			{
-				profiles.POST("", profileHandler.CreateProfile)
-				profiles.GET("", profileHandler.ListProfiles)
-				profiles.GET("/:id", profileHandler.GetProfile)
-				profiles.PUT("/:id", profileHandler.UpdateProfile)
-				profiles.DELETE("/:id", profileHandler.DeleteProfile)
+				profiles.POST("", roleGuard(model.RoleAdmin), profileHandler.CreateProfile)
+				profiles.GET("", roleGuard(model.RoleViewer), profileHandler.ListProfiles)
+				profiles.GET("/:id", roleGuard(model.RoleViewer), profileHandler.GetProfile)
+				profiles.PUT("/:id", roleGuard(model.RoleAdmin), profileHandler.UpdateProfile)
+				profiles.DELETE("/:id", roleGuard(model.RoleAdmin), profileHandler.DeleteProfile)
 			}
 		}
 
@@ -98,11 +124,11 @@ func SetupRouterWithAll(
 			scheduleHandler := NewScheduleHandler(schedulesUC)
 			schedules := v1.Group("/schedules")
 			{
-				schedules.POST("", scheduleHandler.CreateSchedule)
-				schedules.GET("", scheduleHandler.ListSchedules)
-				schedules.GET("/:id", scheduleHandler.GetSchedule)
-				schedules.PUT("/:id", scheduleHandler.UpdateSchedule)
-				schedules.DELETE("/:id", scheduleHandler.DeleteSchedule)
+				schedules.POST("", roleGuard(model.RoleDeployer, model.RoleAdmin), scheduleHandler.CreateSchedule)
+				schedules.GET("", roleGuard(model.RoleViewer), scheduleHandler.ListSchedules)
+				schedules.GET("/:id", roleGuard(model.RoleViewer), scheduleHandler.GetSchedule)
+				schedules.PUT("/:id", roleGuard(model.RoleDeployer, model.RoleAdmin), scheduleHandler.UpdateSchedule)
+				schedules.DELETE("/:id", roleGuard(model.RoleDeployer, model.RoleAdmin), scheduleHandler.DeleteSchedule)
 			}
 		}
 
@@ -110,14 +136,14 @@ func SetupRouterWithAll(
 			runHandler := NewRunHandler(runsUC)
 			runs := v1.Group("/runs")
 			{
-				runs.POST("", runHandler.TriggerRun)
-				runs.GET("", runHandler.ListRuns)
-				runs.GET("/:id", runHandler.GetRun)
-				runs.GET("/:id/report", runHandler.GetRunReport)
-				runs.GET("/:id/logs", runHandler.GetRunLogs)
-				runs.POST("/:id/abort", runHandler.AbortRun)
-				runs.POST("/:id/complete", runHandler.CompleteRun)
-				runs.POST("/complete", runHandler.CompleteRun)
+				runs.POST("", roleGuard(model.RoleDeployer, model.RoleAdmin), runHandler.TriggerRun)
+				runs.GET("", roleGuard(model.RoleViewer), runHandler.ListRuns)
+				runs.GET("/:id", roleGuard(model.RoleViewer), runHandler.GetRun)
+				runs.GET("/:id/report", roleGuard(model.RoleViewer), runHandler.GetRunReport)
+				runs.GET("/:id/logs", roleGuard(model.RoleViewer), runHandler.GetRunLogs)
+				runs.POST("/:id/abort", roleGuard(model.RoleDeployer, model.RoleAdmin), runHandler.AbortRun)
+				runs.POST("/:id/complete", roleGuard(model.RoleRunner, model.RoleAdmin), runHandler.CompleteRun)
+				runs.POST("/complete", roleGuard(model.RoleRunner, model.RoleAdmin), runHandler.CompleteRun)
 			}
 		}
 
@@ -125,9 +151,9 @@ func SetupRouterWithAll(
 			barrierHandler := NewBarrierHandler(barrierUC)
 			runs := v1.Group("/runs")
 			{
-				runs.POST("/:id/barrier/await", barrierHandler.AwaitBarrier)
-				runs.POST("/:id/barrier/abort", barrierHandler.AbortBarrier)
-				runs.GET("/:id/barrier", barrierHandler.GetBarrier)
+				runs.POST("/:id/barrier/await", roleGuard(model.RoleRunner, model.RoleAdmin), barrierHandler.AwaitBarrier)
+				runs.POST("/:id/barrier/abort", roleGuard(model.RoleRunner, model.RoleAdmin), barrierHandler.AbortBarrier)
+				runs.GET("/:id/barrier", roleGuard(model.RoleRunner, model.RoleViewer, model.RoleAdmin), barrierHandler.GetBarrier)
 			}
 		}
 
@@ -135,8 +161,8 @@ func SetupRouterWithAll(
 			hkHandler := NewHousekeepingHandler(housekeepingUC)
 			sys := v1.Group("/system")
 			{
-				sys.POST("/housekeeping", hkHandler.RunHousekeeping)
-				sys.GET("/housekeeping/policy", hkHandler.GetPolicy)
+				sys.POST("/housekeeping", roleGuard(model.RoleAdmin), hkHandler.RunHousekeeping)
+				sys.GET("/housekeeping/policy", roleGuard(model.RoleViewer, model.RoleAdmin), hkHandler.GetPolicy)
 			}
 		}
 	}
