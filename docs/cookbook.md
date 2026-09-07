@@ -1875,6 +1875,66 @@ The session subsystem emits structured `zerolog` events with operation names, se
 
 ---
 
+### Recipe 14: Keycloak OIDC Client Configuration with PKCE & Backchannel Logout
+
+The Go BFF functions as an OAuth 2.0 / OIDC confidential client implementing the Token Handler pattern. It interfaces directly with Keycloak to exchange authorization codes with PKCE, refresh active user tokens, revoke credentials on logout, and validate cryptographically signed Backchannel Logout tokens.
+
+#### 1. Keycloak Admin Console Realm Client Setup
+
+Within your Keycloak realm (e.g., `vuhive`), configure the BFF client:
+
+1. **General Settings**:
+   - **Client type**: `OpenID Connect`
+   - **Client ID**: `vuhive-cloud-bff`
+   - **Name**: `VuHive Cloud BFF Token Handler`
+2. **Capability config**:
+   - **Client authentication**: `ON` (Confidential client)
+   - **Authorization**: `OFF`
+   - **Authentication flow**:
+     - Standard flow: `Enabled` (Authorization Code flow)
+     - Direct access grants: `Disabled` (Resource Owner Password Credentials prohibited)
+     - Implicit flow: `Disabled`
+3. **Login settings**:
+   - **Root URL**: `https://loadtest.example.com`
+   - **Home URL**: `https://loadtest.example.com/`
+   - **Valid redirect URIs**: `https://loadtest.example.com/api/v1/bff/auth/callback`
+   - **Valid post logout redirect URIs**: `https://loadtest.example.com/`
+   - **Web origins**: `+` (or `https://loadtest.example.com`)
+4. **Advanced Settings & PKCE**:
+   - **Proof Key for Code Exchange (PKCE) Code Challenge Method**: `S256` (enforces SHA-256 code challenge verification)
+   - **Backchannel logout URL**: `https://loadtest.example.com/api/v1/bff/auth/backchannel-logout`
+   - **Backchannel logout session required**: `ON` (ensures Keycloak includes the `sid` claim in logout tokens)
+   - **Backchannel logout revoke offline sessions**: `ON`
+
+#### 2. Helm Configuration for Production
+
+Bind the Keycloak confidential client credentials to the BFF deployment:
+
+```bash
+kubectl create secret generic vuhive-bff-keycloak-secret \
+  --namespace vuhive-system \
+  --from-literal=client-secret="KeycloakGeneratedClientSecret456"
+```
+
+Configure `values-production.yaml`:
+
+```yaml
+bff:
+  keycloak:
+    baseUrl: "https://auth.example.com"
+    realm: "vuhive"
+    issuerUrl: "https://auth.example.com/realms/vuhive"
+    clientId: "vuhive-cloud-bff"
+    clientSecretExistingSecret: "vuhive-bff-keycloak-secret"
+    clientSecretKey: "client-secret"
+```
+
+#### 3. Automatic JWKS Key Rotation Verification
+
+The BFF fetches Keycloak's public signing keys on startup from `/protocol/openid-connect/certs` and caches them in memory. If Keycloak performs a zero-downtime signing key rotation, incoming Backchannel Logout tokens signed with an unseen Key ID (`kid`) automatically trigger an on-demand JWKS cache refresh, preventing any service interruption.
+
+---
+
 ## 4. Next Steps
 
 - **[OpenAPI 3.1 Specification (`api/openapi.yaml`)](../api/openapi.yaml)**: Complete REST API contract, machine-readable schemas, and live endpoints (`GET /openapi.yaml`, `GET /openapi.json`).
