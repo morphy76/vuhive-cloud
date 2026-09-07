@@ -184,6 +184,10 @@ database:
 ##### Automated Database Migrations (`database.autoMigrate`)
 When `database.autoMigrate: true` (default), the Helm chart automatically executes a pre-install and pre-upgrade Kubernetes `batch/v1` Job (`vuhive-cloud-migration`). This job uses the control plane server container with `--migrate-only` to apply all pending Goose schema migrations against the external database before rolling out new application pods, guaranteeing zero downtime and forward-compatible schema transitions.
 
+> [!TIP]
+> **Database & Schema Isolation**:
+> When sharing a PostgreSQL cluster between `vuhive-cloud` and an Identity Provider such as Keycloak, ensure Keycloak connects to a dedicated database (e.g. `keycloak`) or schema (`KC_DB_SCHEMA` / `currentSchema=keycloak`). This ensures internal IAM tables (80+ Keycloak metadata tables) do not pollute the application database (`vuhive`) and `public` schema containing `test_suites`, `test_runs`, `artifacts`, `schedules`, and `bff_sessions`. In the local evaluation chart (`vuhive-cloud-infra`), this separation is enforced by default via automated PostgreSQL initialization scripts.
+
 ---
 
 #### B. S3 & Object Storage Binding Scenarios

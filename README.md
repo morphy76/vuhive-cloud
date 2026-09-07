@@ -116,7 +116,7 @@ For complete details on our development methodology, human oversight model, and 
 
 Get up and running locally on Rancher Desktop, Kind, or Minikube in three steps:
 
-### 1. Deploy Backing Infrastructure (PostgreSQL + MinIO)
+### 1. Deploy Backing Infrastructure (PostgreSQL + MinIO + Keycloak)
 Deploy backing services via the local infrastructure chart:
 
 ```bash
@@ -125,7 +125,7 @@ helm repo add groundhog2k https://groundhog2k.github.io/helm-charts/
 helm repo add minio https://charts.min.io/
 helm repo update
 
-# 2. Deploy infrastructure (PostgreSQL + MinIO + optional Swagger UI)
+# 2. Deploy infrastructure (PostgreSQL + MinIO + Keycloak + optional Swagger UI)
 helm dependency build deploy/helm/vuhive-cloud-infra
 helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --namespace vuhive-system \
@@ -133,7 +133,7 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --wait --timeout=180s
 ```
 
-> For details on database, storage parameters, and enabling the optional OpenAPI viewer (Swagger UI, including browser-accessible `specUrl` configuration for `kubectl port-forward`), see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
+> For details on database and storage parameters, Keycloak IAM database isolation, and enabling the optional OpenAPI viewer (Swagger UI, including browser-accessible `specUrl` configuration for `kubectl port-forward`), see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
 
 ### 2. Deploy vuhive-cloud Control Plane
 Deploy the control plane connected to the local infrastructure:
