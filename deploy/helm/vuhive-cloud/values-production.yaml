@@ -1,0 +1,129 @@
+# vuhive-cloud — Production Helm Values Template
+# Example values file demonstrating how to bind external infrastructure dependencies
+# (PostgreSQL, AWS S3 / S3-compatible object storage, and Enterprise OIDC / Keycloak)
+# in production and non-local environments without plaintext credentials.
+#
+# Usage:
+#   helm install vuhive deploy/helm/vuhive-cloud \
+#     --namespace vuhive-system \
+#     --create-namespace \
+#     -f deploy/helm/vuhive-cloud/values-production.yaml
+
+replicaCount: 2
+
+# ── Backing Infrastructure: PostgreSQL Database ───────────────────────────
+# Bind to an external managed database (AWS Aurora/RDS, GCP Cloud SQL,
+# Azure Database for PostgreSQL, CloudNativePG, Crunchy Data PGO, or Bitnami).
+database:
+  # Host and connection parameters when not supplying a pre-composed full URL:
+  host: "postgres.production.internal"
+  port: 5432
+  name: "vuhive"
+  user: "vuhive"
+  # Enforce encrypted TLS communication with the database server.
+  # Options: require, verify-ca, verify-full
+  sslmode: "require"
+  # Reference a pre-existing Kubernetes Secret containing the database connection URL
+  # (e.g. postgres://vuhive:<password>@postgres.production.internal:5432/vuhive?sslmode=require).
+  # Setting existingSecret avoids committing plaintext credentials to values files or git.
+  existingSecret: "vuhive-db-secret"
+  existingSecretKey: "DATABASE_URL"
+  # Run automated database migrations via Helm pre-install / pre-upgrade hook Job.
+  # Uses the server container with --migrate-only against the target database.
+  autoMigrate: true
+
+# ── Backing Infrastructure: S3 / Object Storage ───────────────────────────
+# Configure native AWS S3 or third-party S3-compatible storage
+# (Cloudflare R2, Ceph Object Gateway, MinIO Tenant cluster, GCP Cloud Storage).
+s3:
+  # AWS S3: Leave endpoint empty ("") to use standard AWS regional endpoints.
+  # S3-Compatible: Set to the provider endpoint (e.g. "https://<account-id>.r2.cloudflarestorage.com"
+  # or "https://s3.production.internal:9000").
+  endpoint: ""
+  region: "eu-west-1"
+  bucket: "vuhive-production-artifacts"
+  # Set usePathStyle to false for AWS S3 (virtual-hosted style: http://bucket.s3.region.amazonaws.com).
+  # Set usePathStyle to true for S3-compatible providers (Cloudflare R2, Ceph, MinIO)
+  # where wildcard DNS for bucket subdomains is not supported.
+  usePathStyle: false
+  # Reference pre-existing Kubernetes Secret containing access and secret keys.
+  # If using AWS IRSA or EKS Pod Identity (see serviceAccount below), leave existingSecret empty.
+  existingSecret: "vuhive-s3-secret"
+  existingSecretAccessKey: "AWS_ACCESS_KEY_ID"
+  existingSecretSecretKey: "AWS_SECRET_ACCESS_KEY"
+
+# ── Identity & Access Management (IAM / OIDC) ─────────────────────────────
+# Bind to an enterprise OIDC Identity Provider (Keycloak, Okta, Auth0,
+# Microsoft Entra ID / Azure AD, AWS Cognito, Google Cloud Identity).
+auth:
+  # Enforce OIDC JWT verification and RBAC on all /api/v1 endpoints.
+  enabled: true
+  # OIDC realm issuer URL used for token validation
+  issuerUrl: "https://auth.production.internal/realms/vuhive"
+  # JWKS (JSON Web Key Set) URL to fetch cryptographic public keys
+  jwksUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/certs"
+  # M2M OAuth2 client credentials injected into runner Job manifests for
+  # completion callbacks (POST /api/v1/runs/complete) and barrier rendezvous.
+  runner:
+    clientId: "vuhive-runner"
+    tokenUrl: "https://auth.production.internal/realms/vuhive/protocol/openid-connect/token"
+    # Reference pre-existing Kubernetes Secret containing the runner client secret.
+    existingSecret: "vuhive-runner-auth"
+    existingSecretKey: "RUNNER_CLIENT_SECRET"
+
+# ── Service Account & Cloud IAM (IRSA / Workload Identity) ────────────────
+serviceAccount:
+  create: true
+  annotations:
+    # AWS IAM Roles for Service Accounts (IRSA):
+    # eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/vuhive-control-plane-role"
+    # Azure Workload Identity:
+    # azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000"
+    # GCP Workload Identity:
+    # iam.gke.io/gcp-service-account: "vuhive-sa@my-gcp-project.iam.gserviceaccount.com"
+  automountServiceAccountToken: true
+
+# ── High-Availability & Resource Management ───────────────────────────────
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# Spread replicas across distinct Kubernetes failure domains (nodes / zones)
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vuhive-cloud
+          topologyKey: kubernetes.io/hostname
+
+# ── Execution Workload Orchestration ───────────────────────────────────────
+runner:
+  namespace: "vuhive-runners"
+  createNamespace: true
+  defaultImage: "alpine:3.20"
+
+builder:
+  namespace: "vuhive-system"
+  createNamespace: true
+  image: "golang:1.26-alpine"
+
+# ── Execution Artifact Retention & Housekeeping ───────────────────────────
+housekeeping:
+  enabled: true
+  interval: "6h"
+  dryRun: false
+  applyS3Lifecycle: true
+  retention:
+    logsDays: 14
+    reportsDays: 90
+    sourcesDays: 30
+    binariesDays: 30
+    runsDays: 180
+    archiveOnly: false

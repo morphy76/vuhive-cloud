@@ -7,10 +7,11 @@ Helm chart to deploy backing infrastructure services (PostgreSQL and MinIO) for 
 This chart bundles backing infrastructure dependencies for the `vuhive-cloud` control plane:
 - **`groundhog2k/postgres`**: Lightweight, secure PostgreSQL 16+ instance.
 - **`minio/minio`**: S3-compatible standalone object storage server with pre-created buckets.
+- **`keycloak`**: Containerized OIDC Identity Provider and authorization server with declarative realm import.
 - **OpenAPI Viewer (`swaggerapi/swagger-ui`)**: Optional third-party interactive UI viewer for testing and exploring control plane APIs without bundling UI assets into the core Go control plane binary.
 
 > [!WARNING]
-> This chart is intended for **local development and evaluation** only (e.g., Rancher Desktop, Kind, Minikube). For production deployments, provision PostgreSQL and S3/MinIO via managed cloud services and reference them from the [`vuhive-cloud`](../vuhive-cloud/README.md) chart using `existingSecret`.
+> This chart is intended for **local development and evaluation** only (e.g., Rancher Desktop, Kind, Minikube). For production deployments, provision PostgreSQL, S3/Object Storage, and OIDC Identity Providers via managed cloud services or enterprise clusters, and reference them from the [`vuhive-cloud`](../vuhive-cloud/README.md) chart using `existingSecret` and `values-production.yaml`. See [External Infrastructure & Third-Party Deployment Scenarios](../../README.md#external-infrastructure--third-party-deployment-scenarios) for architecture and deployment guidance.
 
 > **Documentation Navigation**:
 > - **System Architecture & Overview**: [`README.md`](../../README.md) and [`ARCHITECTURE_SPEC.md`](../../ARCHITECTURE_SPEC.md)
