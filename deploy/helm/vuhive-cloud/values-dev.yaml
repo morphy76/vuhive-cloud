@@ -1,0 +1,22 @@
+# vuhive-cloud — Local Development Helm Values
+# Standardized values template for local Kubernetes environments (Rancher Desktop, k3s, minikube)
+# utilizing local container images built via 'make docker-build' with BuildKit --load.
+#
+# Usage:
+#   helm install vuhive deploy/helm/vuhive-cloud \
+#     --namespace vuhive-system \
+#     -f deploy/helm/vuhive-cloud/values-dev.yaml
+
+image:
+  repository: vuhive/server
+  tag: local
+  pullPolicy: Never
+
+runner:
+  initImage: vuhive/runner-init:local
+
+bff:
+  image:
+    repository: vuhive/bff
+    tag: local
+    pullPolicy: Never

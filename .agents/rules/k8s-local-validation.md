@@ -106,11 +106,9 @@ Deploy the control plane with local images and namespace overrides:
 ```bash
 helm --kube-context rancher-desktop install vuhive deploy/helm/vuhive-cloud \
   --namespace "${SMOKE_NS}" \
-  --set image.repository=vuhive/server \
-  --set image.tag=local \
+  -f deploy/helm/vuhive-cloud/values-dev.yaml \
   --set runner.namespace="${SMOKE_NS}" \
   --set builder.namespace="${SMOKE_NS}" \
-  --set runner.initImage=vuhive/runner-init:local \
   --wait --timeout=120s
 ```
 
