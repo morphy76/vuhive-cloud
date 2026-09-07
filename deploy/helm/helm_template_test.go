@@ -270,3 +270,40 @@ func TestHelmChart_BFF_CustomExistingSecretsAndURL(t *testing.T) {
 	assert.Equal(t, "my-session-key", sessionKey)
 }
 
+func TestHelmChart_BFF_PostgresSessionAndServiceAlias(t *testing.T) {
+	rendered := runHelmTemplate(t,
+		"--set", "bff.replicaCount=2",
+		"--set", "bff.session.encryptionKey=my-32-byte-secret-encryption-key",
+		"--set", "bff.database.url=postgres://bff:secret@custom-pg:5432/bffdb",
+	)
+	docs := splitManifests(rendered)
+
+	// Check Deployment replicas and env
+	bffDep := findResource(docs, "Deployment", "vuhive-vuhive-cloud-bff")
+	require.NotNil(t, bffDep)
+	spec := bffDep["spec"].(map[string]interface{})
+	assert.Equal(t, 2, spec["replicas"])
+
+	tmpl := spec["template"].(map[string]interface{})
+	podSpec := tmpl["spec"].(map[string]interface{})
+	containers := podSpec["containers"].([]interface{})
+	bffContainer := containers[0].(map[string]interface{})
+	envList := bffContainer["env"].([]interface{})
+
+	var dbURLVal string
+	for _, e := range envList {
+		eMap := e.(map[string]interface{})
+		if eMap["name"] == "DATABASE_URL" {
+			if val, ok := eMap["value"]; ok {
+				dbURLVal = val.(string)
+			}
+		}
+	}
+	assert.Equal(t, "postgres://bff:secret@custom-pg:5432/bffdb", dbURLVal)
+
+	// Check alias service vuhive-cloud-bff exists
+	aliasSvc := findResource(docs, "Service", "vuhive-cloud-bff")
+	require.NotNil(t, aliasSvc)
+}
+
+

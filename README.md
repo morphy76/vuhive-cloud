@@ -451,6 +451,18 @@ For detailed instructions on local cluster validation, BuildKit containerd image
 # Run BFF with embedded SPA assets
 ./bin/bff --port=8081 --control-plane-url=http://localhost:8080
 
+# Run BFF with persistent PostgreSQL sessions and automatic startup migrations
+./bin/bff --port=8081 --control-plane-url=http://localhost:8080 \
+  --database-url="postgres://vuhive:vuhive-dev@localhost:5432/vuhive?sslmode=disable" \
+  --session-encryption-key="your-32-byte-aes256-secret-key"
+
+# Run BFF with Keycloak OIDC Token Handler authentication enabled
+./bin/bff --port=8081 --control-plane-url=http://localhost:8080 \
+  --database-url="postgres://vuhive:vuhive-dev@localhost:5432/vuhive?sslmode=disable" \
+  --keycloak-issuer-url="http://localhost:8082/realms/vuhive" \
+  --keycloak-client-id="vuhive-cloud-bff" \
+  --keycloak-client-secret="vuhive-bff-secret"
+
 # Run BFF during frontend development with Vite HMR reverse proxying
 ./bin/bff --port=8081 --control-plane-url=http://localhost:8080 --dev-proxy-url=http://localhost:5173
 

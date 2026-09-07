@@ -56,12 +56,27 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ default (include "vuhive-cloud.fullname" .) (default (dict) (default (dict) .Values.bff).keycloak).clientSecretExistingSecret }}
-                  key: {{ default "BFF_KEYCLOAK_CLIENT_SECRET" (default (dict) (default (dict) .Values.bff).keycloak).clientSecretKey }}
+                  key: {{ if (default (dict) (default (dict) .Values.bff).keycloak).clientSecretExistingSecret }}{{ (default (dict) (default (dict) .Values.bff).keycloak).clientSecretKey }}{{ else }}BFF_KEYCLOAK_CLIENT_SECRET{{ end }}
             - name: SESSION_COOKIE_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ default (include "vuhive-cloud.fullname" .) (default (dict) (default (dict) .Values.bff).keycloak).sessionCookieSecretRef }}
-                  key: {{ default "BFF_SESSION_COOKIE_SECRET" (default (dict) (default (dict) .Values.bff).keycloak).sessionCookieSecretKey }}
+                  key: {{ if (default (dict) (default (dict) .Values.bff).keycloak).sessionCookieSecretRef }}{{ (default (dict) (default (dict) .Values.bff).keycloak).sessionCookieSecretKey }}{{ else }}BFF_SESSION_COOKIE_SECRET{{ end }}
+            - name: SESSION_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "vuhive-cloud.fullname" .) (default (dict) (default (dict) .Values.bff).session).encryptionKeyExistingSecret }}
+                  key: {{ if (default (dict) (default (dict) .Values.bff).session).encryptionKeyExistingSecret }}{{ (default (dict) (default (dict) .Values.bff).session).encryptionKeyKey }}{{ else }}BFF_SESSION_ENCRYPTION_KEY{{ end }}
+            {{- if (default (dict) (default (dict) .Values.bff).database).url }}
+            - name: DATABASE_URL
+              value: {{ (default (dict) (default (dict) .Values.bff).database).url | quote }}
+            {{- else }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (default (include "vuhive-cloud.fullname" .) .Values.database.existingSecret) (default (dict) (default (dict) .Values.bff).database).existingSecret }}
+                  key: {{ default (default "DATABASE_URL" .Values.database.existingSecretKey) (default (dict) (default (dict) .Values.bff).database).existingSecretKey }}
+            {{- end }}
             {{- if .Values.bff.controlPlaneToken }}
             - name: CONTROL_PLANE_TOKEN
               value: {{ .Values.bff.controlPlaneToken | quote }}
