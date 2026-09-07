@@ -449,11 +449,61 @@ func TestRunService_TriggerRun(t *testing.T) {
 
 		assert.Equal(t, model.RunStatusQueued, run.Status())
 		assert.Equal(t, "vuhive-run-"+run.ID(), run.K8sJobName())
+		assert.Equal(t, model.DefaultRunnerNamespace, run.K8sNamespace())
 		assert.Contains(t, orchestrator.dispatchedJobs, run.ID())
 
 		saved, err := runRepo.FindByID(ctx, run.ID())
 		require.NoError(t, err)
 		assert.Equal(t, run.ID(), saved.ID())
+		assert.Equal(t, model.DefaultRunnerNamespace, saved.K8sNamespace())
+	})
+
+	t.Run("successfully trigger run respecting configured runner namespace on RunService", func(t *testing.T) {
+		_, suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, storage, suite, artifact, profile := setupTestRunServiceWithStorage(t)
+		svcWithNs := service.NewRunService(
+			suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, storage,
+			service.WithRunnerNamespace("custom-runner-ns"),
+		)
+
+		cmd := inbound.TriggerRunCommand{
+			SuiteID:         suite.ID(),
+			ArtifactID:      artifact.ID(),
+			RunnerProfileID: profile.ID(),
+		}
+
+		run, err := svcWithNs.TriggerRun(ctx, cmd)
+		require.NoError(t, err)
+		require.NotNil(t, run)
+		assert.Equal(t, "custom-runner-ns", run.K8sNamespace())
+
+		saved, err := runRepo.FindByID(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, "custom-runner-ns", saved.K8sNamespace())
+	})
+
+	t.Run("successfully trigger run with per-run runner namespace override", func(t *testing.T) {
+		_, suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, storage, suite, artifact, profile := setupTestRunServiceWithStorage(t)
+		svcWithNs := service.NewRunService(
+			suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, orchestrator, storage,
+			service.WithRunnerNamespace("custom-runner-ns"),
+		)
+
+		overrideNs := "override-ns"
+		cmd := inbound.TriggerRunCommand{
+			SuiteID:         suite.ID(),
+			ArtifactID:      artifact.ID(),
+			RunnerProfileID: profile.ID(),
+			RunnerNamespace: &overrideNs,
+		}
+
+		run, err := svcWithNs.TriggerRun(ctx, cmd)
+		require.NoError(t, err)
+		require.NotNil(t, run)
+		assert.Equal(t, "override-ns", run.K8sNamespace())
+
+		saved, err := runRepo.FindByID(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, "override-ns", saved.K8sNamespace())
 	})
 
 	t.Run("successfully trigger run with configuration", func(t *testing.T) {

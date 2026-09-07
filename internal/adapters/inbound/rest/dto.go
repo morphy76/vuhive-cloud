@@ -317,6 +317,7 @@ type TriggerRunRequest struct {
 	ArtifactID      string  `json:"artifact_id" binding:"required"`
 	ConfigurationID *string `json:"configuration_id,omitempty"`
 	RunnerProfileID string  `json:"runner_profile_id" binding:"required"`
+	RunnerNamespace *string `json:"runner_namespace,omitempty"`
 }
 
 // CompleteRunRequest encapsulates the request body for POST /api/v1/runs/{id}/complete.

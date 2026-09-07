@@ -47,8 +47,10 @@ func (g *RunnerJobGenerator) GenerateJob(
 	configKey := strings.TrimSpace(opts.S3ConfigKey)
 
 	namespace := strings.TrimSpace(run.K8sNamespace())
-	if namespace == "" {
-		namespace = strings.TrimSpace(g.cfg.RunnerNamespace)
+	if namespace == "" || namespace == model.DefaultRunnerNamespace {
+		if strings.TrimSpace(g.cfg.RunnerNamespace) != "" {
+			namespace = strings.TrimSpace(g.cfg.RunnerNamespace)
+		}
 	}
 	if namespace == "" {
 		namespace = model.DefaultRunnerNamespace

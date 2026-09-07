@@ -51,6 +51,7 @@ func (h *RunHandler) TriggerRun(c *gin.Context) {
 		ArtifactID:      req.ArtifactID,
 		ConfigurationID: req.ConfigurationID,
 		RunnerProfileID: req.RunnerProfileID,
+		RunnerNamespace: req.RunnerNamespace,
 	}
 
 	run, err := h.runsUC.TriggerRun(ctx, cmd)

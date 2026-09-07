@@ -55,6 +55,18 @@ func TestNewTestRun(t *testing.T) {
 		_, err = model.NewTestRun("suite-1", "art-1", nil, "", nil)
 		assert.ErrorIs(t, err, model.ErrValidation)
 	})
+
+	t.Run("successfully create with custom runner namespace", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil, "custom-runners")
+		require.NoError(t, err)
+		assert.Equal(t, "custom-runners", run.K8sNamespace())
+	})
+
+	t.Run("fallback to default runner namespace when provided namespace is blank", func(t *testing.T) {
+		run, err := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil, "   ")
+		require.NoError(t, err)
+		assert.Equal(t, model.DefaultRunnerNamespace, run.K8sNamespace())
+	})
 }
 
 func TestTestRun_StateTransitions(t *testing.T) {
