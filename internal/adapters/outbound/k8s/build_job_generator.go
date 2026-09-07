@@ -78,6 +78,8 @@ wget -qO /workspace/source.tar.gz "${SOURCE_URL}"
 echo "Extracting source archive..."
 tar -xzf /workspace/source.tar.gz -C /workspace/src
 cd /workspace/src
+echo "Tidying module dependencies..."
+go mod tidy
 echo "Compiling static binary for GOOS=linux GOARCH=%s..."
 CGO_ENABLED=0 GOOS=linux GOARCH=%s go build -trimpath -ldflags="-s -w" -o /workspace/bin/runner .
 echo "Calculating SHA256 checksum..."

@@ -205,12 +205,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/morphy76/vuhive"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 func NewScenario() *vuhive.Scenario {
 	client := &http.Client{Timeout: 5 * time.Second}
-
 	return vuhive.NewScenario("Smoke Test").
 		Step("Ping", func(ctx context.Context) error {
 			resp, err := client.Get("http://vuhive-vuhive-cloud:8080/healthz")

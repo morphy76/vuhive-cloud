@@ -55,7 +55,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/morphy76/vuhive"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 func NewScenario() *vuhive.Scenario {
@@ -453,5 +453,7 @@ func TestStaticAnalyzer_PrepareSourceArchive(t *testing.T) {
 		assert.Contains(t, mainContent, "mytest/scenario")
 		assert.Contains(t, mainContent, "scenario.NewScenario()")
 		assert.Contains(t, mainContent, `"summary-export"`)
+		assert.Contains(t, mainContent, `"github.com/morphy76/vuhive/pkg/vuhive"`)
+		assert.NotContains(t, mainContent, "\t\"github.com/morphy76/vuhive\"\n")
 	})
 }

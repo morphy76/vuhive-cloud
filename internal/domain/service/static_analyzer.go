@@ -242,7 +242,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/morphy76/vuhive"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 	"%s/scenario"
 )
 

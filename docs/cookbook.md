@@ -87,7 +87,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/morphy76/vuhive"
+	"github.com/morphy76/vuhive/pkg/vuhive"
 )
 
 func NewScenario() *vuhive.Scenario {
@@ -123,6 +123,8 @@ tar -czvf test-suite.tar.gz scenario.go go.mod
 ```
 
 > [!TIP]
+> The engine module path is `github.com/morphy76/vuhive`, but the engine package itself resides under `github.com/morphy76/vuhive/pkg/vuhive`. Ensure your scenario imports `"github.com/morphy76/vuhive/pkg/vuhive"`. During compilation, the ephemeral build job automatically executes `go mod tidy` to reconcile any module dependencies and generate static runner binaries.
+>
 > You may organize helper packages or multiple Go files inside subdirectories, as long as the scenario entrypoint is declared under `package scenario` and `go.mod` sits at the package root.
 
 ### C. Scenario Configuration (`vuhive.yaml`)
@@ -1695,7 +1697,7 @@ The UI introduces two core guidance primitives adhering strictly to **WCAG 2.1 A
 
 | Domain Concept | UI Location | Key Invariants & Guidance Provided |
 |---|---|---|
-| **AST Static Analysis** | New Suite Dialog (`CreateSuiteDialog`) | Scenarios must declare `package scenario` (never user `package main` or `func main()`) and import `github.com/morphy76/vuhive`. Forbidden packages (`os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`) trigger immediate pre-build rejection. |
+| **AST Static Analysis** | New Suite Dialog (`CreateSuiteDialog`) | Scenarios must declare `package scenario` (never user `package main` or `func main()`) and import `github.com/morphy76/vuhive/pkg/vuhive`. Forbidden packages (`os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`) trigger immediate pre-build rejection. |
 | **CPU Millicores** | New Execution Dialog (`TriggerRunDialog`) | Explains Kubernetes millicore allocation (e.g. `500m` = 0.5 CPU, `1000m` = 1 vCPU). Recommends setting requests equal to limits to guarantee CPU scheduling without throttling. |
 | **Memory Units** | New Execution Dialog (`TriggerRunDialog`) | Explains Kubernetes binary SI units (e.g. `512Mi`, `1Gi`, `2Gi`). Warns that memory limits enforce container boundaries; exceeding them triggers kernel `OOMKilled` terminations. |
 | **Node Tolerations** | New Execution Dialog (`TriggerRunDialog`) | Details toleration syntax (`key=value:Effect`, e.g. `dedicated=loadgen:NoSchedule`) for scheduling runner pods onto tainted high-performance benchmark nodes. |
