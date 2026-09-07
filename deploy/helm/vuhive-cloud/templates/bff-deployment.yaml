@@ -1,0 +1,90 @@
+{{- if (default (dict) .Values.bff).enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vuhive-cloud.bff.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud.bff.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.bff.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "vuhive-cloud.bff.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/bff-configmap.yaml") . | sha256sum }}
+        {{- with .Values.bff.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "vuhive-cloud.bff.selectorLabels" . | nindent 8 }}
+        {{- with .Values.bff.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "vuhive-cloud.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml (default .Values.podSecurityContext .Values.bff.podSecurityContext) | nindent 8 }}
+      containers:
+        - name: bff
+          securityContext:
+            {{- toYaml (default .Values.securityContext .Values.bff.securityContext) | nindent 12 }}
+          image: "{{ .Values.bff.image.repository }}:{{ .Values.bff.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.bff.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.bff.service.targetPort }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "vuhive-cloud.bff.fullname" . }}
+            {{- with .Values.bff.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "vuhive-cloud.fullname" .) (default (dict) (default (dict) .Values.bff).keycloak).clientSecretExistingSecret }}
+                  key: {{ default "BFF_KEYCLOAK_CLIENT_SECRET" (default (dict) (default (dict) .Values.bff).keycloak).clientSecretKey }}
+            - name: SESSION_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "vuhive-cloud.fullname" .) (default (dict) (default (dict) .Values.bff).keycloak).sessionCookieSecretRef }}
+                  key: {{ default "BFF_SESSION_COOKIE_SECRET" (default (dict) (default (dict) .Values.bff).keycloak).sessionCookieSecretKey }}
+            {{- if .Values.bff.controlPlaneToken }}
+            - name: CONTROL_PLANE_TOKEN
+              value: {{ .Values.bff.controlPlaneToken | quote }}
+            {{- end }}
+            {{- with .Values.bff.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.bff.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.bff.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.bff.resources | nindent 12 }}
+      {{- with .Values.bff.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.bff.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.bff.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

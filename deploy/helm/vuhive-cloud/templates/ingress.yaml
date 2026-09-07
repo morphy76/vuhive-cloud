@@ -1,6 +1,8 @@
 {{- if .Values.ingress.enabled -}}
 {{- $fullName := include "vuhive-cloud.fullname" . -}}
 {{- $svcPort := .Values.service.port -}}
+{{- $bffFullName := include "vuhive-cloud.bff.fullname" . -}}
+{{- $bffPort := (default (dict) (default (dict) .Values.bff).service).port | default 8081 -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -31,6 +33,54 @@ spec:
     - host: {{ .host | quote }}
       http:
         paths:
+          {{- if (default (dict) $.Values.bff).enabled }}
+          - path: /api/v1/bff/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $bffFullName }}
+                port:
+                  number: {{ $bffPort }}
+          - path: /api/bff/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $bffFullName }}
+                port:
+                  number: {{ $bffPort }}
+          - path: /api/v1/bff
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $bffFullName }}
+                port:
+                  number: {{ $bffPort }}
+          - path: /api/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $svcPort }}
+          {{- range .paths }}
+          {{- if ne .path "/" }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ default $fullName .serviceName }}
+                port:
+                  number: {{ default $svcPort .servicePort }}
+          {{- end }}
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $bffFullName }}
+                port:
+                  number: {{ $bffPort }}
+          {{- else }}
           {{- range .paths }}
           - path: {{ .path }}
             pathType: {{ .pathType }}
@@ -40,5 +90,7 @@ spec:
                 port:
                   number: {{ $svcPort }}
           {{- end }}
+          {{- end }}
     {{- end }}
 {{- end }}
+

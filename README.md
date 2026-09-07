@@ -71,6 +71,8 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
                                     └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+The official Helm chart ([`deploy/helm/vuhive-cloud`](./deploy/helm/vuhive-cloud/README.md)) deploys both the core control plane server (`cmd/server`) and the Go BFF (`cmd/bff`, enabled by default) with unified Ingress routing. The Ingress automatically routes web dashboard traffic, BFF aggregations, and Keycloak OIDC Token Handler sessions (`/`, `/api/bff/v1`, `/api/v1/bff/auth`) to the BFF service, while routing core APIs (`/api/v1`) directly to the control plane server.
+
 For complete architectural specifications, DDD aggregate boundaries, and database schemas, see **[`ARCHITECTURE_SPEC.md`](./ARCHITECTURE_SPEC.md)**.
 
 ---
