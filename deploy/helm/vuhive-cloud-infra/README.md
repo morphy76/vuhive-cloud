@@ -84,12 +84,23 @@ Then navigate to `http://localhost:8081` in your desktop browser. Swagger UI ini
 
 Because modern web browsers enforce the Same-Origin Policy when fetching resources across different ports or hostnames, the `vuhive-cloud` control plane includes built-in Cross-Origin Resource Sharing (CORS) middleware and responds to HTTP `OPTIONS` preflight requests with `204 No Content` and standard CORS headers (`Access-Control-Allow-Origin: *`), ensuring seamless API exploration and ad-hoc request testing without browser blocks.
 
+### MinIO (S3-Compatible Object Storage)
+
+MinIO provides local S3-compatible object storage for test scenario archives, compiled binaries, and execution logs:
+- **S3 API Endpoint (Port `9000`)**: `http://vuhive-infra-minio:9000` — configured as `s3.endpoint` in `vuhive-cloud`.
+- **MinIO Console / WebUI (Port `9001`)**:
+  ```bash
+  kubectl port-forward -n vuhive-system svc/vuhive-infra-minio 9001:9001
+  ```
+  Navigate to `http://localhost:9001` and sign in with root credentials (`vuhive-dev` / `vuhive-dev-secret`).
+
 ### Keycloak (OIDC Identity Provider & Authorization Server)
 
 Keycloak provides OIDC authentication and token issuance for the control plane and developer CLI:
 - **Image**: `quay.io/keycloak/keycloak:26.1.0`
 - **Database Backend**: Automatically connects to the in-chart PostgreSQL instance (`vuhive-infra-postgresql`).
 - **Declarative Realm Import**: Imports `files/vuhive-realm.json` defining the `vuhive` realm with **zero pre-created users**, standard roles (`vuhive-admin`, `vuhive-deployer`, `vuhive-developer`, `vuhive-viewer`, `vuhive-runner`), groups (`/administrators`, `/deployers`, `/developers`, `/viewers`), and clients (`vuhive-cloud-api`, `vuhive-cloud-cli`, `vuhive-runner`, `vuhive-cloud-bff`).
+- **Backchannel Logout Resolution**: Pre-configured with backchannel logout targeting the canonical BFF service `http://vuhive-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`.
 - **Accessing Keycloak Admin Console via Port-Forwarding**:
   ```bash
   kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-keycloak 8082:8080

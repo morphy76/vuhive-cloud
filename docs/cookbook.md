@@ -1977,7 +1977,7 @@ Within your Keycloak realm (e.g., `vuhive`), configure the BFF client:
 4. **Advanced Settings & PKCE**:
    - **Proof Key for Code Exchange (PKCE) Code Challenge Method**: `S256` (enforces SHA-256 code challenge verification)
    - **Backchannel logout URL**:
-     - *In-Cluster (Evaluations & Internal Mesh)*: `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (or release-prefixed `http://<release>-vuhive-cloud-bff:8081/...`)
+     - *In-Cluster (Evaluations & Internal Mesh)*: `http://<release>-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (e.g. `http://vuhive-vuhive-cloud-bff:8081/...` for release `vuhive`, or `http://vuhive-cloud-bff:8081/...` for release `vuhive-cloud`)
      - *External Ingress (Production IdP)*: `https://loadtest.example.com/api/v1/bff/auth/backchannel-logout`
    - **Backchannel logout session required**: `ON` (ensures Keycloak includes the `sid` claim in logout tokens)
    - **Backchannel logout revoke offline sessions**: `ON`
@@ -2106,7 +2106,7 @@ bff:
 
 **Key Operational Capabilities:**
 1. **Shared State & Zero Session Drop on Pod Restarts**: Because sessions and rotated OAuth tokens persist in PostgreSQL (`bff_sessions`) with AES-256-GCM encryption, ingress traffic can be routed round-robin to any BFF replica. If a pod terminates, crashes, or is rescheduled during rolling deployments, active user sessions continue without interruption.
-2. **Cluster-Wide Backchannel Logout**: When Keycloak issues an HTTP POST to `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`, any receiving BFF pod verifies the cryptographic RS256 token and invokes `RevokeByKeycloakSID`. This immediately invalidates the user's session record in PostgreSQL, immediately terminating authorization across all cluster pods.
+2. **Cluster-Wide Backchannel Logout**: When Keycloak issues an HTTP POST to the canonical BFF service endpoint (`http://<release>-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` or `https://<domain>/api/v1/bff/auth/backchannel-logout`), any receiving BFF pod verifies the cryptographic RS256 token and invokes `RevokeByKeycloakSID`. This immediately invalidates the user's session record in PostgreSQL, immediately terminating authorization across all cluster pods.
 3. **Automated Schema Evolution**: The BFF automatically checks and applies database migrations on startup using an isolated migration tracking table (`bff_goose_db_version`), allowing seamless parallel deployments with the core control plane.
 
 ---

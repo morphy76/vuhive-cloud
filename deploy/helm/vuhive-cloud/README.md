@@ -59,6 +59,27 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set s3.endpoint=http://vuhive-infra-minio:9000
 ```
 
+#### Local Development Deployment (`values-dev.yaml`)
+
+When testing local container images built via `make docker-build` with `--load` (e.g. on Rancher Desktop or local clusters), deploy using the standardized `values-dev.yaml` template:
+
+```bash
+helm install vuhive deploy/helm/vuhive-cloud \
+  --namespace vuhive-system \
+  -f deploy/helm/vuhive-cloud/values-dev.yaml \
+  --set database.host=vuhive-infra-postgresql \
+  --set s3.endpoint=http://vuhive-infra-minio:9000
+```
+
+This applies image overrides (`vuhive/server:local`, `vuhive/runner-init:local`, `vuhive/bff:local`) with `imagePullPolicy: Never` so the local CRI image store is utilized directly.
+
+> [!NOTE]
+> - **MinIO Ports**: MinIO exposes two distinct ports:
+>   - **Port `9000` (S3 API)**: Used by `s3.endpoint: http://vuhive-infra-minio:9000` for artifact uploads, binaries, and execution logs.
+>   - **Port `9001` (Console / WebUI)**: MinIO Web UI dashboard (access via `kubectl port-forward -n vuhive-system svc/vuhive-infra-minio 9001:9001`).
+> - **Path-Style S3 Addressing**: When `s3.endpoint` is non-empty (as in the MinIO case above), `s3.usePathStyle` is automatically treated as `true` by the control plane server, runner-init, and runner-wrapper. Path-style addressing (`http://<endpoint>/<bucket>/`) is required for MinIO because virtual-hosted-style URLs (`http://<bucket>.<service>/`) depend on DNS wildcards unavailable for Kubernetes Service names.
+> - **Database Schema Migrations**: The control plane runs automated Goose migrations on startup (or via `database.autoMigrate: true` pre-install hook), sequentially applying `000001_init_schema.sql`, `000002_retention_policies.sql`, and `000003_create_bff_sessions.sql`.
+
 #### Enabling OIDC Authentication & RBAC (with Keycloak)
 
 To secure the control plane REST API with Keycloak OpenID Connect and Role-Based Access Control:
@@ -74,9 +95,6 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set auth.runner.clientId=vuhive-runner \
   --set auth.runner.clientSecret=vuhive-runner-secret
 ```
-
-> [!NOTE]
-> When `s3.endpoint` is non-empty (as in the MinIO case above), `s3.usePathStyle` is automatically treated as `true` by the control plane server, runner-init, and runner-wrapper. Path-style addressing (`http://<endpoint>/<bucket>/`) is required for MinIO because virtual-hosted-style URLs (`http://<bucket>.<service>/`) depend on DNS wildcards unavailable for Kubernetes Service names.
 
 ### 3. Verify Health & Version Metadata
 
@@ -283,7 +301,7 @@ To bind an external Keycloak instance or existing corporate realm, administrator
    - **Valid Redirect URIs**: `https://<dashboard-domain>/*` (for local evaluation: `/*` or `http://localhost:8081/*`)
    - **Web Origins**: `+`
    - **Backchannel Logout URL**:
-     - *In-Cluster (Evaluations & Internal Mesh)*: `http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (or release-prefixed `http://<release>-vuhive-cloud-bff:8081/...`)
+     - *In-Cluster (Evaluations & Internal Mesh)*: `http://<release>-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout` (e.g. `http://vuhive-vuhive-cloud-bff:8081/...` when release name is `vuhive`, or `http://vuhive-cloud-bff:8081/...` when release name is `vuhive-cloud`)
      - *External Ingress (Production IdP)*: `https://<dashboard-domain>/api/v1/bff/auth/backchannel-logout`
    - **Backchannel Logout Session Required**: `On` (Mandatory: instructs Keycloak to embed the `sid` session ID claim in signed `logout_token` payloads, enabling targeted revocation of user sessions in PostgreSQL across all BFF replicas)
    - **Backchannel Logout Revoke Offline Sessions**: `On`
@@ -644,7 +662,7 @@ The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway an
   - `SESSION_COOKIE_SECRET`: Encryption key for securing `HttpOnly` session cookies in browser clients.
   - `SESSION_ENCRYPTION_KEY`: 32-byte AES-256-GCM encryption key for stored OAuth tokens at rest in PostgreSQL.
   - `DATABASE_URL`: PostgreSQL connection string. When provided, the BFF executes automatic startup migrations for `bff_sessions` using table `bff_goose_db_version`, enabling seamless horizontal scaling across multi-pod BFF deployments (`bff.replicaCount: 2+`).
-  - **Service Discovery**: The chart automatically creates both `<release>-bff` and `vuhive-cloud-bff` Service objects, ensuring Keycloak OIDC backchannel logout requests (`http://vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`) resolve seamlessly in cluster DNS.
+  - **Service Discovery**: The chart creates a single canonical Service named `{{ include "vuhive-cloud.bff.fullname" . }}` (e.g. `<release>-vuhive-cloud-bff` or `vuhive-cloud-bff`). Keycloak OIDC backchannel logout requests should target the canonical service URL (e.g., `http://<release>-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`).
 
 #### Progressive Web App (PWA) & HTTPS / Ingress Requirements
 

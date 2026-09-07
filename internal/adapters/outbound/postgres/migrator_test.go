@@ -2,6 +2,8 @@ package postgres_test
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/morphy76/vuhive-cloud/internal/adapters/outbound/postgres"
@@ -22,6 +24,36 @@ func TestEmbeddedMigrations(t *testing.T) {
 		}
 	}
 	assert.True(t, foundInit, "expected 000001_init_schema.sql to be embedded")
+}
+
+func TestEmbeddedMigrations_UniqueSequentialVersions(t *testing.T) {
+	entries, err := postgres.MigrationFS.ReadDir("migrations")
+	require.NoError(t, err)
+	require.NotEmpty(t, entries)
+
+	seenVersions := make(map[int]string)
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".sql") {
+			continue
+		}
+		parts := strings.SplitN(name, "_", 2)
+		require.Len(t, parts, 2, "migration filename must contain an underscore separator: %s", name)
+
+		var version int
+		_, err := fmt.Sscanf(parts[0], "%d", &version)
+		require.NoError(t, err, "migration prefix must be numeric: %s", name)
+
+		prevFile, exists := seenVersions[version]
+		assert.Falsef(t, exists, "duplicate migration version %06d found in files %s and %s", version, prevFile, name)
+		seenVersions[version] = name
+	}
+
+	// Verify continuous sequential ordering without gaps starting from 1
+	for v := 1; v <= len(seenVersions); v++ {
+		_, ok := seenVersions[v]
+		assert.Truef(t, ok, "missing migration version %06d in sequence", v)
+	}
 }
 
 func TestMigrateUpURL_InvalidURL(t *testing.T) {

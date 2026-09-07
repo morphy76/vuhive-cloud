@@ -139,14 +139,18 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --wait --timeout=120s
 ```
 
-> **MinIO Note**: Setting `s3.endpoint` automatically enables path-style S3 addressing in the control plane server, runner-init, and runner-wrapper — no extra flag needed. See the [Control Plane Helm Installation Guide (`deploy/helm/vuhive-cloud/README.md`)](./deploy/helm/vuhive-cloud/README.md) for full configuration reference and production deployment options.
+> **MinIO & Local Development Note**: Setting `s3.endpoint` automatically enables path-style S3 addressing (`port 9000`). When deploying locally built images (`make docker-build` with `--load`), pass `-f deploy/helm/vuhive-cloud/values-dev.yaml`. See the [Control Plane Helm Installation Guide (`deploy/helm/vuhive-cloud/README.md`)](./deploy/helm/vuhive-cloud/README.md) for full configuration reference and production deployment options.
 
 ### 3. Verify Health, Version & OpenAPI Endpoints
  
 Port-forward the control plane service:
 
 ```bash
+# Port-forward the control plane REST API (port 8080)
 kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080
+
+# In a separate terminal, port-forward the Web UI dashboard (port 8081)
+kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud-bff 8081:8081
 ```
 
 Verify service liveness, version, and OpenAPI specifications:
