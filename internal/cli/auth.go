@@ -218,7 +218,7 @@ func (a *AuthCommand) login(args []string, stdout, stderr io.Writer) int {
 				desc := q.Get("error_description")
 				errChan <- fmt.Errorf("oauth error %s: %s", errParam, desc)
 				w.WriteHeader(http.StatusBadRequest)
-				_, _ = fmt.Fprintf(w, "<h1>Authentication Failed</h1><p>%s: %s</p>", errParam, desc)
+				_, _ = w.Write([]byte("<h1>Authentication Failed</h1><p>An authentication error occurred. Please return to your terminal.</p>"))
 				return
 			}
 
