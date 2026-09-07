@@ -128,6 +128,45 @@ func TestProfileHandler_CreateProfile(t *testing.T) {
 		mockProfilesUC.AssertExpectations(t)
 	})
 
+	t.Run("successfully create profile with security policy attributes", func(t *testing.T) {
+		mockProfilesUC := new(MockProfilesUseCase)
+		router := rest.SetupRouter(nil, mockProfilesUC, nil, nil)
+
+		deadline := int64(1800)
+		runtimeClass := "gvisor"
+		sampleProfile := createSampleProfile(t, "prof-sec", "sec-profile")
+		sampleProfile.WithActiveDeadlineSeconds(&deadline).WithRuntimeClassName(&runtimeClass)
+
+		mockProfilesUC.On("CreateProfile", mock.Anything, mock.MatchedBy(func(cmd inbound.CreateProfileCommand) bool {
+			return cmd.Name == "sec-profile" &&
+				cmd.ActiveDeadlineSeconds != nil && *cmd.ActiveDeadlineSeconds == 1800 &&
+				cmd.RuntimeClassName != nil && *cmd.RuntimeClassName == "gvisor"
+		})).Return(sampleProfile, nil)
+
+		reqBody := rest.CreateProfileRequest{
+			Name:                  "sec-profile",
+			ActiveDeadlineSeconds: &deadline,
+			RuntimeClassName:      &runtimeClass,
+		}
+		raw, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/profiles", bytes.NewReader(raw))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+		var resp rest.ProfileResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.ActiveDeadlineSeconds)
+		assert.Equal(t, int64(1800), *resp.ActiveDeadlineSeconds)
+		require.NotNil(t, resp.RuntimeClassName)
+		assert.Equal(t, "gvisor", *resp.RuntimeClassName)
+		mockProfilesUC.AssertExpectations(t)
+	})
+
 	t.Run("fail with invalid json body returns 400", func(t *testing.T) {
 		mockProfilesUC := new(MockProfilesUseCase)
 		router := rest.SetupRouter(nil, mockProfilesUC, nil, nil)

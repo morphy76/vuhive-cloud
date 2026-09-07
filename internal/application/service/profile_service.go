@@ -89,6 +89,11 @@ func (s *ProfileService) CreateProfile(ctx context.Context, cmd inbound.CreatePr
 		return nil, err
 	}
 
+	if err := profile.UpdateSecurityPolicy(cmd.ActiveDeadlineSeconds, cmd.RuntimeClassName); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed applying security policy to runner profile")
+		return nil, err
+	}
+
 	if err := s.profileRepo.Save(ctx, profile); err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed saving runner profile to repository")
 		return nil, err
@@ -209,6 +214,11 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, id string, cmd inbou
 		cmd.Tolerations,
 	); err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed updating runner profile details")
+		return nil, err
+	}
+
+	if err := existing.UpdateSecurityPolicy(cmd.ActiveDeadlineSeconds, cmd.RuntimeClassName); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed updating runner profile security policy")
 		return nil, err
 	}
 

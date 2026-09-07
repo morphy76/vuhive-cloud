@@ -98,30 +98,34 @@ type BuildsUseCase interface {
 
 // CreateProfileCommand encapsulates input parameters for creating a new runner profile.
 type CreateProfileCommand struct {
-	Name          string
-	Description   string
-	RunnerImage   string
-	CPURequest    string
-	CPULimit      string
-	MemoryRequest string
-	MemoryLimit   string
-	NodeSelector  map[string]string
-	Affinity      model.Affinity
-	Tolerations   []model.Toleration
+	Name                  string
+	Description           string
+	RunnerImage           string
+	CPURequest            string
+	CPULimit              string
+	MemoryRequest         string
+	MemoryLimit           string
+	NodeSelector          map[string]string
+	Affinity              model.Affinity
+	Tolerations           []model.Toleration
+	ActiveDeadlineSeconds *int64
+	RuntimeClassName      *string
 }
 
 // UpdateProfileCommand encapsulates input parameters for updating a runner profile.
 type UpdateProfileCommand struct {
-	Name          string
-	Description   string
-	RunnerImage   string
-	CPURequest    string
-	CPULimit      string
-	MemoryRequest string
-	MemoryLimit   string
-	NodeSelector  map[string]string
-	Affinity      model.Affinity
-	Tolerations   []model.Toleration
+	Name                  string
+	Description           string
+	RunnerImage           string
+	CPURequest            string
+	CPULimit              string
+	MemoryRequest         string
+	MemoryLimit           string
+	NodeSelector          map[string]string
+	Affinity              model.Affinity
+	Tolerations           []model.Toleration
+	ActiveDeadlineSeconds *int64
+	RuntimeClassName      *string
 }
 
 // ProfilesUseCase defines driving use cases for managing reusable RunnerProfile entities.

@@ -197,4 +197,44 @@ func TestCronJobGenerator_GenerateCronJob(t *testing.T) {
 		_, err = generator.GenerateCronJob(schedule, profile, outbound.RunnerJobOptions{})
 		assert.ErrorIs(t, err, model.ErrValidation)
 	})
+
+	t.Run("generate cronjob respects security hardening, deadline precedence, and runtime class", func(t *testing.T) {
+		profileDeadline := int64(900)
+		runtimeClass := "kata"
+		p, err := model.NewRunnerProfile(
+			"cron-sec", "desc", "alpine:3.20", res, nil, model.Affinity{}, nil,
+		)
+		require.NoError(t, err)
+		p.WithActiveDeadlineSeconds(&profileDeadline).WithRuntimeClassName(&runtimeClass)
+
+		cronJob, err := generator.GenerateCronJob(schedule, p, opts)
+		require.NoError(t, err)
+
+		jobSpec := cronJob.Spec.JobTemplate.Spec
+		require.NotNil(t, jobSpec.ActiveDeadlineSeconds)
+		assert.Equal(t, int64(900), *jobSpec.ActiveDeadlineSeconds)
+
+		podSpec := jobSpec.Template.Spec
+		require.NotNil(t, podSpec.RuntimeClassName)
+		assert.Equal(t, "kata", *podSpec.RuntimeClassName)
+
+		hasTmpVolume := false
+		for _, v := range podSpec.Volumes {
+			if v.Name == "tmp-volume" && v.EmptyDir != nil {
+				hasTmpVolume = true
+				break
+			}
+		}
+		assert.True(t, hasTmpVolume, "pod must contain tmp-volume emptyDir")
+
+		// Opts override
+		optsDeadline := int64(450)
+		cronJob2, err := generator.GenerateCronJob(schedule, p, outbound.RunnerJobOptions{
+			S3BinaryKey:           "key",
+			ActiveDeadlineSeconds: &optsDeadline,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, cronJob2.Spec.JobTemplate.Spec.ActiveDeadlineSeconds)
+		assert.Equal(t, int64(450), *cronJob2.Spec.JobTemplate.Spec.ActiveDeadlineSeconds)
+	})
 }

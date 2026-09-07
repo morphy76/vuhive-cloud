@@ -470,6 +470,12 @@
       },
       "CreateProfileRequest": {
         "properties": {
+          "active_deadline_seconds": {
+            "description": "Optional active deadline timeout in seconds for runner Jobs (terminates runaway executions)",
+            "example": 1800,
+            "format": "int64",
+            "type": "integer"
+          },
           "affinity": {
             "$ref": "#/components/schemas/AffinityDTO"
           },
@@ -506,6 +512,11 @@
             "type": "object"
           },
           "runner_image": {
+            "type": "string"
+          },
+          "runtime_class_name": {
+            "description": "Optional Kubernetes RuntimeClass for container kernel isolation (e.g. gvisor, runsc, kata)",
+            "example": "gvisor",
             "type": "string"
           },
           "tolerations": {
@@ -847,6 +858,13 @@
       },
       "ProfileResponse": {
         "properties": {
+          "active_deadline_seconds": {
+            "description": "Active deadline timeout in seconds for runner Jobs",
+            "example": 1800,
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
           "affinity": {
             "$ref": "#/components/schemas/AffinityDTO"
           },
@@ -881,6 +899,12 @@
             "type": "object"
           },
           "runner_image": {
+            "type": "string"
+          },
+          "runtime_class_name": {
+            "description": "Kubernetes RuntimeClass for container isolation",
+            "example": "gvisor",
+            "nullable": true,
             "type": "string"
           },
           "tolerations": {
@@ -1741,6 +1765,12 @@
       },
       "UpdateProfileRequest": {
         "properties": {
+          "active_deadline_seconds": {
+            "description": "Optional active deadline timeout in seconds for runner Jobs (terminates runaway executions)",
+            "example": 1800,
+            "format": "int64",
+            "type": "integer"
+          },
           "affinity": {
             "$ref": "#/components/schemas/AffinityDTO"
           },
@@ -1769,6 +1799,11 @@
             "type": "object"
           },
           "runner_image": {
+            "type": "string"
+          },
+          "runtime_class_name": {
+            "description": "Optional Kubernetes RuntimeClass for container kernel isolation (e.g. gvisor, runsc, kata)",
+            "example": "gvisor",
             "type": "string"
           },
           "tolerations": {

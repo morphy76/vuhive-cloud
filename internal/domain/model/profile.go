@@ -173,16 +173,18 @@ func (r ResourceRequirements) MemoryLimit() string {
 
 // RunnerProfile represents a reusable compute configuration for executing test runners on Kubernetes.
 type RunnerProfile struct {
-	id           string
-	name         string
-	description  string
-	runnerImage  string
-	resources    ResourceRequirements
-	nodeSelector map[string]string
-	affinity     Affinity
-	tolerations  []Toleration
-	createdAt    time.Time
-	updatedAt    time.Time
+	id                    string
+	name                  string
+	description           string
+	runnerImage           string
+	resources             ResourceRequirements
+	nodeSelector          map[string]string
+	affinity              Affinity
+	tolerations           []Toleration
+	activeDeadlineSeconds *int64
+	runtimeClassName      *string
+	createdAt             time.Time
+	updatedAt             time.Time
 }
 
 const DefaultRunnerImage = "alpine:3.20"
@@ -314,6 +316,61 @@ func (p *RunnerProfile) Affinity() Affinity {
 // Tolerations returns the list of pod tolerations.
 func (p *RunnerProfile) Tolerations() []Toleration {
 	return p.tolerations
+}
+
+// ActiveDeadlineSeconds returns the optional active deadline timeout in seconds.
+func (p *RunnerProfile) ActiveDeadlineSeconds() *int64 {
+	return p.activeDeadlineSeconds
+}
+
+// RuntimeClassName returns the optional Kubernetes runtime class name for container isolation.
+func (p *RunnerProfile) RuntimeClassName() *string {
+	return p.runtimeClassName
+}
+
+// WithActiveDeadlineSeconds sets the active deadline seconds on the profile (fluent builder).
+func (p *RunnerProfile) WithActiveDeadlineSeconds(deadline *int64) *RunnerProfile {
+	if deadline != nil && *deadline > 0 {
+		d := *deadline
+		p.activeDeadlineSeconds = &d
+	} else {
+		p.activeDeadlineSeconds = nil
+	}
+	return p
+}
+
+// WithRuntimeClassName sets the runtime class name on the profile (fluent builder).
+func (p *RunnerProfile) WithRuntimeClassName(runtimeClass *string) *RunnerProfile {
+	if runtimeClass != nil && strings.TrimSpace(*runtimeClass) != "" {
+		rc := strings.TrimSpace(*runtimeClass)
+		p.runtimeClassName = &rc
+	} else {
+		p.runtimeClassName = nil
+	}
+	return p
+}
+
+// UpdateSecurityPolicy validates and updates active deadline and runtime class.
+func (p *RunnerProfile) UpdateSecurityPolicy(activeDeadlineSeconds *int64, runtimeClassName *string) error {
+	if activeDeadlineSeconds != nil && *activeDeadlineSeconds <= 0 {
+		return ErrInvalidDeadline
+	}
+	if activeDeadlineSeconds != nil {
+		d := *activeDeadlineSeconds
+		p.activeDeadlineSeconds = &d
+	} else {
+		p.activeDeadlineSeconds = nil
+	}
+
+	if runtimeClassName != nil && strings.TrimSpace(*runtimeClassName) != "" {
+		rc := strings.TrimSpace(*runtimeClassName)
+		p.runtimeClassName = &rc
+	} else {
+		p.runtimeClassName = nil
+	}
+
+	p.updatedAt = time.Now().UTC()
+	return nil
 }
 
 // CreatedAt returns when the profile was created.

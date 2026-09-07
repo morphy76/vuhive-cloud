@@ -2237,6 +2237,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TolerationDTO'
+        active_deadline_seconds:
+          type: integer
+          format: int64
+          description: Optional active deadline timeout in seconds for runner Jobs (terminates runaway executions)
+          example: 1800
+        runtime_class_name:
+          type: string
+          description: Optional Kubernetes RuntimeClass for container kernel isolation (e.g. gvisor, runsc, kata)
+          example: gvisor
 
     UpdateProfileRequest:
       type: object
@@ -2267,6 +2276,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TolerationDTO'
+        active_deadline_seconds:
+          type: integer
+          format: int64
+          description: Optional active deadline timeout in seconds for runner Jobs (terminates runaway executions)
+          example: 1800
+        runtime_class_name:
+          type: string
+          description: Optional Kubernetes RuntimeClass for container kernel isolation (e.g. gvisor, runsc, kata)
+          example: gvisor
 
     ProfileResponse:
       type: object
@@ -2307,6 +2325,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TolerationDTO'
+        active_deadline_seconds:
+          type: integer
+          format: int64
+          nullable: true
+          description: Active deadline timeout in seconds for runner Jobs
+          example: 1800
+        runtime_class_name:
+          type: string
+          nullable: true
+          description: Kubernetes RuntimeClass for container isolation
+          example: gvisor
         created_at:
           type: string
         updated_at:

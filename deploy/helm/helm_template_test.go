@@ -386,4 +386,39 @@ func TestHelmChart_ValuesProduction_BFFRendering(t *testing.T) {
 	assert.Equal(t, "DATABASE_URL", dbKey)
 }
 
+func TestHelmChart_NetworkPolicyRendering(t *testing.T) {
+	t.Run("disabled by default", func(t *testing.T) {
+		rendered := runHelmTemplate(t)
+		docs := splitManifests(rendered)
+		netPol := findResource(docs, "NetworkPolicy", "vuhive-vuhive-cloud-runner-isolation")
+		assert.Nil(t, netPol)
+	})
+
+	t.Run("rendered when networkPolicy.enabled is true", func(t *testing.T) {
+		rendered := runHelmTemplate(t,
+			"--set", "networkPolicy.enabled=true",
+			"--set", "runner.namespace=vuhive-runners",
+		)
+		docs := splitManifests(rendered)
+		netPol := findResource(docs, "NetworkPolicy", "vuhive-vuhive-cloud-runner-isolation")
+		require.NotNil(t, netPol)
+
+		metadata := netPol["metadata"].(map[string]interface{})
+		assert.Equal(t, "vuhive-runners", metadata["namespace"])
+
+		spec := netPol["spec"].(map[string]interface{})
+		podSelector := spec["podSelector"].(map[string]interface{})
+		matchLabels := podSelector["matchLabels"].(map[string]interface{})
+		assert.Equal(t, "vuhive-runner", matchLabels["app.kubernetes.io/name"])
+
+		egressList := spec["egress"].([]interface{})
+		require.NotEmpty(t, egressList)
+
+		// Check DNS rule
+		dnsRule := egressList[0].(map[string]interface{})
+		ports := dnsRule["ports"].([]interface{})
+		require.Len(t, ports, 2)
+	})
+}
+
 

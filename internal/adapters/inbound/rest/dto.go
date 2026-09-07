@@ -88,47 +88,53 @@ type AffinityDTO struct {
 
 // CreateProfileRequest represents the JSON request payload to create a new RunnerProfile.
 type CreateProfileRequest struct {
-	Name          string            `json:"name" binding:"required"`
-	Description   string            `json:"description,omitempty"`
-	RunnerImage   string            `json:"runner_image,omitempty"`
-	CPURequest    string            `json:"cpu_request,omitempty"`
-	CPULimit      string            `json:"cpu_limit,omitempty"`
-	MemoryRequest string            `json:"memory_request,omitempty"`
-	MemoryLimit   string            `json:"memory_limit,omitempty"`
-	NodeSelector  map[string]string `json:"node_selector,omitempty"`
-	Affinity      *AffinityDTO      `json:"affinity,omitempty"`
-	Tolerations   []TolerationDTO   `json:"tolerations,omitempty"`
+	Name                  string            `json:"name" binding:"required"`
+	Description           string            `json:"description,omitempty"`
+	RunnerImage           string            `json:"runner_image,omitempty"`
+	CPURequest            string            `json:"cpu_request,omitempty"`
+	CPULimit              string            `json:"cpu_limit,omitempty"`
+	MemoryRequest         string            `json:"memory_request,omitempty"`
+	MemoryLimit           string            `json:"memory_limit,omitempty"`
+	NodeSelector          map[string]string `json:"node_selector,omitempty"`
+	Affinity              *AffinityDTO      `json:"affinity,omitempty"`
+	Tolerations           []TolerationDTO   `json:"tolerations,omitempty"`
+	ActiveDeadlineSeconds *int64            `json:"active_deadline_seconds,omitempty"`
+	RuntimeClassName      *string           `json:"runtime_class_name,omitempty"`
 }
 
 // UpdateProfileRequest represents the JSON request payload to update an existing RunnerProfile.
 type UpdateProfileRequest struct {
-	Name          string            `json:"name" binding:"required"`
-	Description   string            `json:"description,omitempty"`
-	RunnerImage   string            `json:"runner_image,omitempty"`
-	CPURequest    string            `json:"cpu_request,omitempty"`
-	CPULimit      string            `json:"cpu_limit,omitempty"`
-	MemoryRequest string            `json:"memory_request,omitempty"`
-	MemoryLimit   string            `json:"memory_limit,omitempty"`
-	NodeSelector  map[string]string `json:"node_selector,omitempty"`
-	Affinity      *AffinityDTO      `json:"affinity,omitempty"`
-	Tolerations   []TolerationDTO   `json:"tolerations,omitempty"`
+	Name                  string            `json:"name" binding:"required"`
+	Description           string            `json:"description,omitempty"`
+	RunnerImage           string            `json:"runner_image,omitempty"`
+	CPURequest            string            `json:"cpu_request,omitempty"`
+	CPULimit              string            `json:"cpu_limit,omitempty"`
+	MemoryRequest         string            `json:"memory_request,omitempty"`
+	MemoryLimit           string            `json:"memory_limit,omitempty"`
+	NodeSelector          map[string]string `json:"node_selector,omitempty"`
+	Affinity              *AffinityDTO      `json:"affinity,omitempty"`
+	Tolerations           []TolerationDTO   `json:"tolerations,omitempty"`
+	ActiveDeadlineSeconds *int64            `json:"active_deadline_seconds,omitempty"`
+	RuntimeClassName      *string           `json:"runtime_class_name,omitempty"`
 }
 
 // ProfileResponse represents the JSON response payload for a RunnerProfile entity.
 type ProfileResponse struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	Description   string            `json:"description"`
-	RunnerImage   string            `json:"runner_image"`
-	CPURequest    string            `json:"cpu_request"`
-	CPULimit      string            `json:"cpu_limit"`
-	MemoryRequest string            `json:"memory_request"`
-	MemoryLimit   string            `json:"memory_limit"`
-	NodeSelector  map[string]string `json:"node_selector"`
-	Affinity      AffinityDTO       `json:"affinity"`
-	Tolerations   []TolerationDTO   `json:"tolerations"`
-	CreatedAt     string            `json:"created_at"`
-	UpdatedAt     string            `json:"updated_at"`
+	ID                    string            `json:"id"`
+	Name                  string            `json:"name"`
+	Description           string            `json:"description"`
+	RunnerImage           string            `json:"runner_image"`
+	CPURequest            string            `json:"cpu_request"`
+	CPULimit              string            `json:"cpu_limit"`
+	MemoryRequest         string            `json:"memory_request"`
+	MemoryLimit           string            `json:"memory_limit"`
+	NodeSelector          map[string]string `json:"node_selector"`
+	Affinity              AffinityDTO       `json:"affinity"`
+	Tolerations           []TolerationDTO   `json:"tolerations"`
+	ActiveDeadlineSeconds *int64            `json:"active_deadline_seconds,omitempty"`
+	RuntimeClassName      *string           `json:"runtime_class_name,omitempty"`
+	CreatedAt             string            `json:"created_at"`
+	UpdatedAt             string            `json:"updated_at"`
 }
 
 // ProfileListResponse represents the JSON response payload containing a list of RunnerProfiles.
@@ -210,19 +216,21 @@ func ToProfileResponse(p *model.RunnerProfile) ProfileResponse {
 	}
 
 	return ProfileResponse{
-		ID:            p.ID(),
-		Name:          p.Name(),
-		Description:   p.Description(),
-		RunnerImage:   p.RunnerImage(),
-		CPURequest:    p.Resources().CPURequest(),
-		CPULimit:      p.Resources().CPULimit(),
-		MemoryRequest: p.Resources().MemoryRequest(),
-		MemoryLimit:   p.Resources().MemoryLimit(),
-		NodeSelector:  nodeSelector,
-		Affinity:      ToAffinityDTO(p.Affinity()),
-		Tolerations:   ToTolerationsDTO(p.Tolerations()),
-		CreatedAt:     p.CreatedAt().Format(time.RFC3339),
-		UpdatedAt:     p.UpdatedAt().Format(time.RFC3339),
+		ID:                    p.ID(),
+		Name:                  p.Name(),
+		Description:           p.Description(),
+		RunnerImage:           p.RunnerImage(),
+		CPURequest:            p.Resources().CPURequest(),
+		CPULimit:              p.Resources().CPULimit(),
+		MemoryRequest:         p.Resources().MemoryRequest(),
+		MemoryLimit:           p.Resources().MemoryLimit(),
+		NodeSelector:          nodeSelector,
+		Affinity:              ToAffinityDTO(p.Affinity()),
+		Tolerations:           ToTolerationsDTO(p.Tolerations()),
+		ActiveDeadlineSeconds: p.ActiveDeadlineSeconds(),
+		RuntimeClassName:      p.RuntimeClassName(),
+		CreatedAt:             p.CreatedAt().Format(time.RFC3339),
+		UpdatedAt:             p.UpdatedAt().Format(time.RFC3339),
 	}
 }
 

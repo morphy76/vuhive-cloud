@@ -41,16 +41,18 @@ func (h *ProfileHandler) CreateProfile(c *gin.Context) {
 	}
 
 	cmd := inbound.CreateProfileCommand{
-		Name:          req.Name,
-		Description:   req.Description,
-		RunnerImage:   req.RunnerImage,
-		CPURequest:    req.CPURequest,
-		CPULimit:      req.CPULimit,
-		MemoryRequest: req.MemoryRequest,
-		MemoryLimit:   req.MemoryLimit,
-		NodeSelector:  req.NodeSelector,
-		Affinity:      FromAffinityDTO(req.Affinity),
-		Tolerations:   FromTolerationsDTO(req.Tolerations),
+		Name:                  req.Name,
+		Description:           req.Description,
+		RunnerImage:           req.RunnerImage,
+		CPURequest:            req.CPURequest,
+		CPULimit:              req.CPULimit,
+		MemoryRequest:         req.MemoryRequest,
+		MemoryLimit:           req.MemoryLimit,
+		NodeSelector:          req.NodeSelector,
+		Affinity:              FromAffinityDTO(req.Affinity),
+		Tolerations:           FromTolerationsDTO(req.Tolerations),
+		ActiveDeadlineSeconds: req.ActiveDeadlineSeconds,
+		RuntimeClassName:      req.RuntimeClassName,
 	}
 
 	profile, err := h.profilesUC.CreateProfile(ctx, cmd)
@@ -151,16 +153,18 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	cmd := inbound.UpdateProfileCommand{
-		Name:          req.Name,
-		Description:   req.Description,
-		RunnerImage:   req.RunnerImage,
-		CPURequest:    req.CPURequest,
-		CPULimit:      req.CPULimit,
-		MemoryRequest: req.MemoryRequest,
-		MemoryLimit:   req.MemoryLimit,
-		NodeSelector:  req.NodeSelector,
-		Affinity:      FromAffinityDTO(req.Affinity),
-		Tolerations:   FromTolerationsDTO(req.Tolerations),
+		Name:                  req.Name,
+		Description:           req.Description,
+		RunnerImage:           req.RunnerImage,
+		CPURequest:            req.CPURequest,
+		CPULimit:              req.CPULimit,
+		MemoryRequest:         req.MemoryRequest,
+		MemoryLimit:           req.MemoryLimit,
+		NodeSelector:          req.NodeSelector,
+		Affinity:              FromAffinityDTO(req.Affinity),
+		Tolerations:           FromTolerationsDTO(req.Tolerations),
+		ActiveDeadlineSeconds: req.ActiveDeadlineSeconds,
+		RuntimeClassName:      req.RuntimeClassName,
 	}
 
 	profile, err := h.profilesUC.UpdateProfile(ctx, profileID, cmd)

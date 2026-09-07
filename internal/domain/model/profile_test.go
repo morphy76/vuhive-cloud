@@ -472,3 +472,58 @@ func TestRunnerProfile_UpdateDetails(t *testing.T) {
 		assert.ErrorIs(t, err, model.ErrInvalidToleration)
 	})
 }
+
+func TestRunnerProfile_SecurityFields(t *testing.T) {
+	res, _ := model.NewResourceRequirements("1000m", "2000m", "1Gi", "2Gi")
+	profile, err := model.NewRunnerProfile("security-profile", "desc", "alpine:3.20", res, nil, model.Affinity{}, nil)
+	require.NoError(t, err)
+
+	assert.Nil(t, profile.ActiveDeadlineSeconds())
+	assert.Nil(t, profile.RuntimeClassName())
+
+	t.Run("set valid deadline and runtime class", func(t *testing.T) {
+		deadline := int64(1800)
+		runtimeClass := "gvisor"
+		err := profile.UpdateSecurityPolicy(&deadline, &runtimeClass)
+		require.NoError(t, err)
+
+		require.NotNil(t, profile.ActiveDeadlineSeconds())
+		assert.Equal(t, int64(1800), *profile.ActiveDeadlineSeconds())
+		require.NotNil(t, profile.RuntimeClassName())
+		assert.Equal(t, "gvisor", *profile.RuntimeClassName())
+	})
+
+	t.Run("fail with non-positive deadline", func(t *testing.T) {
+		invalidDeadline := int64(0)
+		err := profile.UpdateSecurityPolicy(&invalidDeadline, nil)
+		assert.ErrorIs(t, err, model.ErrInvalidDeadline)
+
+		negDeadline := int64(-50)
+		err = profile.UpdateSecurityPolicy(&negDeadline, nil)
+		assert.ErrorIs(t, err, model.ErrInvalidDeadline)
+	})
+
+	t.Run("clear security policy fields", func(t *testing.T) {
+		err := profile.UpdateSecurityPolicy(nil, nil)
+		require.NoError(t, err)
+		assert.Nil(t, profile.ActiveDeadlineSeconds())
+		assert.Nil(t, profile.RuntimeClassName())
+	})
+
+	t.Run("reconstruct with security fields", func(t *testing.T) {
+		deadline := int64(3600)
+		runtimeClass := "runsc"
+		now := time.Now()
+		p, err := model.NewRunnerProfileWithID(
+			"prof-sec", "sec-prof", "desc", "alpine:3.20",
+			res, nil, model.Affinity{}, nil, now, now,
+		)
+		require.NoError(t, err)
+		p.WithActiveDeadlineSeconds(&deadline).WithRuntimeClassName(&runtimeClass)
+
+		require.NotNil(t, p.ActiveDeadlineSeconds())
+		assert.Equal(t, int64(3600), *p.ActiveDeadlineSeconds())
+		require.NotNil(t, p.RuntimeClassName())
+		assert.Equal(t, "runsc", *p.RuntimeClassName())
+	})
+}
