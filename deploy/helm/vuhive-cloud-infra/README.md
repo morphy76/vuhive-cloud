@@ -88,7 +88,7 @@ Because modern web browsers enforce the Same-Origin Policy when fetching resourc
 Keycloak provides OIDC authentication and token issuance for the control plane and developer CLI:
 - **Image**: `quay.io/keycloak/keycloak:26.1.0`
 - **Database Backend**: Automatically connects to the in-chart PostgreSQL instance (`vuhive-infra-postgresql`).
-- **Declarative Realm Import**: Imports `files/vuhive-realm.json` defining the `vuhive` realm with **zero pre-created users**, standard roles (`vuhive-admin`, `vuhive-deployer`, `vuhive-developer`, `vuhive-viewer`, `vuhive-runner`), groups (`/administrators`, `/deployers`, `/developers`, `/viewers`), and clients (`vuhive-cloud-api`, `vuhive-cloud-cli`, `vuhive-runner`).
+- **Declarative Realm Import**: Imports `files/vuhive-realm.json` defining the `vuhive` realm with **zero pre-created users**, standard roles (`vuhive-admin`, `vuhive-deployer`, `vuhive-developer`, `vuhive-viewer`, `vuhive-runner`), groups (`/administrators`, `/deployers`, `/developers`, `/viewers`), and clients (`vuhive-cloud-api`, `vuhive-cloud-cli`, `vuhive-runner`, `vuhive-cloud-bff`).
 - **Accessing Keycloak Admin Console via Port-Forwarding**:
   ```bash
   kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-keycloak 8082:8080

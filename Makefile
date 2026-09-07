@@ -10,6 +10,7 @@ LDFLAGS := -s -w \
 
 DOCKER ?= docker
 SERVER_IMAGE ?= vuhive/server:local
+BFF_IMAGE ?= vuhive/bff:local
 RUNNER_INIT_IMAGE ?= vuhive/runner-init:local
 
 .PHONY: all
@@ -56,7 +57,7 @@ build-runner-init: ## Build runner init binary
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/runner-init ./cmd/runner-init
 
 .PHONY: docker-build
-docker-build: docker-build-server docker-build-runner-init ## Build all container images with --load for local cluster testing
+docker-build: docker-build-server docker-build-bff docker-build-runner-init ## Build all container images with --load for local cluster testing
 
 .PHONY: docker-build-server
 docker-build-server: ## Build control plane server container image with --load
@@ -66,6 +67,15 @@ docker-build-server: ## Build control plane server container image with --load
 		--build-arg BUILD_TIME=$(BUILD_TIME) \
 		-t $(SERVER_IMAGE) \
 		-f deploy/docker/server.Dockerfile .
+
+.PHONY: docker-build-bff
+docker-build-bff: ## Build BFF service container image with --load
+	$(DOCKER) build --load --provenance=false \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t $(BFF_IMAGE) \
+		-f deploy/docker/bff.Dockerfile .
 
 .PHONY: docker-build-runner-init
 docker-build-runner-init: ## Build runner-init container image with --load

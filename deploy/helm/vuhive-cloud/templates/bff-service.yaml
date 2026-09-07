@@ -1,0 +1,22 @@
+{{- if (default (dict) .Values.bff).enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "vuhive-cloud.bff.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud.bff.labels" . | nindent 4 }}
+  {{- with .Values.bff.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.bff.service.type }}
+  ports:
+    - port: {{ .Values.bff.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "vuhive-cloud.bff.selectorLabels" . | nindent 4 }}
+{{- end }}

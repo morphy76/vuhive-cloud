@@ -114,6 +114,34 @@
         "profile",
         "email"
       ]
+    },
+    {
+      "clientId": "vuhive-cloud-bff",
+      "name": "vuhive-cloud Go BFF Client",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "secret": "vuhive-bff-secret",
+      "redirectUris": [
+        "/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "backchannel.logout.url": "http://vuhive-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout",
+        "backchannel.logout.session.required": "true"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email"
+      ]
     }
   ]
 }
