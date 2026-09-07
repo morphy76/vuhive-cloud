@@ -98,7 +98,7 @@ MinIO provides local S3-compatible object storage for test scenario archives, co
 
 Keycloak provides OIDC authentication and token issuance for the control plane and developer CLI:
 - **Image**: `quay.io/keycloak/keycloak:26.1.0`
-- **Database Backend**: Automatically connects to the in-chart PostgreSQL instance (`vuhive-infra-postgresql`).
+- **Database Backend & Isolation**: Automatically connects to the in-chart PostgreSQL instance (`vuhive-infra-postgresql`) using a dedicated database (`keycloak`) provisioned during initial startup via PostgreSQL `customScripts` (`02-init-keycloak-db.sh`). This isolates Keycloak's 87 internal IAM tables entirely from the core control plane and BFF tables residing in the `vuhive` database's `public` schema. An optional dedicated schema can also be specified via `keycloak.database.schema`.
 - **Declarative Realm Import**: Imports `files/vuhive-realm.json` defining the `vuhive` realm with **zero pre-created users**, standard roles (`vuhive-admin`, `vuhive-deployer`, `vuhive-developer`, `vuhive-viewer`, `vuhive-runner`), groups (`/administrators`, `/deployers`, `/developers`, `/viewers`), and clients (`vuhive-cloud-api`, `vuhive-cloud-cli`, `vuhive-runner`, `vuhive-cloud-bff`).
 - **Backchannel Logout Resolution**: Pre-configured with backchannel logout targeting the canonical BFF service `http://vuhive-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`.
 - **Accessing Keycloak Admin Console via Port-Forwarding**:
@@ -115,6 +115,7 @@ Keycloak provides OIDC authentication and token issuance for the control plane a
 | `postgresql.userDatabase.name` | Application database name | `vuhive` |
 | `postgresql.userDatabase.user` | Application database user | `vuhive` |
 | `postgresql.userDatabase.password` | Application database password | `vuhive-dev` |
+| `postgresql.customScripts` | Custom PostgreSQL initialization scripts mounted into `/docker-entrypoint-initdb.d` | Provisions `keycloak` database via `02-init-keycloak-db.sh` |
 | `minio.rootUser` | MinIO root user | `vuhive-dev` |
 | `minio.rootPassword` | MinIO root password | `vuhive-dev-secret` |
 | `minio.buckets[0].name` | Default artifact bucket name | `vuhive-artifacts` |
@@ -124,6 +125,12 @@ Keycloak provides OIDC authentication and token issuance for the control plane a
 | `keycloak.image.tag` | Container image tag | `26.1.0` |
 | `keycloak.adminUser` | Keycloak bootstrap administrator username | `admin` |
 | `keycloak.adminPassword` | Keycloak bootstrap administrator password | `admin` |
+| `keycloak.database.host` | Keycloak PostgreSQL host (defaults to in-chart service) | `""` |
+| `keycloak.database.port` | Keycloak PostgreSQL port | `5432` |
+| `keycloak.database.name` | Isolated Keycloak database name | `keycloak` |
+| `keycloak.database.user` | Keycloak database user | `vuhive` |
+| `keycloak.database.password` | Keycloak database password | `vuhive-dev` |
+| `keycloak.database.schema` | Optional Keycloak database schema (`KC_DB_SCHEMA`) | `""` |
 | `keycloak.service.port` | Keycloak service port | `8080` |
 | `openapiViewer.enabled` | Deploy optional third-party OpenAPI viewer (Swagger UI) | `false` |
 | `openapiViewer.image.repository` | Container image repository for OpenAPI viewer | `swaggerapi/swagger-ui` |
@@ -139,3 +146,4 @@ Keycloak provides OIDC authentication and token issuance for the control plane a
 
 > **Note:** Default credentials are intended for local development only.
 > Always override secrets in production using `existingSecret` references.
+
