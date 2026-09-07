@@ -206,7 +206,7 @@ func (c *KeycloakClient) ExchangeCode(ctx context.Context, code, codeVerifier, r
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("token exchange HTTP request failed")
 		return nil, fmt.Errorf("%w: token exchange failed: %v", model.ErrInternal, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -276,7 +276,7 @@ func (c *KeycloakClient) RefreshToken(ctx context.Context, refreshToken string) 
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("token refresh HTTP request failed")
 		return nil, fmt.Errorf("%w: token refresh failed: %v", model.ErrInternal, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -348,7 +348,7 @@ func (c *KeycloakClient) RevokeToken(ctx context.Context, token, tokenTypeHint s
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("token revocation HTTP request failed")
 		return fmt.Errorf("%w: token revocation failed: %v", model.ErrInternal, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Warn().
@@ -533,7 +533,7 @@ func (c *KeycloakClient) refreshJWKS(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed fetching jwks: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status from jwks endpoint: %d", resp.StatusCode)
