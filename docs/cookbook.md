@@ -1109,6 +1109,33 @@ The BFF encapsulates session state and lifecycle rules in a pure DDD aggregate:
   - `MemorySessionStore` (`internal/bff/adapters/outbound/session/memory`): Fast, thread-safe, deep-copying store for unit testing and local development.
   - `PostgresSessionStore` (`internal/bff/adapters/outbound/session/postgres`): Clustered relational store supporting multi-pod horizontal scalability, AES-256-GCM token encryption at rest, and $O(1)$ Keycloak backchannel logout invalidation.
 
+##### B. PostgreSQL Schema & AES-256-GCM Token Encryption
+
+In multi-replica cloud deployments, session persistence in PostgreSQL (`bff_sessions`) eliminates pod-memory loss and guarantees that OIDC backchannel logout invalidations take effect cluster-wide:
+
+```sql
+CREATE TABLE IF NOT EXISTS bff_sessions (
+    id VARCHAR(128) PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    keycloak_sid VARCHAR(255),
+    access_token TEXT NOT NULL DEFAULT '',
+    refresh_token TEXT NOT NULL DEFAULT '',
+    id_token TEXT,
+    roles JSONB NOT NULL DEFAULT '[]'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bff_sessions_keycloak_sid ON bff_sessions(keycloak_sid);
+CREATE INDEX IF NOT EXISTS idx_bff_sessions_user_id ON bff_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_bff_sessions_expires_at ON bff_sessions(expires_at);
+```
+
+- **Index Optimization**: Lookups by cookie token hash (`id`) and Keycloak backchannel logout invalidations (`keycloak_sid`) operate in $O(1)$ time, while batch cleanup of expired sessions utilizes `idx_bff_sessions_expires_at`.
+- **Encryption at Rest**: When `SESSION_ENCRYPTION_KEY` (a 32-byte hexadecimal, base64, or passphrase string) is configured, the `TokenCipher` utility transparently encrypts `access_token`, `refresh_token`, and `id_token` using authenticated AES-256-GCM with randomized 12-byte nonces before persisting to PostgreSQL.
+
 ---
 
 

@@ -489,5 +489,11 @@ The control plane includes an automated retention lifecycle worker and housekeep
 | `bff.keycloak.sessionCookieSecretRef` | Name of existing Secret containing session cookie encryption secret | `""` |
 | `bff.keycloak.sessionCookieSecretKey` | Key within `sessionCookieSecretRef` containing secret | `session-cookie-secret` |
 | `bff.keycloak.sessionCookieName` | Cookie name for encrypted browser session | `vuhive_session` |
+| `bff.database.url` | PostgreSQL connection URL for persistent HTTP session store (`bff_sessions`) | `""` |
+| `bff.database.existingSecret` | Name of existing Secret containing PostgreSQL connection URL | `""` |
+| `bff.database.existingSecretKey` | Key within `existingSecret` containing the database connection URL | `database-url` |
+| `bff.session.encryptionKey` | 32-byte AES-256-GCM encryption key for stored OAuth tokens at rest | `""` |
+| `bff.session.encryptionKeyExistingSecret` | Name of existing Secret containing 32-byte session token encryption key | `""` |
+| `bff.session.encryptionKeyKey` | Key within `encryptionKeyExistingSecret` containing the encryption key | `session-encryption-key` |
 
 
