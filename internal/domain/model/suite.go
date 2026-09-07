@@ -145,6 +145,36 @@ func (s *TestSuite) Archive() error {
 	return nil
 }
 
+// SetDraft transitions the test suite into the DRAFT state.
+func (s *TestSuite) SetDraft() error {
+	if s.state == TestSuiteStateDraft {
+		return ErrInvalidStateTransition
+	}
+	s.state = TestSuiteStateDraft
+	s.updatedAt = time.Now().UTC()
+	return nil
+}
+
+// TransitionState transitions the test suite to target state or is a no-op if already in that state.
+func (s *TestSuite) TransitionState(target TestSuiteState) error {
+	if !target.IsValid() {
+		return ErrInvalidStateTransition
+	}
+	if s.state == target {
+		return nil
+	}
+	switch target {
+	case TestSuiteStateDraft:
+		return s.SetDraft()
+	case TestSuiteStateActive:
+		return s.Activate()
+	case TestSuiteStateArchived:
+		return s.Archive()
+	default:
+		return ErrInvalidStateTransition
+	}
+}
+
 // UpdateDetails updates the name and description of the test suite.
 func (s *TestSuite) UpdateDetails(name, description string) error {
 	if s.state == TestSuiteStateArchived {

@@ -587,4 +587,104 @@ func ToRetentionPolicyResponse(p model.RetentionPolicy) RetentionPolicyResponse 
 	}
 }
 
+// CreateSuiteRequest represents the request body to create a new TestSuite.
+type CreateSuiteRequest struct {
+	Name        string `json:"name" binding:"required"`
+	Description string `json:"description,omitempty"`
+}
 
+// UpdateSuiteRequest represents the request body to update an existing TestSuite.
+type UpdateSuiteRequest struct {
+	Name        string `json:"name" binding:"required"`
+	Description string `json:"description,omitempty"`
+	State       string `json:"state,omitempty"`
+}
+
+// SuiteResponse represents the JSON response for a TestSuite aggregate.
+type SuiteResponse struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	State       string `json:"state"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+// SuiteListResponse represents the JSON response containing a list of TestSuites.
+type SuiteListResponse struct {
+	Suites []SuiteResponse `json:"suites"`
+	Count  int             `json:"count"`
+}
+
+// CreateConfigRequest represents the request body to upload and attach a configuration to a TestSuite.
+type CreateConfigRequest struct {
+	Name        string `json:"name" binding:"required"`
+	ContentYAML string `json:"content_yaml" binding:"required"`
+	IsDefault   bool   `json:"is_default,omitempty"`
+}
+
+// ConfigResponse represents the JSON response for an attached scenario Configuration entity.
+type ConfigResponse struct {
+	ID          string `json:"id"`
+	SuiteID     string `json:"suite_id"`
+	Name        string `json:"name"`
+	ContentYAML string `json:"content_yaml"`
+	S3ConfigKey string `json:"s3_config_key"`
+	IsDefault   bool   `json:"is_default"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// ConfigListResponse represents the JSON response containing a list of Configurations.
+type ConfigListResponse struct {
+	Configs []ConfigResponse `json:"configs"`
+	Count   int              `json:"count"`
+}
+
+// ToSuiteResponse converts a domain model.TestSuite aggregate into a SuiteResponse DTO.
+func ToSuiteResponse(s *model.TestSuite) SuiteResponse {
+	return SuiteResponse{
+		ID:          s.ID(),
+		Name:        s.Name(),
+		Description: s.Description(),
+		State:       string(s.State()),
+		CreatedAt:   s.CreatedAt().Format(time.RFC3339),
+		UpdatedAt:   s.UpdatedAt().Format(time.RFC3339),
+	}
+}
+
+// ToSuiteListResponse converts a slice of domain model.TestSuite into a SuiteListResponse DTO.
+func ToSuiteListResponse(suites []*model.TestSuite) SuiteListResponse {
+	items := make([]SuiteResponse, 0, len(suites))
+	for _, s := range suites {
+		items = append(items, ToSuiteResponse(s))
+	}
+	return SuiteListResponse{
+		Suites: items,
+		Count:  len(items),
+	}
+}
+
+// ToConfigResponse converts a domain model.Configuration entity into a ConfigResponse DTO.
+func ToConfigResponse(c *model.Configuration) ConfigResponse {
+	return ConfigResponse{
+		ID:          c.ID(),
+		SuiteID:     c.SuiteID(),
+		Name:        c.Name(),
+		ContentYAML: c.ContentYAML(),
+		S3ConfigKey: c.S3ConfigKey(),
+		IsDefault:   c.IsDefault(),
+		CreatedAt:   c.CreatedAt().Format(time.RFC3339),
+	}
+}
+
+// ToConfigListResponse converts a slice of domain model.Configuration into a ConfigListResponse DTO.
+func ToConfigListResponse(configs []*model.Configuration) ConfigListResponse {
+	items := make([]ConfigResponse, 0, len(configs))
+	for _, c := range configs {
+		items = append(items, ToConfigResponse(c))
+	}
+	return ConfigListResponse{
+		Configs: items,
+		Count:   len(items),
+	}
+}

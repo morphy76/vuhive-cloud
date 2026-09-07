@@ -1081,6 +1081,393 @@ paths:
               schema:
                 $ref: '#/components/schemas/BarrierResponse'
 
+  /api/v1/suites:
+    get:
+      summary: List all test suites
+      description: Returns all test suites registered in the control plane ordered by creation timestamp.
+      operationId: listSuites
+      tags:
+        - Suites
+      responses:
+        '200':
+          description: List of test suites
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Create a test suite
+      description: Creates a new TestSuite aggregate in DRAFT state.
+      operationId: createSuite
+      tags:
+        - Suites
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSuiteRequest'
+      responses:
+        '201':
+          description: Test suite created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Suite name conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/suites/{id}:
+    get:
+      summary: Get test suite details
+      description: Retrieves details of a specific TestSuite by ID.
+      operationId: getSuite
+      tags:
+        - Suites
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test suite details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update test suite
+      description: Updates mutable properties (name, description, state) of a TestSuite.
+      operationId: updateSuite
+      tags:
+        - Suites
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSuiteRequest'
+      responses:
+        '200':
+          description: Test suite updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuiteResponse'
+        '400':
+          description: Validation or state transition error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Name collision conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete test suite
+      description: Deletes a TestSuite and cascading records by ID.
+      operationId: deleteSuite
+      tags:
+        - Suites
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Test suite deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/suites/{id}/configs:
+    get:
+      summary: List scenario configurations
+      description: Retrieves all attached configurations for a test suite.
+      operationId: listConfigs
+      tags:
+        - Configurations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of attached configurations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: Upload and attach scenario configuration
+      description: Uploads a vuhive.yaml test configuration, stages it in S3, and attaches it to the test suite.
+      operationId: createConfig
+      tags:
+        - Configurations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConfigRequest'
+      responses:
+        '201':
+          description: Configuration created and attached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Configuration name already exists for suite
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/suites/{id}/configs/{configId}:
+    get:
+      summary: Get scenario configuration
+      description: Retrieves details and content of a specific attached scenario configuration.
+      operationId: getConfig
+      tags:
+        - Configurations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+        - name: configId
+          in: path
+          required: true
+          description: Configuration ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Configuration details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Configuration or test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Delete scenario configuration
+      description: Deletes an attached configuration and its backing S3 object.
+      operationId: deleteConfig
+      tags:
+        - Configurations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+        - name: configId
+          in: path
+          required: true
+          description: Configuration ID
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Configuration deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Configuration or test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/suites/{id}/builds:
     post:
       summary: Upload Go test source and trigger build Job
@@ -2721,4 +3108,149 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    CreateSuiteRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: checkout-service-load
+        description:
+          type: string
+          example: Checkout service load test scenarios
+
+    UpdateSuiteRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: checkout-service-load-v2
+        description:
+          type: string
+          example: Updated checkout load test scenarios
+        state:
+          type: string
+          enum: [DRAFT, ACTIVE, ARCHIVED]
+          example: ACTIVE
+
+    SuiteResponse:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - state
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3e04a02e-bf34-4398-8b40-6389bca12c97
+        name:
+          type: string
+          example: checkout-service-load
+        description:
+          type: string
+          example: Checkout service load test scenarios
+        state:
+          type: string
+          enum: [DRAFT, ACTIVE, ARCHIVED]
+          example: ACTIVE
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-09-07T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-09-07T12:30:00Z"
+
+    SuiteListResponse:
+      type: object
+      required:
+        - suites
+        - count
+      properties:
+        suites:
+          type: array
+          items:
+            $ref: '#/components/schemas/SuiteResponse'
+        count:
+          type: integer
+          example: 2
+
+    CreateConfigRequest:
+      type: object
+      required:
+        - name
+        - content_yaml
+      properties:
+        name:
+          type: string
+          example: staging-profile
+        content_yaml:
+          type: string
+          example: |
+            vus: 50
+            duration: 5m
+        is_default:
+          type: boolean
+          example: true
+
+    ConfigResponse:
+      type: object
+      required:
+        - id
+        - suite_id
+        - name
+        - content_yaml
+        - s3_config_key
+        - is_default
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 7fa1205c-d38e-4f51-b924-11883395bcf8
+        suite_id:
+          type: string
+          format: uuid
+          example: 3e04a02e-bf34-4398-8b40-6389bca12c97
+        name:
+          type: string
+          example: staging-profile
+        content_yaml:
+          type: string
+          example: |
+            vus: 50
+            duration: 5m
+        s3_config_key:
+          type: string
+          example: suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs/7fa1205c-d38e-4f51-b924-11883395bcf8.yaml
+        is_default:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-09-07T12:00:00Z"
+
+    ConfigListResponse:
+      type: object
+      required:
+        - configs
+        - count
+      properties:
+        configs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigResponse'
+        count:
+          type: integer
+          example: 1
 

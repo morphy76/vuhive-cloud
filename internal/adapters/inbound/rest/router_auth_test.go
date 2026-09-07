@@ -24,6 +24,8 @@ func TestRouter_RBACProtection(t *testing.T) {
 	mockRuns := &mockRunsUseCase{}
 	mockBarrier := &mockBarrierUseCase{}
 	mockHK := new(MockHousekeepingUseCase)
+	mockSuites := new(MockSuitesUseCase)
+	mockConfigs := new(MockConfigsUseCase)
 
 	devClaims := model.NewClaims("dev-1", "dev", "dev@example.com", []string{model.RoleDeveloper}, nil, time.Now().Add(time.Hour))
 	depClaims := model.NewClaims("dep-1", "dep", "dep@example.com", []string{model.RoleDeployer}, nil, time.Now().Add(time.Hour))
@@ -37,7 +39,17 @@ func TestRouter_RBACProtection(t *testing.T) {
 	mockVerifier.On("VerifyToken", mock.Anything, "runner-token").Return(runnerClaims, nil)
 	mockVerifier.On("VerifyToken", mock.Anything, "viewer-token").Return(viewerClaims, nil)
 
-	router := rest.SetupRouterWithAuth(mockBuilds, mockProfiles, mockSchedules, mockRuns, mockBarrier, mockHK, mockVerifier)
+	router := rest.SetupRouterWithConfig(rest.RouterConfig{
+		BuildsUC:       mockBuilds,
+		ProfilesUC:     mockProfiles,
+		SchedulesUC:    mockSchedules,
+		RunsUC:         mockRuns,
+		BarrierUC:      mockBarrier,
+		HousekeepingUC: mockHK,
+		SuitesUC:       mockSuites,
+		ConfigsUC:      mockConfigs,
+		TokenVerifier:  mockVerifier,
+	})
 
 	t.Run("public endpoints bypass authentication", func(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodGet, "/healthz", nil)
@@ -150,5 +162,43 @@ func TestRouter_RBACProtection(t *testing.T) {
 		wProf := httptest.NewRecorder()
 		router.ServeHTTP(wProf, profReq)
 		assert.Equal(t, http.StatusCreated, wProf.Code)
+	})
+
+	t.Run("developer can create suite and configuration", func(t *testing.T) {
+		suite, _ := model.NewTestSuite("dev-suite", "desc")
+		mockSuites.On("CreateSuite", mock.Anything, "dev-suite", "desc").Return(suite, nil).Once()
+
+		cfg, _ := model.NewConfiguration(suite.ID(), "default", "vus: 1", "key", true)
+		mockConfigs.On("CreateConfig", mock.Anything, inbound.CreateConfigCommand{
+			SuiteID:     suite.ID(),
+			Name:        "default",
+			ContentYAML: "vus: 1",
+			IsDefault:   true,
+		}).Return(cfg, nil).Once()
+
+		// Developer creates suite
+		suiteReq, _ := http.NewRequest(http.MethodPost, "/api/v1/suites", bytes.NewReader([]byte(`{"name":"dev-suite","description":"desc"}`)))
+		suiteReq.Header.Set("Authorization", "Bearer dev-token")
+		suiteReq.Header.Set("Content-Type", "application/json")
+		wSuite := httptest.NewRecorder()
+		router.ServeHTTP(wSuite, suiteReq)
+		assert.Equal(t, http.StatusCreated, wSuite.Code)
+
+		// Developer creates configuration
+		cfgReq, _ := http.NewRequest(http.MethodPost, "/api/v1/suites/"+suite.ID()+"/configs", bytes.NewReader([]byte(`{"name":"default","content_yaml":"vus: 1","is_default":true}`)))
+		cfgReq.Header.Set("Authorization", "Bearer dev-token")
+		cfgReq.Header.Set("Content-Type", "application/json")
+		wCfg := httptest.NewRecorder()
+		router.ServeHTTP(wCfg, cfgReq)
+		assert.Equal(t, http.StatusCreated, wCfg.Code)
+	})
+
+	t.Run("viewer cannot create suite", func(t *testing.T) {
+		suiteReq, _ := http.NewRequest(http.MethodPost, "/api/v1/suites", bytes.NewReader([]byte(`{"name":"viewer-suite"}`)))
+		suiteReq.Header.Set("Authorization", "Bearer viewer-token")
+		suiteReq.Header.Set("Content-Type", "application/json")
+		wSuite := httptest.NewRecorder()
+		router.ServeHTTP(wSuite, suiteReq)
+		assert.Equal(t, http.StatusForbidden, wSuite.Code)
 	})
 }

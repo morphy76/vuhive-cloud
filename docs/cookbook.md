@@ -149,12 +149,73 @@ All examples assume the control plane is reachable at `http://vuhive-cloud.vuhiv
 > **Interactive API Exploration with Swagger UI**:
 > If you deployed the optional OpenAPI viewer in `vuhive-cloud-infra` (`openapiViewer.enabled: true`), you can test all API recipes interactively from your browser at `http://localhost:8081` (via `kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openapi-viewer 8081:8080`). When accessing via local port-forwarding, set `openapiViewer.specUrl="http://localhost:8080/openapi.json"` so your browser resolves the control plane specification. See [Recipe 12](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors) for detailed setup.
 
-### Recipe 1: Registering a Test Suite & Uploading Source Packages
+### Recipe 1: Registering a Test Suite, Attaching Configurations & Uploading Source Packages
 
-Upload the source archive to trigger synchronous static analysis and schedule an asynchronous compilation build job in Kubernetes.
+#### Step 1: Create a New Test Suite
+
+Create a managed test suite aggregate in `DRAFT` state:
 
 ```bash
-curl -i -X POST http://localhost:8080/api/v1/suites/suite-auth-checkout/builds \
+curl -i -X POST http://localhost:8080/api/v1/suites \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "suite-auth-checkout",
+    "description": "Checkout service end-to-end load testing suite"
+  }'
+```
+
+##### Response (`201 Created`):
+
+```json
+{
+  "id": "3e04a02e-bf34-4398-8b40-6389bca12c97",
+  "name": "suite-auth-checkout",
+  "description": "Checkout service end-to-end load testing suite",
+  "state": "DRAFT",
+  "created_at": "2026-09-07T12:00:00Z",
+  "updated_at": "2026-09-07T12:00:00Z"
+}
+```
+
+> [!TIP]
+> You can retrieve or update the test suite at any time via `GET /api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97` or transition its state via `PUT /api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97` (`{"name":"suite-auth-checkout","state":"ACTIVE"}`).
+
+#### Step 2: Attach Scenario Configurations (`vuhive.yaml`)
+
+Upload an execution profile specifying virtual users (VUs), duration, ramp-up stages, and SLA latency thresholds:
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "staging-load",
+    "content_yaml": "version: \"1.0\"\nexecution:\n  vus: 50\n  duration: 60s\n  ramp_up: 10s\nthresholds:\n  p95_latency_ms: 250\n  error_rate_pct: 1.0\n",
+    "is_default": true
+  }'
+```
+
+##### Response (`201 Created`):
+
+```json
+{
+  "id": "7fa1205c-d38e-4f51-b924-11883395bcf8",
+  "suite_id": "3e04a02e-bf34-4398-8b40-6389bca12c97",
+  "name": "staging-load",
+  "content_yaml": "version: \"1.0\"\nexecution:\n  vus: 50\n  duration: 60s\n  ramp_up: 10s\nthresholds:\n  p95_latency_ms: 250\n  error_rate_pct: 1.0\n",
+  "s3_config_key": "suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs/7fa1205c-d38e-4f51-b924-11883395bcf8.yaml",
+  "is_default": true,
+  "created_at": "2026-09-07T12:05:00Z"
+}
+```
+
+The configuration is staged directly in S3/MinIO and recorded in PostgreSQL. You can inspect attached configurations via `GET /api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs`.
+
+#### Step 3: Upload Source Packages & Trigger Ephemeral Compilation
+
+Upload the Go source archive to trigger synchronous static analysis and schedule an asynchronous compilation build job in Kubernetes:
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/builds \
   -F "source=@test-suite.tar.gz" \
   -F "platform=linux/amd64"
 ```

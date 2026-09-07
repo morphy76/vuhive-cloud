@@ -285,6 +285,8 @@ func main() {
 		AllowInsecureOverride: allowInsecure,
 		WhitelistedPackages:   whitelistedPackages,
 	})
+	suiteService := service.NewSuiteService(suiteRepo)
+	configService := service.NewConfigService(suiteRepo, configRepo, storageAdapter)
 	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator, staticAnalyzer)
 	profileService := service.NewProfileService(profileRepo)
 	runService := service.NewRunService(suiteRepo, artifactRepo, configRepo, profileRepo, runRepo, runnerOrchestrator, storageAdapter)
@@ -365,7 +367,17 @@ func main() {
 	}
 
 	// Router setup
-	router := rest.SetupRouterWithAuth(buildService, profileService, scheduleService, runService, barrierService, housekeepingService, tokenVerifier)
+	router := rest.SetupRouterWithConfig(rest.RouterConfig{
+		BuildsUC:       buildService,
+		ProfilesUC:     profileService,
+		SchedulesUC:    scheduleService,
+		RunsUC:         runService,
+		BarrierUC:      barrierService,
+		HousekeepingUC: housekeepingService,
+		SuitesUC:       suiteService,
+		ConfigsUC:      configService,
+		TokenVerifier:  tokenVerifier,
+	})
 
 	server := &http.Server{
 		Addr:         ":" + port,
