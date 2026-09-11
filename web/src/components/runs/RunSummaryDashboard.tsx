@@ -14,6 +14,7 @@ import {
   Server,
   ShieldCheck,
   ShieldAlert,
+  FolderTree,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,12 +23,14 @@ import { useProfile } from '@/hooks/use-profiles'
 import { useSuiteArtifacts } from '@/hooks/use-suites'
 import { VisualAnalyticsSection } from '@/components/charts/VisualAnalyticsSection'
 import { ExecutionLogDialog } from '@/components/dialogs/ExecutionLogDialog'
+import { ReportInspectorDialog } from '@/components/dialogs/ReportInspectorDialog'
 import type { HistoricalRun } from '@/types/suite'
 
 export interface RunSummaryDashboardProps {
   run: HistoricalRun
   onClose?: () => void
   onViewLogs?: () => void
+  onViewReport?: () => void
 }
 
 function formatDuration(ms?: number): string {
@@ -62,9 +65,11 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
   run,
   onClose,
   onViewLogs,
+  onViewReport,
 }) => {
   const [copiedChecksum, setCopiedChecksum] = React.useState(false)
   const [isLogDialogOpen, setIsLogDialogOpen] = React.useState(false)
+  const [isReportDialogOpen, setIsReportDialogOpen] = React.useState(false)
 
   // Fetch contextual runner profile details
   const { data: profile } = useProfile(run.runnerProfileId || '')
@@ -164,6 +169,24 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => {
+              if (onViewReport) {
+                onViewReport()
+              } else {
+                setIsReportDialogOpen(true)
+              }
+            }}
+            className="min-h-[40px] gap-2 border-slate-200 dark:border-slate-800"
+            aria-label="Inspect telemetry report"
+          >
+            <FolderTree className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+            <span>Inspect Report</span>
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -607,6 +630,12 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
       <ExecutionLogDialog
         open={isLogDialogOpen}
         onOpenChange={setIsLogDialogOpen}
+        run={run}
+      />
+
+      <ReportInspectorDialog
+        open={isReportDialogOpen}
+        onOpenChange={setIsReportDialogOpen}
         run={run}
       />
     </div>
