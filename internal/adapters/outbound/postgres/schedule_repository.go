@@ -246,6 +246,70 @@ func (r *ScheduleRepository) ListActive(ctx context.Context) ([]*model.Schedule,
 	return schedules, nil
 }
 
+// ListAll returns all Schedule aggregates across all suites regardless of active state.
+func (r *ScheduleRepository) ListAll(ctx context.Context) ([]*model.Schedule, error) {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().Str("op", "ScheduleRepository.ListAll").Logger()
+	log.Debug().Msg("listing all schedules")
+
+	query := `
+		SELECT id, suite_id, artifact_id, configuration_id, runner_profile_id,
+		       name, cron_expression, k8s_cronjob_name, is_active,
+		       created_at, updated_at
+		FROM schedules
+		ORDER BY created_at ASC
+	`
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to query all schedules")
+		return nil, MapError(err)
+	}
+	defer rows.Close()
+
+	var schedules []*model.Schedule
+	for rows.Next() {
+		var (
+			scheduleID      string
+			suiteID         string
+			artifactID      string
+			configurationID *string
+			runnerProfileID string
+			name            string
+			cronExpression  string
+			k8sCronJobName  string
+			isActive        bool
+			createdAt       time.Time
+			updatedAt       time.Time
+		)
+		if err := rows.Scan(
+			&scheduleID, &suiteID, &artifactID, &configurationID, &runnerProfileID,
+			&name, &cronExpression, &k8sCronJobName, &isActive,
+			&createdAt, &updatedAt,
+		); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan schedule row")
+			return nil, MapError(err)
+		}
+		schedule, err := model.NewScheduleWithID(
+			scheduleID, suiteID, artifactID, configurationID, runnerProfileID,
+			name, cronExpression, k8sCronJobName, isActive,
+			createdAt, updatedAt,
+		)
+		if err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to reconstitute schedule from row")
+			return nil, err
+		}
+		schedules = append(schedules, schedule)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("error iterating all schedule rows")
+		return nil, MapError(err)
+	}
+
+	log.Info().Int("count", len(schedules)).Dur("duration_ms", time.Since(start)).Msg("successfully listed all schedules")
+	return schedules, nil
+}
+
 // Delete removes a Schedule by ID.
 func (r *ScheduleRepository) Delete(ctx context.Context, id string) error {
 	start := time.Now()

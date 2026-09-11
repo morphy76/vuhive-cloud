@@ -53,6 +53,14 @@ func (m *mockScheduleRepo) ListActive(_ context.Context) ([]*model.Schedule, err
 	return list, nil
 }
 
+func (m *mockScheduleRepo) ListAll(_ context.Context) ([]*model.Schedule, error) {
+	var list []*model.Schedule
+	for _, s := range m.schedules {
+		list = append(list, s)
+	}
+	return list, nil
+}
+
 func (m *mockScheduleRepo) Delete(_ context.Context, id string) error {
 	if _, ok := m.schedules[id]; !ok {
 		return model.ErrNotFound
@@ -263,7 +271,8 @@ func TestScheduleService_UpdateSchedule(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("updates cron expression and syncs to K8s CronJob", func(t *testing.T) {
-		updated, err := svc.UpdateSchedule(ctx, schedule.ID(), "*/15 * * * *")
+		expr := "*/15 * * * *"
+		updated, err := svc.UpdateSchedule(ctx, schedule.ID(), &expr, nil)
 		require.NoError(t, err)
 		assert.Equal(t, "*/15 * * * *", updated.CronExpression())
 
@@ -272,8 +281,36 @@ func TestScheduleService_UpdateSchedule(t *testing.T) {
 		assert.Equal(t, "*/15 * * * *", orchestrator.updatedCronJobs[schedule.K8sCronJobName()].CronExpression())
 	})
 
+	t.Run("pauses schedule by setting isActive to false", func(t *testing.T) {
+		activeFalse := false
+		updated, err := svc.UpdateSchedule(ctx, schedule.ID(), nil, &activeFalse)
+		require.NoError(t, err)
+		assert.False(t, updated.IsActive())
+
+		// Verify orchestrator received update with suspended state
+		assert.Contains(t, orchestrator.updatedCronJobs, schedule.K8sCronJobName())
+		assert.False(t, orchestrator.updatedCronJobs[schedule.K8sCronJobName()].IsActive())
+	})
+
+	t.Run("resumes schedule by setting isActive to true", func(t *testing.T) {
+		activeTrue := true
+		updated, err := svc.UpdateSchedule(ctx, schedule.ID(), nil, &activeTrue)
+		require.NoError(t, err)
+		assert.True(t, updated.IsActive())
+
+		// Verify orchestrator received update with active state
+		assert.Contains(t, orchestrator.updatedCronJobs, schedule.K8sCronJobName())
+		assert.True(t, orchestrator.updatedCronJobs[schedule.K8sCronJobName()].IsActive())
+	})
+
+	t.Run("fails on empty update parameters", func(t *testing.T) {
+		_, err := svc.UpdateSchedule(ctx, schedule.ID(), nil, nil)
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
 	t.Run("fails on invalid cron expression", func(t *testing.T) {
-		_, err := svc.UpdateSchedule(ctx, schedule.ID(), "bad-cron")
+		badExpr := "bad-cron"
+		_, err := svc.UpdateSchedule(ctx, schedule.ID(), &badExpr, nil)
 		assert.ErrorIs(t, err, model.ErrInvalidCronExpression)
 	})
 }

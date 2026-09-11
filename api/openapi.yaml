@@ -2452,13 +2452,16 @@ components:
 
     UpdateScheduleRequest:
       type: object
-      required:
-        - cron_expression
+      description: Payload for updating schedule cadence or toggling active state. At least one property should be provided.
       properties:
         cron_expression:
           type: string
           description: Standard 5-field CRON expression (minute hour day-of-month month day-of-week) executed in cluster UTC timezone
           example: "0 2 * * *"
+        is_active:
+          type: boolean
+          description: State of the native Kubernetes CronJob (true to activate/resume, false to suspend/pause)
+          example: true
 
     ScheduleResponse:
       type: object

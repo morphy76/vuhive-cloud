@@ -67,5 +67,6 @@ type ScheduleRepository interface {
 	FindByID(ctx context.Context, id string) (*model.Schedule, error)
 	ListBySuiteID(ctx context.Context, suiteID string) ([]*model.Schedule, error)
 	ListActive(ctx context.Context) ([]*model.Schedule, error)
+	ListAll(ctx context.Context) ([]*model.Schedule, error)
 	Delete(ctx context.Context, id string) error
 }

@@ -19,7 +19,7 @@ type mockSchedulesUseCase struct {
 	createFunc func(ctx context.Context, suiteID, artifactID string, configID *string, runnerProfileID, name, cronExpr string) (*model.Schedule, error)
 	getFunc    func(ctx context.Context, id string) (*model.Schedule, error)
 	listFunc   func(ctx context.Context) ([]*model.Schedule, error)
-	updateFunc func(ctx context.Context, id string, cronExpr string) (*model.Schedule, error)
+	updateFunc func(ctx context.Context, id string, cronExpr *string, isActive *bool) (*model.Schedule, error)
 	deleteFunc func(ctx context.Context, id string) error
 }
 
@@ -44,9 +44,9 @@ func (m *mockSchedulesUseCase) ListSchedules(ctx context.Context) ([]*model.Sche
 	return nil, nil
 }
 
-func (m *mockSchedulesUseCase) UpdateSchedule(ctx context.Context, id string, cronExpr string) (*model.Schedule, error) {
+func (m *mockSchedulesUseCase) UpdateSchedule(ctx context.Context, id string, cronExpr *string, isActive *bool) (*model.Schedule, error) {
 	if m.updateFunc != nil {
-		return m.updateFunc(ctx, id, cronExpr)
+		return m.updateFunc(ctx, id, cronExpr, isActive)
 	}
 	return nil, nil
 }
@@ -219,19 +219,22 @@ func TestScheduleHandler_ListSchedules(t *testing.T) {
 }
 
 func TestScheduleHandler_UpdateSchedule(t *testing.T) {
-	t.Run("successfully updates schedule", func(t *testing.T) {
+	t.Run("successfully updates schedule cron expression", func(t *testing.T) {
 		s := sampleSchedule(t)
 		mockUC := &mockSchedulesUseCase{
-			updateFunc: func(_ context.Context, id string, cronExpr string) (*model.Schedule, error) {
-				_ = s.UpdateCronExpression(cronExpr)
+			updateFunc: func(_ context.Context, id string, cronExpr *string, isActive *bool) (*model.Schedule, error) {
+				if cronExpr != nil {
+					_ = s.UpdateCronExpression(*cronExpr)
+				}
 				return s, nil
 			},
 		}
 
 		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
+		cronExpr := "*/10 * * * *"
 		payload := rest.UpdateScheduleRequest{
-			CronExpression: "*/10 * * * *",
+			CronExpression: &cronExpr,
 		}
 		body, _ := json.Marshal(payload)
 
@@ -250,16 +253,63 @@ func TestScheduleHandler_UpdateSchedule(t *testing.T) {
 		assert.Equal(t, "*/10 * * * *", resp.CronExpression)
 	})
 
+	t.Run("successfully pauses and resumes schedule via is_active", func(t *testing.T) {
+		s := sampleSchedule(t)
+		mockUC := &mockSchedulesUseCase{
+			updateFunc: func(_ context.Context, id string, cronExpr *string, isActive *bool) (*model.Schedule, error) {
+				if isActive != nil {
+					if *isActive {
+						_ = s.Activate()
+					} else {
+						_ = s.Deactivate()
+					}
+				}
+				return s, nil
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
+
+		// Pause
+		activeFalse := false
+		body, _ := json.Marshal(rest.UpdateScheduleRequest{IsActive: &activeFalse})
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/schedules/"+s.ID(), bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var resp rest.ScheduleResponse
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		assert.False(t, resp.IsActive)
+	})
+
+	t.Run("returns 400 when neither cron_expression nor is_active is provided", func(t *testing.T) {
+		mockUC := &mockSchedulesUseCase{}
+		router := rest.SetupRouter(nil, nil, mockUC, nil)
+
+		payload := rest.UpdateScheduleRequest{}
+		body, _ := json.Marshal(payload)
+
+		req, _ := http.NewRequest(http.MethodPut, "/api/v1/schedules/sched-123", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
 	t.Run("returns 404 when updating non-existent schedule", func(t *testing.T) {
 		mockUC := &mockSchedulesUseCase{
-			updateFunc: func(_ context.Context, _ string, _ string) (*model.Schedule, error) {
+			updateFunc: func(_ context.Context, _ string, _ *string, _ *bool) (*model.Schedule, error) {
 				return nil, model.ErrNotFound
 			},
 		}
 
 		router := rest.SetupRouter(nil, nil, mockUC, nil)
 
-		payload := rest.UpdateScheduleRequest{CronExpression: "0 0 * * *"}
+		cronExpr := "0 0 * * *"
+		payload := rest.UpdateScheduleRequest{CronExpression: &cronExpr}
 		body, _ := json.Marshal(payload)
 
 		req, err := http.NewRequest(http.MethodPut, "/api/v1/schedules/unknown", bytes.NewReader(body))

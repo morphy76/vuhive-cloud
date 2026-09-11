@@ -498,15 +498,36 @@ Verify the native Kubernetes CronJob:
 kubectl get cronjob -n vuhive-runners vuhive-sched-7fa1205c
 ```
 
-#### 2. Update Schedule Cadence:
+#### 2. Update Schedule Cadence or Pause/Resume:
+
+You can update the cron cadence expression, pause/resume execution, or both simultaneously:
 
 ```bash
+# Update cron cadence expression
 curl -i -X PUT http://localhost:8080/api/v1/schedules/7fa1205c-d38e-4f51-b924-11883395bcf8 \
   -H "Content-Type: application/json" \
   -d '{
     "cron_expression": "*/30 * * * *"
   }'
+
+# Pause schedule execution (suspends Kubernetes CronJob execution via spec.suspend = true)
+curl -i -X PUT http://localhost:8080/api/v1/schedules/7fa1205c-d38e-4f51-b924-11883395bcf8 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "is_active": false
+  }'
+
+# Resume paused schedule execution (restores active execution via spec.suspend = false)
+curl -i -X PUT http://localhost:8080/api/v1/schedules/7fa1205c-d38e-4f51-b924-11883395bcf8 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "is_active": true
+  }'
 ```
+
+> [!TIP]
+> **Interactive Cron Builder & Management Dashboard (Web UI)**:
+> In the React 19 web interface (`/schedules`), schedules can be authored with a human-readable **Interactive Cron Builder** featuring standard presets ("Hourly", "Nightly", "Daily at midnight", "Every Monday morning", "Weekend soak"), live 5-field syntax validation, natural language cadence preview, and next trigger calculations. Quick actions allow toggling pause/resume status with immediate Kubernetes `spec.suspend` synchronization, triggering ad-hoc "Run Now" dispatches, inspecting correlated execution history in a slide-over drawer, and safe schedule deletion.
 
 #### 3. Delete a Schedule:
 
