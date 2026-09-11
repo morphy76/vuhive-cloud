@@ -1,0 +1,26 @@
+# Version control and workspaces
+.git
+.worktrees
+
+# IDE & local configuration
+.idea
+.vscode
+.env
+
+# Go build and test artifacts
+bin/
+*.test
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Frontend dependencies and local build outputs
+node_modules/
+web/node_modules/
+web/dist/
+.pnpm-store/
+.vite/
+coverage/
+web/coverage/
+*.tsbuildinfo

@@ -91,6 +91,9 @@ make docker-build
 # Build only the control plane server image (vuhive/server:local)
 make docker-build-server
 
+# Build only the BFF service image (vuhive/bff:local)
+make docker-build-bff
+
 # Build only the runner init/wrapper image (vuhive/runner-init:local)
 make docker-build-runner-init
 
@@ -101,7 +104,7 @@ make docker-prune
 You can customize the target tags via environment variables:
 
 ```bash
-SERVER_IMAGE=myrepo/server:dev RUNNER_INIT_IMAGE=myrepo/runner-init:dev make docker-build
+SERVER_IMAGE=myrepo/server:dev BFF_IMAGE=myrepo/bff:dev RUNNER_INIT_IMAGE=myrepo/runner-init:dev make docker-build
 ```
 
 ### Verifying Images with Rancher Desktop / Kubernetes
@@ -115,6 +118,7 @@ docker images | grep vuhive
 Expected output:
 ```text
 vuhive/server        local    ...
+vuhive/bff           local    ...
 vuhive/runner-init   local    ...
 ```
 
@@ -137,6 +141,9 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set image.tag=local \
   --set image.pullPolicy=IfNotPresent \
   --set runner.initImage=vuhive/runner-init:local \
+  --set bff.image.repository=vuhive/bff \
+  --set bff.image.tag=local \
+  --set bff.image.pullPolicy=IfNotPresent \
   --wait --timeout=120s
 ```
 

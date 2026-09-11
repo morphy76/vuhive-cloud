@@ -1,16 +1,39 @@
 # ==============================================================================
-# Build stage
+# Stage 1: Frontend build (React 19 PWA with Vite & Tailwind CSS v4)
+# ==============================================================================
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /src/web
+
+# Enable pnpm package manager via corepack
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Cache frontend dependencies
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml* ./
+RUN pnpm install --frozen-lockfile
+
+# Copy frontend source code and configuration files
+COPY web/ .
+
+# Build production static assets into /src/web/dist
+RUN pnpm build
+
+# ==============================================================================
+# Stage 2: Go binary compilation (BFF service embedding frontend assets)
 # ==============================================================================
 FROM golang:1.26-alpine AS builder
 
 WORKDIR /src
 
-# Cache dependencies
+# Cache Go module dependencies
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source tree
+# Copy backend source tree
 COPY . .
+
+# Copy compiled frontend assets from Stage 1 into web/dist
+COPY --from=frontend-builder /src/web/dist ./web/dist
 
 # Build static binary for BFF service
 ARG VERSION=dev
@@ -27,7 +50,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /bin/bff ./cmd/bff
 
 # ==============================================================================
-# Runtime image (Restricted Pod Security Standard compliant)
+# Stage 3: Runtime image (Restricted Pod Security Standard compliant)
 # ==============================================================================
 FROM alpine:3.20
 
@@ -44,6 +67,8 @@ RUN chmod 0755 /usr/local/bin/bff
 
 USER 10001:10001
 
-EXPOSE 8081
+ENV PORT=8080
+
+EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/bff"]

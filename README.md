@@ -242,6 +242,7 @@ make docker-build
 
 # Or build individual images
 make docker-build-server
+make docker-build-bff
 make docker-build-runner-init
 
 # Prune Docker build cache to prevent Kubelet ImageGC eviction on local clusters
