@@ -70,6 +70,15 @@ func TestConfiguration_Updates(t *testing.T) {
 		assert.Equal(t, "new-s3-key", cfg.S3ConfigKey())
 	})
 
+	t.Run("set name", func(t *testing.T) {
+		err := cfg.SetName("renamed-config")
+		require.NoError(t, err)
+		assert.Equal(t, "renamed-config", cfg.Name())
+
+		err = cfg.SetName("")
+		assert.ErrorIs(t, err, model.ErrEmptyName)
+	})
+
 	t.Run("fail update with empty content or key", func(t *testing.T) {
 		assert.ErrorIs(t, cfg.UpdateContent("", "key"), model.ErrValidation)
 		assert.ErrorIs(t, cfg.UpdateContent("content", ""), model.ErrEmptyS3Key)

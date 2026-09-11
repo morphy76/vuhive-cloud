@@ -126,6 +126,13 @@ export default defineConfig({
             '@radix-ui/react-slot',
             '@radix-ui/react-visually-hidden',
           ],
+          'vendor-editor': [
+            '@uiw/react-codemirror',
+            '@codemirror/lang-yaml',
+            '@codemirror/theme-one-dark',
+            'yaml',
+            'diff',
+          ],
         },
       },
     },

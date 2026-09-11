@@ -228,3 +228,88 @@ func (s *ConfigService) DeleteConfig(ctx context.Context, suiteID, configID stri
 	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed test scenario configuration deletion")
 	return nil
 }
+
+// UpdateConfig updates an attached scenario configuration and updates its backing object in storage.
+func (s *ConfigService) UpdateConfig(ctx context.Context, cmd inbound.UpdateConfigCommand) (*model.Configuration, error) {
+	start := time.Now()
+	trimmedSuiteID := strings.TrimSpace(cmd.SuiteID)
+	trimmedConfigID := strings.TrimSpace(cmd.ConfigID)
+	trimmedName := strings.TrimSpace(cmd.Name)
+	trimmedYAML := strings.TrimSpace(cmd.ContentYAML)
+
+	if trimmedSuiteID == "" || trimmedConfigID == "" {
+		return nil, fmt.Errorf("%w: suite ID and config ID cannot be empty", model.ErrValidation)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "ConfigService.UpdateConfig").
+		Str("suite_id", trimmedSuiteID).
+		Str("config_id", trimmedConfigID).
+		Logger()
+	log.Debug().Msg("starting test scenario configuration update")
+
+	if s.suiteRepo != nil {
+		if _, err := s.suiteRepo.FindByID(ctx, trimmedSuiteID); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding parent test suite")
+			return nil, err
+		}
+	}
+
+	if s.configRepo == nil {
+		return nil, model.ErrNotFound
+	}
+
+	config, err := s.configRepo.FindByID(ctx, trimmedConfigID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding configuration for update")
+		return nil, err
+	}
+
+	if config.SuiteID() != trimmedSuiteID {
+		log.Warn().
+			Str("actual_suite_id", config.SuiteID()).
+			Dur("duration_ms", time.Since(start)).
+			Msg("configuration does not belong to specified suite")
+		return nil, model.ErrNotFound
+	}
+
+	if trimmedName == "" {
+		return nil, model.ErrEmptyName
+	}
+	if err := config.SetName(trimmedName); err != nil {
+		return nil, err
+	}
+
+	if trimmedYAML == "" {
+		return nil, fmt.Errorf("%w: configuration YAML cannot be empty", model.ErrValidation)
+	}
+
+	if s.storage != nil && config.S3ConfigKey() != "" {
+		reader := strings.NewReader(cmd.ContentYAML)
+		if err := s.storage.Upload(ctx, config.S3ConfigKey(), reader, int64(len(cmd.ContentYAML)), "application/x-yaml"); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed uploading updated configuration to storage")
+			return nil, fmt.Errorf("failed to upload updated configuration to storage: %w", err)
+		}
+	}
+
+	if err := config.UpdateContent(cmd.ContentYAML, config.S3ConfigKey()); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed updating configuration domain model")
+		return nil, err
+	}
+
+	if cmd.IsDefault != nil {
+		config.SetDefault(*cmd.IsDefault)
+	}
+
+	if err := s.configRepo.Save(ctx, config); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed saving updated configuration to repository")
+		return nil, err
+	}
+
+	log.Info().
+		Str("config_id", config.ID()).
+		Dur("duration_ms", time.Since(start)).
+		Msg("completed test scenario configuration update")
+	return config, nil
+}
+

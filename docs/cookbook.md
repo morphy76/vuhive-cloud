@@ -211,7 +211,21 @@ curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389
 }
 ```
 
-The configuration is staged directly in S3/MinIO and recorded in PostgreSQL. You can inspect attached configurations via `GET /api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs`.
+The configuration is staged directly in S3/MinIO and recorded in PostgreSQL. You can inspect attached configurations via `GET /api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs` or modify an existing configuration in-place via `PUT /api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs/7fa1205c-d38e-4f51-b924-11883395bcf8`:
+
+```bash
+curl -i -X PUT http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs/7fa1205c-d38e-4f51-b924-11883395bcf8 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "staging-load-updated",
+    "content_yaml": "version: \"1.0\"\nexecution:\n  vus: 100\n  duration: 120s\n  ramp_up: 20s\nthresholds:\n  p95_latency_ms: 200\n  error_rate_pct: 0.5\n",
+    "is_default": true
+  }'
+```
+
+> [!TIP]
+> **In-App Syntax-Highlighted YAML Editor & Version Diff**:
+> When managing suites via the Web UI, you can author, tune, and validate attached `vuhive.yaml` scenario parameters using the integrated code editor featuring real-time syntax checking, schema diagnostics, and preset scenario templates. The suite detail view also provides side-by-side YAML diff inspection across configuration versions.
 
 #### Step 3: Upload Source Packages & Trigger Ephemeral Compilation
 

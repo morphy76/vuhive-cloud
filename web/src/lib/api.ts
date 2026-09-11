@@ -246,6 +246,31 @@ export const api = {
     }
   },
 
+  async updateSuiteConfig(
+    suiteId: string,
+    configId: string,
+    data: { name: string; content_yaml: string; is_default?: boolean }
+  ): Promise<SuiteConfiguration> {
+    const c = await apiRequest<any>(
+      `/suites/${encodeURIComponent(suiteId)}/configs/${encodeURIComponent(configId)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }
+    )
+
+    return {
+      id: c.id,
+      suiteId: c.suite_id || suiteId,
+      name: c.name,
+      contentYaml: c.content_yaml,
+      s3ConfigKey: c.s3_config_key,
+      isDefault: !!c.is_default,
+      createdAt: c.created_at,
+    }
+  },
+
   async deleteSuiteConfig(suiteId: string, configId: string): Promise<void> {
     await apiRequest<void>(
       `/suites/${encodeURIComponent(suiteId)}/configs/${encodeURIComponent(configId)}`,

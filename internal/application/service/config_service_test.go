@@ -291,3 +291,86 @@ func TestConfigService_DeleteConfig(t *testing.T) {
 		assert.ErrorIs(t, err, model.ErrNotFound)
 	})
 }
+
+func TestConfigService_UpdateConfig(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successfully updates configuration name, yaml content, and isDefault", func(t *testing.T) {
+		suite, _ := model.NewTestSuite("suite-1", "desc")
+		suiteRepo := new(MockTestSuiteRepository)
+		suiteRepo.On("FindByID", mock.Anything, suite.ID()).Return(suite, nil).Once()
+
+		cfg, _ := model.NewConfiguration(suite.ID(), "old-name", "duration: 1m", "suites/"+suite.ID()+"/configs/c1.yaml", false)
+		configRepo := new(MockConfigurationRepository)
+		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
+
+		storage := new(MockStoragePort)
+		storage.On("Upload", mock.Anything, cfg.S3ConfigKey(), mock.Anything, int64(len("duration: 5m\nconcurrency: 100\n")), "application/x-yaml").Return(nil).Once()
+
+		configRepo.On("Save", mock.Anything, mock.MatchedBy(func(c *model.Configuration) bool {
+			return c.ID() == cfg.ID() && c.Name() == "new-name" && c.ContentYAML() == "duration: 5m\nconcurrency: 100\n" && c.IsDefault()
+		})).Return(nil).Once()
+
+		svc := service.NewConfigService(suiteRepo, configRepo, storage)
+		isDefault := true
+		updated, err := svc.UpdateConfig(ctx, inbound.UpdateConfigCommand{
+			SuiteID:     suite.ID(),
+			ConfigID:    cfg.ID(),
+			Name:        "new-name",
+			ContentYAML: "duration: 5m\nconcurrency: 100\n",
+			IsDefault:   &isDefault,
+		})
+
+		require.NoError(t, err)
+		require.NotNil(t, updated)
+		assert.Equal(t, "new-name", updated.Name())
+		assert.Equal(t, "duration: 5m\nconcurrency: 100\n", updated.ContentYAML())
+		assert.True(t, updated.IsDefault())
+
+		suiteRepo.AssertExpectations(t)
+		configRepo.AssertExpectations(t)
+		storage.AssertExpectations(t)
+	})
+
+	t.Run("returns ErrNotFound when configuration belongs to another suite", func(t *testing.T) {
+		suite, _ := model.NewTestSuite("suite-1", "desc")
+		suiteRepo := new(MockTestSuiteRepository)
+		suiteRepo.On("FindByID", mock.Anything, suite.ID()).Return(suite, nil).Once()
+
+		cfg, _ := model.NewConfiguration("other-suite", "cfg-name", "duration: 1m", "key", false)
+		configRepo := new(MockConfigurationRepository)
+		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
+
+		svc := service.NewConfigService(suiteRepo, configRepo, nil)
+		_, err := svc.UpdateConfig(ctx, inbound.UpdateConfigCommand{
+			SuiteID:     suite.ID(),
+			ConfigID:    cfg.ID(),
+			Name:        "new-name",
+			ContentYAML: "duration: 2m",
+		})
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("fails when validation fails on empty fields", func(t *testing.T) {
+		suite, _ := model.NewTestSuite("suite-1", "desc")
+		suiteRepo := new(MockTestSuiteRepository)
+		suiteRepo.On("FindByID", mock.Anything, suite.ID()).Return(suite, nil).Once()
+
+		cfg, _ := model.NewConfiguration(suite.ID(), "old-name", "duration: 1m", "key", false)
+		configRepo := new(MockConfigurationRepository)
+		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
+
+		svc := service.NewConfigService(suiteRepo, configRepo, nil)
+		_, err := svc.UpdateConfig(ctx, inbound.UpdateConfigCommand{
+			SuiteID:     suite.ID(),
+			ConfigID:    cfg.ID(),
+			Name:        "",
+			ContentYAML: "duration: 2m",
+		})
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, model.ErrEmptyName)
+	})
+}
