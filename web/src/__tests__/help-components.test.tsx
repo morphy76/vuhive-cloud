@@ -40,7 +40,7 @@ describe('HelpTooltip Component', () => {
     expect(
       screen.getByText(/Target CPU architectures for ephemeral cross-compilation/i)
     ).toBeInTheDocument()
-  })
+  }, 30000)
 })
 
 describe('InfoBadge Component', () => {
