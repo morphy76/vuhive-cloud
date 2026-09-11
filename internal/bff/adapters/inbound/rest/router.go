@@ -119,6 +119,8 @@ func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 			proxyGroup.GET("/runs", proxyHandler)
 			proxyGroup.POST("/runs/:id/abort", proxyHandler)
 			proxyGroup.POST("/runs/:id/complete", proxyHandler)
+			proxyGroup.GET("/runs/:id/logs", proxyHandler)
+			proxyGroup.GET("/runs/:id/report", proxyHandler)
 		}
 	}
 

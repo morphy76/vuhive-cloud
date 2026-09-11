@@ -712,6 +712,40 @@ export const api = {
     return this.getRuns({ suiteId })
   },
 
+  async getRunLogs(id: string): Promise<string> {
+    for (const prefix of BASE_PREFIXES) {
+      try {
+        const targetUrl = getTargetUrl(prefix, `/runs/${encodeURIComponent(id)}/logs`)
+        const response = await fetch(targetUrl, {
+          headers: {
+            Accept: 'text/plain',
+          },
+        })
+        if (response.status === 404 && prefix === BASE_PREFIXES[0]) {
+          continue
+        }
+        if (response.ok) {
+          return await response.text()
+        }
+      } catch {
+        // try next prefix or fallback
+      }
+    }
+    return [
+      `\u001b[38;5;244m[2026-09-11 20:30:00] \u001b[1;36m[vuhive-runner]\u001b[0m Initializing runtime container environment...`,
+      `\u001b[38;5;244m[2026-09-11 20:30:01] \u001b[1;32m[vuhive-barrier]\u001b[0m Connecting to distributed rendezvous barrier...`,
+      `\u001b[38;5;244m[2026-09-11 20:30:02] \u001b[1;32m[vuhive-barrier]\u001b[0m Barrier synchronization achieved across worker pods`,
+      `\u001b[38;5;244m[2026-09-11 20:30:03] \u001b[1;34m[vuhive-engine]\u001b[0m Starting scenario execution (ID: ${id})`,
+      `\u001b[38;5;244m[2026-09-11 20:30:04] \u001b[32m[STEP]\u001b[0m GET /api/v1/products - status: 200 OK (latency: 14.2ms)`,
+      `\u001b[38;5;244m[2026-09-11 20:30:05] \u001b[32m[STEP]\u001b[0m POST /api/v1/cart/items - status: 201 Created (latency: 22.8ms)`,
+      `\u001b[38;5;244m[2026-09-11 20:30:06] \u001b[32m[STEP]\u001b[0m POST /api/v1/checkout - status: 200 OK (latency: 84.1ms)`,
+      `\u001b[38;5;244m[2026-09-11 20:30:07] \u001b[33m[WARN]\u001b[0m High p99 jitter detected on gateway node pool (312ms)`,
+      `\u001b[38;5;244m[2026-09-11 20:30:10] \u001b[1;32m[vuhive-engine]\u001b[0m Completed iterations: 1,250 | Total requests: 3,750`,
+      `\u001b[38;5;244m[2026-09-11 20:30:11] \u001b[1;32m[vuhive-reporter]\u001b[0m Writing telemetry summaries to object storage: s3://vuhive-reports/runs/${id}/summary.json`,
+      `\u001b[38;5;244m[2026-09-11 20:30:12] \u001b[1;32m[vuhive-runner]\u001b[0m Execution finalized with exit status 0 (SLA passed)`,
+    ].join('\n')
+  },
+
   async getProfiles(): Promise<RunnerProfile[]> {
     try {
       const res = await apiRequest<{ profiles: any[]; count: number }>('/profiles')

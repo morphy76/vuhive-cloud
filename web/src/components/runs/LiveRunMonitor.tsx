@@ -8,11 +8,13 @@ import {
   Layers,
   Cpu,
   ShieldAlert,
+  Terminal,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { AbortConfirmationDialog } from '@/components/dialogs/AbortConfirmationDialog'
+import { ExecutionLogDialog } from '@/components/dialogs/ExecutionLogDialog'
 import { useAbortRun } from '@/hooks/use-runs'
 import { useRunEvents } from '@/hooks/use-events'
 import type { HistoricalRun, RunExecutionStatus } from '@/types/suite'
@@ -22,6 +24,7 @@ export interface LiveRunMonitorProps {
   onClose?: () => void
   onRunAborted?: (run: HistoricalRun) => void
   onViewSummary?: () => void
+  onViewLogs?: () => void
 }
 
 function formatDuration(ms: number): string {
@@ -44,9 +47,11 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
   onClose,
   onRunAborted,
   onViewSummary,
+  onViewLogs,
 }) => {
   const [run, setRun] = React.useState<HistoricalRun>(initialRun)
   const [isAbortDialogOpen, setIsAbortDialogOpen] = React.useState(false)
+  const [isLogDialogOpen, setIsLogDialogOpen] = React.useState(false)
   const [elapsedMs, setElapsedMs] = React.useState<number>(() => {
     if (initialRun.durationMs && initialRun.durationMs > 0) return initialRun.durationMs
     const start = new Date(initialRun.startedAt || initialRun.createdAt).getTime()
@@ -152,6 +157,23 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
               <span>Abort Test</span>
             </Button>
           )}
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (onViewLogs) {
+                onViewLogs()
+              } else {
+                setIsLogDialogOpen(true)
+              }
+            }}
+            className="text-xs font-semibold min-h-[38px] px-3 gap-1.5 border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+            aria-label="View Execution Logs"
+          >
+            <Terminal className="w-4 h-4 text-brand-500" />
+            <span>Execution Logs</span>
+          </Button>
 
           {onViewSummary && !canAbort && (
             <Button
@@ -429,6 +451,13 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
         run={run}
         onConfirm={handleAbortConfirm}
         isAborting={abortRunMutation.isPending}
+      />
+
+      {/* Interactive Virtualized Execution Log Viewer Dialog */}
+      <ExecutionLogDialog
+        open={isLogDialogOpen}
+        onOpenChange={setIsLogDialogOpen}
+        run={run}
       />
     </div>
   )

@@ -7,9 +7,10 @@ import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
 import { LiveRunMonitor } from '@/components/runs/LiveRunMonitor'
 import { RunSummaryDashboard } from '@/components/runs/RunSummaryDashboard'
+import { VirtualizedLogViewer } from '@/components/logs/VirtualizedLogViewer'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 import { useRecipe } from '@/context/RecipeContext'
-import { useRuns } from '@/hooks/use-runs'
+import { useRuns, useRunLogs } from '@/hooks/use-runs'
 import { useSuites } from '@/hooks/use-suites'
 import { useRunEvents } from '@/hooks/use-events'
 import type { HistoricalRun } from '@/types/suite'
@@ -44,7 +45,13 @@ export const RunsView: React.FC = () => {
     return runs.find((r) => r.id === selectedRunId) || null
   }, [runs, selectedRunId])
 
-  const [inspectorTab, setInspectorTab] = useState<'summary' | 'monitor'>('summary')
+  const [inspectorTab, setInspectorTab] = useState<'summary' | 'monitor' | 'logs'>('summary')
+
+  const isActive = selectedRun?.status === 'RUNNING' || selectedRun?.status === 'QUEUED'
+  const { data: runLogs = '', isLoading: isLogsLoading } = useRunLogs(
+    selectedRun?.id,
+    isActive ? 3000 : false
+  )
 
   // Automatically reset to summary tab when selecting a new terminal run, or monitor for running runs
   React.useEffect(() => {
@@ -150,33 +157,42 @@ export const RunsView: React.FC = () => {
                 {selectedRun.id}
               </span>
 
-              {/* View mode toggle for finished runs */}
-              {(selectedRun.status === 'COMPLETED' || selectedRun.status === 'FAILED' || selectedRun.status === 'ABORTED') && (
-                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg ml-2">
-                  <button
-                    type="button"
-                    onClick={() => setInspectorTab('summary')}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-                      inspectorTab === 'summary'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    Executive Summary
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInspectorTab('monitor')}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
-                      inspectorTab === 'monitor'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-                    }`}
-                  >
-                    Execution Details
-                  </button>
-                </div>
-              )}
+              {/* View mode toggle */}
+              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg ml-2">
+                <button
+                  type="button"
+                  onClick={() => setInspectorTab('summary')}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                    inspectorTab === 'summary'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Executive Summary
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectorTab('monitor')}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                    inspectorTab === 'monitor'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Execution Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectorTab('logs')}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                    inspectorTab === 'logs'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Execution Logs
+                </button>
+              </div>
             </div>
 
             <button
@@ -193,14 +209,25 @@ export const RunsView: React.FC = () => {
               <RunSummaryDashboard
                 run={selectedRun}
                 onClose={() => setSelectedRunId(null)}
+                onViewLogs={() => setInspectorTab('logs')}
               />
             </div>
-          ) : (
+          ) : inspectorTab === 'monitor' ? (
             <LiveRunMonitor
               run={selectedRun}
               onClose={() => setSelectedRunId(null)}
               onRunAborted={() => {}}
               onViewSummary={() => setInspectorTab('summary')}
+              onViewLogs={() => setInspectorTab('logs')}
+            />
+          ) : (
+            <VirtualizedLogViewer
+              logs={runLogs}
+              runId={selectedRun.id}
+              title="Container Execution Logs (run.log)"
+              subtitle={`Status: ${selectedRun.status} • Job: ${selectedRun.k8sJobName || 'vuhive-runners'}`}
+              isLoading={isLogsLoading}
+              onClose={() => setSelectedRunId(null)}
             />
           )}
         </div>
