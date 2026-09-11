@@ -20,6 +20,7 @@ import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
 import { ConfigEditorDialog } from '@/components/dialogs/ConfigEditorDialog'
 import { ConfigDiffDialog } from '@/components/dialogs/ConfigDiffDialog'
 import { UploadBuildDialog } from '@/components/dialogs/UploadBuildDialog'
+import { RunSummaryDialog } from '@/components/dialogs/RunSummaryDialog'
 import { BuildLogViewer } from '@/components/build/BuildLogViewer'
 import {
   useSuiteConfigs,
@@ -28,7 +29,7 @@ import {
   useSuiteRuns,
 } from '@/hooks/use-suites'
 import { useBuildEvents } from '@/hooks/use-events'
-import type { TestSuite, SuiteConfiguration } from '@/types/suite'
+import type { TestSuite, SuiteConfiguration, HistoricalRun } from '@/types/suite'
 
 export interface SuiteDetailViewProps {
   suite: TestSuite
@@ -45,6 +46,8 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   const [diffBaseId, setDiffBaseId] = useState<string | undefined>(undefined)
   const [diffComparisonId, setDiffComparisonId] = useState<string | undefined>(undefined)
   const [expandedArtifactLogs, setExpandedArtifactLogs] = useState<Record<string, boolean>>({})
+  const [selectedRunForSummary, setSelectedRunForSummary] = useState<HistoricalRun | null>(null)
+  const [isRunSummaryOpen, setIsRunSummaryOpen] = useState(false)
 
   // Subscribe to live SSE build status changes for reactive artifact updates
   useBuildEvents(suite.id)
@@ -454,7 +457,11 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                 {runs.map((r) => (
                   <div
                     key={r.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30"
+                    onClick={() => {
+                      setSelectedRunForSummary(r)
+                      setIsRunSummaryOpen(true)
+                    }}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
                   >
                     <div>
                       <div className="flex items-center gap-2">
@@ -499,8 +506,24 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                       )}
                     </div>
 
-                    <div className="text-xs text-slate-400 font-mono">
-                      {new Date(r.createdAt).toLocaleDateString()}
+                    <div className="flex items-center gap-3">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedRunForSummary(r)
+                          setIsRunSummaryOpen(true)
+                        }}
+                        className="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 min-h-[36px]"
+                        aria-label={`View summary for run ${r.id}`}
+                      >
+                        View Summary
+                      </Button>
+                      <div className="text-xs text-slate-400 font-mono">
+                        {new Date(r.createdAt).toLocaleDateString()}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -511,6 +534,11 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
       </Tabs>
 
       {/* Action Dialogs */}
+      <RunSummaryDialog
+        open={isRunSummaryOpen}
+        onOpenChange={setIsRunSummaryOpen}
+        run={selectedRunForSummary}
+      />
       <TriggerRunDialog
         open={isTriggerRunOpen}
         onOpenChange={setIsTriggerRunOpen}

@@ -798,6 +798,26 @@ Retrieve a single test run by its UUID:
 curl -s http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff012498beaa | jq .
 ```
 
+#### 4. Web UI Executive Summary Dashboard & SLA Audit
+
+When inspecting completed, failed, or aborted test runs in the embedded Web interface (under the **Runs** view or from the **TestSuite** Historical Executions tab), `vuhive-cloud` presents an executive summary view designed for fast performance evaluation without re-downloading large raw reports:
+
+1. **SLA Compliance Banner**:
+   - High-contrast, WCAG 2.1 AA accessible status banner: `SLA PASSED` (green) or `SLA FAILED` (red).
+   - Informs screen readers via `role="status"` and accessible ARIA attributes so state is never communicated solely by color.
+   - Summarizes runner process **Exit Code** and wall-clock **Run Duration**.
+2. **Key Performance Indicator (KPI) Cards**:
+   - **Total Iterations & Total Requests**: Formatted with localized thousands separators.
+   - **Average Throughput (TPS)**: Average sustained transaction rate (`req/s`).
+   - **Error Rate %**: Color-coded with threshold warnings (`Normal` for 0.00%, `Warning` for `<5%`, and `Critical` for `≥5%`).
+   - **Latency Percentile Summary Badges**: Distinct badges for `p50`, `p90`, `p95`, and `p99` response percentiles in milliseconds.
+3. **Execution Environment & Topology Metadata**:
+   - Contextual runner profile specifications (CPU/RAM requests and limits, container image).
+   - Kubernetes cluster scheduling context (Job name, runner namespace, and target node placement constraints).
+   - Cryptographic artifact SHA256 checksum with one-click clipboard copy and target architecture badge (`linux/amd64` / `linux/arm64`).
+   - Localized and UTC start and finish timestamps.
+4. **Export & Raw Telemetry**:
+   - Direct download links for raw `summary.json` report and execution `run.log`.
 
 ---
 

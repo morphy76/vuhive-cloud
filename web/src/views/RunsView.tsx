@@ -6,6 +6,7 @@ import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
 import { LiveRunMonitor } from '@/components/runs/LiveRunMonitor'
+import { RunSummaryDashboard } from '@/components/runs/RunSummaryDashboard'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 import { useRecipe } from '@/context/RecipeContext'
 import { useRuns } from '@/hooks/use-runs'
@@ -43,8 +44,21 @@ export const RunsView: React.FC = () => {
     return runs.find((r) => r.id === selectedRunId) || null
   }, [runs, selectedRunId])
 
+  const [inspectorTab, setInspectorTab] = useState<'summary' | 'monitor'>('summary')
+
+  // Automatically reset to summary tab when selecting a new terminal run, or monitor for running runs
+  React.useEffect(() => {
+    if (!selectedRun) return
+    if (selectedRun.status === 'RUNNING' || selectedRun.status === 'QUEUED') {
+      setInspectorTab('monitor')
+    } else {
+      setInspectorTab('summary')
+    }
+  }, [selectedRun?.id, selectedRun?.status])
+
   const handleRunTriggered = (newRun: HistoricalRun) => {
     setSelectedRunId(newRun.id)
+    setInspectorTab('monitor')
   }
 
   const renderStatusBadge = (status: string) => {
@@ -124,24 +138,71 @@ export const RunsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Selected Run Live Execution Monitor */}
+      {/* Selected Run Inspection: Executive Summary or Live Execution Monitor */}
       {selectedRun && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 px-1">
-            <span>ACTIVE INSPECTION MONITOR</span>
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                ACTIVE INSPECTION
+              </span>
+              <span className="font-mono text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                {selectedRun.id}
+              </span>
+
+              {/* View mode toggle for finished runs */}
+              {(selectedRun.status === 'COMPLETED' || selectedRun.status === 'FAILED' || selectedRun.status === 'ABORTED') && (
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg ml-2">
+                  <button
+                    type="button"
+                    onClick={() => setInspectorTab('summary')}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                      inspectorTab === 'summary'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Executive Summary
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectorTab('monitor')}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                      inspectorTab === 'monitor'
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    Execution Details
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={() => setSelectedRunId(null)}
-              className="text-brand-600 hover:text-brand-700 dark:text-brand-400 text-xs font-medium cursor-pointer"
+              className="text-brand-600 hover:text-brand-700 dark:text-brand-400 text-xs font-medium cursor-pointer self-start sm:self-auto"
             >
-              Close Monitor
+              Close Inspector
             </button>
           </div>
-          <LiveRunMonitor
-            run={selectedRun}
-            onClose={() => setSelectedRunId(null)}
-            onRunAborted={() => {}}
-          />
+
+          {inspectorTab === 'summary' ? (
+            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs p-6">
+              <RunSummaryDashboard
+                run={selectedRun}
+                onClose={() => setSelectedRunId(null)}
+              />
+            </div>
+          ) : (
+            <LiveRunMonitor
+              run={selectedRun}
+              onClose={() => setSelectedRunId(null)}
+              onRunAborted={() => {}}
+              onViewSummary={() => setInspectorTab('summary')}
+            />
+          )}
         </div>
       )}
 
