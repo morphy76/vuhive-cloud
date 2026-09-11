@@ -40,25 +40,34 @@ See [`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md) for full details.
 ### Prerequisites
 
 - **Go**: Version `1.26`
+- **Node.js**: Version `22+` (for React 19 frontend development)
+- **pnpm**: Fast, disk space efficient package manager (enabled via `corepack enable` or standalone install)
 - **Docker / Rancher Desktop**: Docker 29+ (or nerdctl) with BuildKit enabled
 - **Kubernetes**: 1.28+ local cluster (Rancher Desktop, Kind, or Minikube)
 - **Helm**: 3.10+ or 4+
 - **kubectl**: Configured for your local Kubernetes cluster
 - **golangci-lint**: Recommended for static code analysis
 
-### Building Local Binaries
+### Building Local Binaries and Frontend Assets
 
-All binaries are compiled via the root `Makefile` with compile-time version metadata injected via `ldflags`:
+All binaries and static web assets are compiled via the root `Makefile` with compile-time version metadata injected via `ldflags` (reading from `VERSION.vuhive` and `VERSION.bff`):
 
 ```bash
-# Build all local binaries (server, bff, runner-wrapper, runner-init)
+# Build all local binaries and frontend production assets
 make build
 
-# Build individual binaries
+# Install frontend dependencies (pnpm install in web/)
+make web-install
+
+# Build frontend production static assets (pnpm build in web/)
+make web-build
+
+# Build individual backend binaries
 make build-server
-make build-bff
+make build-bff       # Injects version metadata from VERSION.bff
 make build-runner-wrapper
 make build-runner-init
+make build-cli
 
 # View all available targets and descriptions
 make help
@@ -233,23 +242,23 @@ We maintain strict Test-Driven Development (TDD) discipline:
 2. **Green**: Implement the minimal code required to pass the test.
 3. **Refactor**: Clean up and optimize while ensuring all tests stay green.
 
-### Running Tests
+### Running Tests and Linting
 
 ```bash
-# Run unit tests
+# Run Go unit tests
 make test
 
-# Run tests with the Go race detector
+# Run Go unit tests with the Go race detector
 make test-race
 
 # Run Go BFF unit tests with race detector
 make test-bff
 
 # Run web client unit and component tests (Vitest)
-make test-web
+make web-test       # Alias: make test-web
 
 # Run web client type-checking and linter
-make lint-web
+make web-lint       # Alias: make lint-web
 
 # Run integration tests (requires Docker for testcontainers)
 make test-integration
@@ -257,8 +266,11 @@ make test-integration
 # Run benchmarks
 make test-bench
 
-# Run Go linter
+# Run Go linter across entire codebase
 make lint
+
+# Run Go linter specifically on Go BFF packages
+make lint-bff
 ```
 
 ### Automated CI/CD Pipelines (GitHub Actions)

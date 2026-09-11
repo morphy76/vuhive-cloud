@@ -1,10 +1,15 @@
 COMPONENT := vuhive
 VERSION ?= $(shell cat VERSION.$(COMPONENT) 2>/dev/null || echo "0.0.0")
+VERSION_BFF ?= $(shell cat VERSION.bff 2>/dev/null || echo "$(VERSION)")
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 MODULE := github.com/morphy76/vuhive-cloud
 LDFLAGS := -s -w \
   -X '$(MODULE)/internal/version.Version=$(VERSION)' \
+  -X '$(MODULE)/internal/version.Commit=$(COMMIT)' \
+  -X '$(MODULE)/internal/version.BuildTime=$(BUILD_TIME)'
+LDFLAGS_BFF := -s -w \
+  -X '$(MODULE)/internal/version.Version=$(VERSION_BFF)' \
   -X '$(MODULE)/internal/version.Commit=$(COMMIT)' \
   -X '$(MODULE)/internal/version.BuildTime=$(BUILD_TIME)'
 
@@ -21,19 +26,32 @@ help: ## Display this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: build
-build: build-web build-server build-runner-wrapper build-runner-init build-bff build-cli ## Build all binaries and web assets
+build: web-build build-server build-runner-wrapper build-runner-init build-bff build-cli ## Build all binaries and web assets
 
-.PHONY: build-web
-build-web: ## Build web SPA static assets with pnpm
+.PHONY: web-install
+web-install: ## Install frontend dependencies via pnpm in web/
+	pnpm --dir web install
+
+.PHONY: web-build
+web-build: ## Build frontend production assets with pnpm in web/
 	pnpm --dir web build
 
-.PHONY: test-web
-test-web: ## Run web unit and component tests
+.PHONY: web-test
+web-test: ## Run frontend Vitest component tests in web/
 	pnpm --dir web test
 
-.PHONY: lint-web
-lint-web: ## Run web type checking and linter
+.PHONY: web-lint
+web-lint: ## Run frontend linter and type checking in web/
 	pnpm --dir web lint
+
+.PHONY: build-web
+build-web: web-build ## Alias for web-build
+
+.PHONY: test-web
+test-web: web-test ## Alias for web-test
+
+.PHONY: lint-web
+lint-web: web-lint ## Alias for web-lint
 
 .PHONY: build-server
 build-server: ## Build control plane server binary
@@ -48,7 +66,7 @@ build-cli: ## Build developer CLI binary
 .PHONY: build-bff
 build-bff: ## Build Backend-For-Frontend (BFF) service binary
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/bff ./cmd/bff
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS_BFF)" -o bin/bff ./cmd/bff
 
 .PHONY: build-runner-wrapper
 build-runner-wrapper: ## Build runner wrapper binary
@@ -75,7 +93,7 @@ docker-build-server: ## Build control plane server container image with --load
 .PHONY: docker-build-bff
 docker-build-bff: ## Build BFF service container image with --load
 	$(DOCKER) build --load --provenance=false \
-		--build-arg VERSION=$(VERSION) \
+		--build-arg VERSION=$(VERSION_BFF) \
 		--build-arg COMMIT=$(COMMIT) \
 		--build-arg BUILD_TIME=$(BUILD_TIME) \
 		-t $(BFF_IMAGE) \
@@ -122,6 +140,10 @@ test-examples: ## Build and verify examples
 .PHONY: lint
 lint: ## Run golangci-lint
 	@which golangci-lint > /dev/null 2>&1 && golangci-lint run ./... || echo "golangci-lint not installed"
+
+.PHONY: lint-bff
+lint-bff: ## Run golangci-lint on BFF code
+	@which golangci-lint > /dev/null 2>&1 && golangci-lint run ./cmd/bff/... ./internal/bff/... || echo "golangci-lint not installed"
 
 .PHONY: generate
 generate: ## Run go generate

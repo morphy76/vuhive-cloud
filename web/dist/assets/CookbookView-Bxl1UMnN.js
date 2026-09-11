@@ -1,4 +1,4 @@
-import{a as I,j as n,f as N}from"./vendor-query-BbWbP_Ow.js";import{c as P,a as R,B,b as K}from"./index-CEybtjJm.js";import{n as M,o as H,R as G,T as W,r as q,aw as $,I as V,ax as F,e as z,ay as J,a2 as X,X as Z,B as Q,h as Y,m as ee}from"./vendor-ui-GQIPKQuZ.js";import{r as ne,M as te}from"./vendor-markdown-BHkkQZ4e.js";import"./vendor-radix-BMM7zfOc.js";import"./vendor-editor-CzsMigAb.js";import"./vendor-charts-D-vLgTWD.js";const ae=`# vuhive-cloud Adoption Guide & API Recipes (Cookbook)
+import{a as I,j as n,f as N}from"./vendor-query-BbWbP_Ow.js";import{c as P,a as R,B,b as K}from"./index-bOxdqFWb.js";import{n as M,o as H,R as G,T as W,r as q,aw as $,I as V,ax as F,e as z,ay as J,a2 as X,X as Z,B as Q,h as Y,m as ee}from"./vendor-ui-GQIPKQuZ.js";import{r as ne,M as te}from"./vendor-markdown-BHkkQZ4e.js";import"./vendor-radix-BMM7zfOc.js";import"./vendor-editor-CzsMigAb.js";import"./vendor-charts-D-vLgTWD.js";const ae=`# vuhive-cloud Adoption Guide & API Recipes (Cookbook)
 
 Welcome to the \`vuhive-cloud\` adoption cookbook. This guide provides an end-to-end walkthrough for test engineers, DevOps specialists, and platform architects looking to build, schedule, execute, and monitor distributed load testing workloads on Kubernetes with \`vuhive-cloud\`.
 
@@ -1353,7 +1353,7 @@ When compiling the frontend for production, Vite outputs optimized bundles into 
 
 \`\`\`bash
 # Build production bundle:
-make build-web
+make web-build
 # or:
 pnpm --dir web build
 \`\`\`
@@ -1405,7 +1405,7 @@ Execute unit and component tests for responsive layouts, navigation switching, a
 
 \`\`\`bash
 # Run Vitest test suite:
-make test-web
+make web-test
 # or:
 pnpm --dir web test
 \`\`\`

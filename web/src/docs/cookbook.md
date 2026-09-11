@@ -1353,7 +1353,7 @@ When compiling the frontend for production, Vite outputs optimized bundles into 
 
 ```bash
 # Build production bundle:
-make build-web
+make web-build
 # or:
 pnpm --dir web build
 ```
@@ -1405,7 +1405,7 @@ Execute unit and component tests for responsive layouts, navigation switching, a
 
 ```bash
 # Run Vitest test suite:
-make test-web
+make web-test
 # or:
 pnpm --dir web test
 ```
