@@ -20,11 +20,35 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 })
 
-// Mock ResizeObserver for Radix UI primitives in jsdom
+// Mock ResizeObserver for Radix UI primitives and Recharts in jsdom
 global.ResizeObserver = class ResizeObserver {
-  observe() {}
+  callback: (entries: any[]) => void
+  constructor(callback: any) {
+    this.callback = callback
+  }
+  observe(target: any) {
+    if (this.callback) {
+      this.callback([{ target, contentRect: { width: 800, height: 400 } }])
+    }
+  }
   unobserve() {}
   disconnect() {}
+}
+
+// Mock SVGElement.prototype.getBBox for Recharts in jsdom
+if (typeof SVGElement !== 'undefined' && !(SVGElement.prototype as any).getBBox) {
+  ;(SVGElement.prototype as any).getBBox = () =>
+    ({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      top: 0,
+      toJSON: () => {},
+    }) as any
 }
 
 // Mock Range.prototype.getClientRects for CodeMirror in jsdom

@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { useProfile } from '@/hooks/use-profiles'
 import { useSuiteArtifacts } from '@/hooks/use-suites'
+import { VisualAnalyticsSection } from '@/components/charts/VisualAnalyticsSection'
 import type { HistoricalRun } from '@/types/suite'
 
 export interface RunSummaryDashboardProps {
@@ -461,7 +462,10 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
         </div>
       </div>
 
-      {/* 3. Execution Environment & Technical Metadata */}
+      {/* 3. Interactive Visual Analytics (Latency Percentiles, Throughput Correlation, Historical Trends) */}
+      <VisualAnalyticsSection run={run} />
+
+      {/* 4. Execution Environment & Technical Metadata */}
       <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-6">
         <div>
           <h3 className="text-base font-bold text-slate-900 dark:text-white">
