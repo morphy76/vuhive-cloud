@@ -44,6 +44,13 @@ describe('WCAG 2.1 AA Accessibility Compliance', () => {
     expect(results).toHaveNoViolations()
   })
 
+  it('ProfilesView has no accessibility violations', async () => {
+    const { ProfilesView } = await import('../views/ProfilesView')
+    const { container } = render(withTooltipProvider(<ProfilesView />))
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  })
+
   it('YamlDiffViewer has no accessibility violations', async () => {
     const { YamlDiffViewer } = await import('../components/editor/YamlDiffViewer')
     const { container } = render(

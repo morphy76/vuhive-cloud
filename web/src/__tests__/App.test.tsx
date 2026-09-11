@@ -36,6 +36,11 @@ describe('App & Responsive Shell Layout', () => {
     expect(screen.getByText('Cron Schedules')).toBeInTheDocument()
     expect(screen.getByText(/Native Kubernetes CronJob Schedules/i)).toBeInTheDocument()
 
+    // Navigate to Profiles
+    const profilesButtons = screen.getAllByRole('button', { name: /profiles/i })
+    fireEvent.click(profilesButtons[0])
+    expect(screen.getByRole('heading', { name: /runner profiles/i })).toBeInTheDocument()
+
     // Back to Dashboard
     const dashboardButtons = screen.getAllByRole('button', { name: /dashboard/i })
     fireEvent.click(dashboardButtons[0])

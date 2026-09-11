@@ -8,6 +8,7 @@ import { DashboardView } from '@/views/DashboardView'
 import { SuitesView } from '@/views/SuitesView'
 import { RunsView } from '@/views/RunsView'
 import { SchedulesView } from '@/views/SchedulesView'
+import { ProfilesView } from '@/views/ProfilesView'
 import { queryClient, idbPersister } from '@/lib/query-client'
 
 import { RecipeProvider } from '@/context/RecipeContext'
@@ -22,6 +23,7 @@ export const AppContent: React.FC = () => {
         {currentRoute === 'suites' && <SuitesView />}
         {currentRoute === 'runs' && <RunsView />}
         {currentRoute === 'schedules' && <SchedulesView />}
+        {currentRoute === 'profiles' && <ProfilesView />}
       </Shell>
     </RecipeProvider>
   )

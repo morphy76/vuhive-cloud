@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { InfoBadge } from '@/components/help/InfoBadge'
+import { useProfiles } from '@/hooks/use-profiles'
 
 export interface TriggerRunDialogProps {
   open: boolean
@@ -21,11 +22,29 @@ export const TriggerRunDialog: React.FC<TriggerRunDialogProps> = ({
   open,
   onOpenChange,
 }) => {
+  const { data: profiles = [] } = useProfiles()
+  const [selectedProfileId, setSelectedProfileId] = React.useState<string>('')
   const [pods, setPods] = React.useState('8')
   const [cpu, setCpu] = React.useState('1000m')
   const [memory, setMemory] = React.useState('1Gi')
   const [tolerations, setTolerations] = React.useState('dedicated=loadgen:NoSchedule')
   const [barrierEnabled, setBarrierEnabled] = React.useState(true)
+
+  const handleProfileChange = (profileId: string) => {
+    setSelectedProfileId(profileId)
+    if (!profileId) return
+    const p = profiles.find((item) => item.id === profileId)
+    if (p) {
+      setCpu(p.cpu_limit || p.cpu_request || '1000m')
+      setMemory(p.memory_limit || p.memory_request || '1Gi')
+      if (p.tolerations && p.tolerations.length > 0) {
+        const tol = p.tolerations[0]
+        setTolerations(`${tol.key || ''}=${tol.value || ''}:${tol.effect || 'NoSchedule'}`)
+      } else {
+        setTolerations('')
+      }
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -41,6 +60,35 @@ export const TriggerRunDialog: React.FC<TriggerRunDialogProps> = ({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <label
+                htmlFor="runner-profile-select"
+                className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                Runner Profile
+              </label>
+              <HelpTooltip
+                text="Select a pre-registered Runner Profile to auto-fill compute limits and scheduling rules, or customize manually."
+                label="Help for runner profile selection"
+              />
+            </div>
+            <select
+              id="runner-profile-select"
+              value={selectedProfileId}
+              onChange={(e) => handleProfileChange(e.target.value)}
+              aria-label="Runner Profile"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2 text-xs font-medium text-slate-900 dark:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              <option value="">Custom Configuration</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} (CPU: {p.cpu_request}/{p.cpu_limit}, RAM: {p.memory_request}/{p.memory_limit})
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
