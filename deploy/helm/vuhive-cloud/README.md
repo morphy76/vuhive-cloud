@@ -134,7 +134,10 @@ helm install vuhive deploy/helm/vuhive-cloud \
   --set image.repository=vuhive/server \
   --set image.tag=local \
   --set image.pullPolicy=IfNotPresent \
-  --set runner.initImage=vuhive/runner-init:local
+  --set runner.initImage=vuhive/runner-init:local \
+  --set bff.image.repository=vuhive/bff \
+  --set bff.image.tag=local \
+  --set bff.image.pullPolicy=IfNotPresent
 ```
 
 For full details on local container building, BuildKit cache pruning (`make docker-prune`), and troubleshooting `ImagePullBackOff` / Kubelet ImageGC eviction issues, see [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
