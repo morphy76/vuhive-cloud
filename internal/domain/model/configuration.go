@@ -140,5 +140,15 @@ func (c *Configuration) UpdateContent(contentYAML, s3ConfigKey string) error {
 	return nil
 }
 
+// SetName updates the configuration profile name.
+func (c *Configuration) SetName(name string) error {
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		return ErrEmptyName
+	}
+	c.name = trimmedName
+	return nil
+}
+
 // Compile-time interface assertion
 var _ Entity = (*Configuration)(nil)

@@ -632,6 +632,13 @@ type CreateConfigRequest struct {
 	IsDefault   bool   `json:"is_default,omitempty"`
 }
 
+// UpdateConfigRequest represents the request body to update an attached configuration.
+type UpdateConfigRequest struct {
+	Name        string `json:"name" binding:"required"`
+	ContentYAML string `json:"content_yaml" binding:"required"`
+	IsDefault   *bool  `json:"is_default,omitempty"`
+}
+
 // ConfigResponse represents the JSON response for an attached scenario Configuration entity.
 type ConfigResponse struct {
 	ID          string `json:"id"`

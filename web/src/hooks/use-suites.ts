@@ -121,6 +121,23 @@ export function useDeleteSuiteConfig(suiteId: string) {
   )
 }
 
+export function useUpdateSuiteConfig(suiteId: string) {
+  const queryClient = useSafeQueryClient()
+
+  return useMutation(
+    {
+      mutationFn: (args: {
+        configId: string
+        data: { name: string; content_yaml: string; is_default?: boolean }
+      }) => api.updateSuiteConfig(suiteId, args.configId, args.data),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['suites', suiteId, 'configs'] })
+      },
+    },
+    queryClient
+  )
+}
+
 export function useSuiteArtifacts(suiteId: string) {
   const client = useSafeQueryClient()
   return useQuery(

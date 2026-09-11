@@ -33,11 +33,21 @@ type CreateConfigCommand struct {
 	IsDefault   bool
 }
 
+// UpdateConfigCommand encapsulates input parameters for updating an attached test configuration.
+type UpdateConfigCommand struct {
+	SuiteID     string
+	ConfigID    string
+	Name        string
+	ContentYAML string
+	IsDefault   *bool
+}
+
 // ConfigsUseCase defines driving use cases for managing test scenario configurations.
 type ConfigsUseCase interface {
 	CreateConfig(ctx context.Context, cmd CreateConfigCommand) (*model.Configuration, error)
 	GetConfig(ctx context.Context, suiteID, configID string) (*model.Configuration, error)
 	ListConfigs(ctx context.Context, suiteID string) ([]*model.Configuration, error)
+	UpdateConfig(ctx context.Context, cmd UpdateConfigCommand) (*model.Configuration, error)
 	DeleteConfig(ctx context.Context, suiteID, configID string) error
 }
 

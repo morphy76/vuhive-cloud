@@ -1427,6 +1427,63 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+    put:
+      summary: Update scenario configuration
+      description: Updates the name, content, or default status of an attached scenario configuration.
+      operationId: updateConfig
+      tags:
+        - Configurations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+        - name: configId
+          in: path
+          required: true
+          description: Configuration ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConfigRequest'
+      responses:
+        '200':
+          description: Updated configuration details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Configuration or test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
     delete:
       summary: Delete scenario configuration
       description: Deletes an attached configuration and its backing S3 object.
@@ -3233,6 +3290,24 @@ components:
           example: |
             vus: 50
             duration: 5m
+        is_default:
+          type: boolean
+          example: true
+
+    UpdateConfigRequest:
+      type: object
+      required:
+        - name
+        - content_yaml
+      properties:
+        name:
+          type: string
+          example: staging-profile-updated
+        content_yaml:
+          type: string
+          example: |
+            vus: 100
+            duration: 10m
         is_default:
           type: boolean
           example: true

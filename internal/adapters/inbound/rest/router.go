@@ -160,6 +160,7 @@ func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 					suites.POST("/:id/configs", roleGuard(model.RoleDeveloper, model.RoleAdmin), configHandler.CreateConfig)
 					suites.GET("/:id/configs", roleGuard(model.RoleViewer), configHandler.ListConfigs)
 					suites.GET("/:id/configs/:configId", roleGuard(model.RoleViewer), configHandler.GetConfig)
+					suites.PUT("/:id/configs/:configId", roleGuard(model.RoleDeveloper, model.RoleAdmin), configHandler.UpdateConfig)
 					suites.DELETE("/:id/configs/:configId", roleGuard(model.RoleDeveloper, model.RoleAdmin), configHandler.DeleteConfig)
 				}
 

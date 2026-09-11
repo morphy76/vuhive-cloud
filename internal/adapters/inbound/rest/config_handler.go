@@ -71,6 +71,34 @@ func (h *ConfigHandler) ListConfigs(c *gin.Context) {
 	c.JSON(http.StatusOK, ToConfigListResponse(configs))
 }
 
+// UpdateConfig handles PUT /api/v1/suites/:id/configs/:configId to update an attached configuration.
+func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
+	suiteID := c.Param("id")
+	configID := c.Param("configId")
+
+	var req UpdateConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	cmd := inbound.UpdateConfigCommand{
+		SuiteID:     suiteID,
+		ConfigID:    configID,
+		Name:        req.Name,
+		ContentYAML: req.ContentYAML,
+		IsDefault:   req.IsDefault,
+	}
+
+	config, err := h.configsUC.UpdateConfig(c.Request.Context(), cmd)
+	if err != nil {
+		HandleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, ToConfigResponse(config))
+}
+
 // DeleteConfig handles DELETE /api/v1/suites/:id/configs/:configId to delete an attached configuration.
 func (h *ConfigHandler) DeleteConfig(c *gin.Context) {
 	suiteID := c.Param("id")

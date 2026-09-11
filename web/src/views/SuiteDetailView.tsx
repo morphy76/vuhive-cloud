@@ -8,15 +8,17 @@ import {
   Clock,
   Layers,
   Trash2,
-  Eye,
   Plus,
   Terminal,
+  Split,
+  FileEdit,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
-import { AttachConfigDialog } from '@/components/dialogs/AttachConfigDialog'
+import { ConfigEditorDialog } from '@/components/dialogs/ConfigEditorDialog'
+import { ConfigDiffDialog } from '@/components/dialogs/ConfigDiffDialog'
 import { UploadBuildDialog } from '@/components/dialogs/UploadBuildDialog'
 import { BuildLogViewer } from '@/components/build/BuildLogViewer'
 import {
@@ -37,8 +39,11 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   const [activeTab, setActiveTab] = useState('configs')
   const [isTriggerRunOpen, setIsTriggerRunOpen] = useState(false)
   const [isUploadBuildOpen, setIsUploadBuildOpen] = useState(false)
-  const [isAttachConfigOpen, setIsAttachConfigOpen] = useState(false)
-  const [selectedYamlConfig, setSelectedYamlConfig] = useState<SuiteConfiguration | null>(null)
+  const [isConfigEditorOpen, setIsConfigEditorOpen] = useState(false)
+  const [editingConfig, setEditingConfig] = useState<SuiteConfiguration | null>(null)
+  const [isDiffDialogOpen, setIsDiffDialogOpen] = useState(false)
+  const [diffBaseId, setDiffBaseId] = useState<string | undefined>(undefined)
+  const [diffComparisonId, setDiffComparisonId] = useState<string | undefined>(undefined)
   const [expandedArtifactLogs, setExpandedArtifactLogs] = useState<Record<string, boolean>>({})
 
   // Subscribe to live SSE build status changes for reactive artifact updates
@@ -103,7 +108,10 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
           <div className="flex flex-wrap items-center gap-2.5">
             <Button
               variant="outline"
-              onClick={() => setIsAttachConfigOpen(true)}
+              onClick={() => {
+                setEditingConfig(null)
+                setIsConfigEditorOpen(true)
+              }}
               className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800"
             >
               <FileCode className="w-4 h-4" />
@@ -148,7 +156,7 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
         {/* Configurations Tab */}
         <TabsContent value="configs">
           <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
                   Scenario Configurations
@@ -157,15 +165,35 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                   Traffic profiles, virtual user targets, and stage progression rules.
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAttachConfigOpen(true)}
-                className="gap-1.5 min-h-[36px]"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>New Config</span>
-              </Button>
+              <div className="flex items-center gap-2">
+                {configs.length >= 2 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDiffBaseId(configs[0].id)
+                      setDiffComparisonId(configs[1].id)
+                      setIsDiffDialogOpen(true)
+                    }}
+                    className="gap-1.5 min-h-[36px]"
+                  >
+                    <Split className="w-3.5 h-3.5" />
+                    <span>Compare Versions</span>
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditingConfig(null)
+                    setIsConfigEditorOpen(true)
+                  }}
+                  className="gap-1.5 min-h-[36px]"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New Config</span>
+                </Button>
+              </div>
             </div>
 
             {isLoadingConfigs ? (
@@ -181,7 +209,10 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                 </p>
                 <Button
                   variant="outline"
-                  onClick={() => setIsAttachConfigOpen(true)}
+                  onClick={() => {
+                    setEditingConfig(null)
+                    setIsConfigEditorOpen(true)
+                  }}
                   className="mt-4 min-h-[40px]"
                 >
                   Attach Configuration
@@ -210,13 +241,33 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setSelectedYamlConfig(cfg)}
+                        onClick={() => {
+                          setEditingConfig(cfg)
+                          setIsConfigEditorOpen(true)
+                        }}
                         className="gap-1 text-slate-600 dark:text-slate-400 min-h-[36px]"
-                        aria-label={`View YAML for ${cfg.name}`}
+                        aria-label={`Edit and view YAML for ${cfg.name}`}
                       >
-                        <Eye className="w-4 h-4" />
-                        <span>View YAML</span>
+                        <FileEdit className="w-4 h-4" />
+                        <span>Edit / Tune</span>
                       </Button>
+                      {configs.length >= 2 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setDiffBaseId(cfg.id)
+                            const other = configs.find((c) => c.id !== cfg.id)
+                            setDiffComparisonId(other?.id)
+                            setIsDiffDialogOpen(true)
+                          }}
+                          className="gap-1 text-slate-600 dark:text-slate-400 min-h-[36px]"
+                          aria-label={`Compare configuration ${cfg.name}`}
+                        >
+                          <Split className="w-4 h-4" />
+                          <span>Diff</span>
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -459,51 +510,28 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
         </TabsContent>
       </Tabs>
 
-      {/* YAML Viewer Modal */}
-      {selectedYamlConfig && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs"
-        >
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white">
-                  {selectedYamlConfig.name}
-                </h3>
-                <p className="text-xs text-slate-500 font-mono">
-                  {selectedYamlConfig.id}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedYamlConfig(null)}
-                className="min-h-[36px]"
-              >
-                Close
-              </Button>
-            </div>
-            <pre className="p-4 rounded-xl bg-slate-950 text-slate-100 font-mono text-xs overflow-x-auto max-h-80">
-              {selectedYamlConfig.contentYaml}
-            </pre>
-          </div>
-        </div>
-      )}
-
-      {/* Child Action Dialogs */}
+      {/* Action Dialogs */}
       <TriggerRunDialog open={isTriggerRunOpen} onOpenChange={setIsTriggerRunOpen} />
       <UploadBuildDialog
         suiteId={suite.id}
         open={isUploadBuildOpen}
         onOpenChange={setIsUploadBuildOpen}
       />
-      <AttachConfigDialog
+      <ConfigEditorDialog
         suiteId={suite.id}
-        open={isAttachConfigOpen}
-        onOpenChange={setIsAttachConfigOpen}
+        open={isConfigEditorOpen}
+        onOpenChange={setIsConfigEditorOpen}
+        initialConfig={editingConfig}
+        existingConfigs={configs}
+      />
+      <ConfigDiffDialog
+        open={isDiffDialogOpen}
+        onOpenChange={setIsDiffDialogOpen}
+        configs={configs}
+        initialBaseId={diffBaseId}
+        initialComparisonId={diffComparisonId}
       />
     </div>
   )
 }
+

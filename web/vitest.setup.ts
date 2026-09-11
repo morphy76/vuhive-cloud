@@ -26,3 +26,33 @@ global.ResizeObserver = class ResizeObserver {
   unobserve() {}
   disconnect() {}
 }
+
+// Mock Range.prototype.getClientRects for CodeMirror in jsdom
+if (typeof Range !== 'undefined') {
+  Range.prototype.getClientRects = () =>
+    [
+      {
+        bottom: 0,
+        height: 0,
+        left: 0,
+        right: 0,
+        top: 0,
+        width: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      },
+    ] as any
+  Range.prototype.getBoundingClientRect = () =>
+    ({
+      bottom: 0,
+      height: 0,
+      left: 0,
+      right: 0,
+      top: 0,
+      width: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    }) as any
+}

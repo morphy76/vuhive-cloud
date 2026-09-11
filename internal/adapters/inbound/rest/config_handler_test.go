@@ -50,6 +50,14 @@ func (m *MockConfigsUseCase) DeleteConfig(ctx context.Context, suiteID, configID
 	return m.Called(ctx, suiteID, configID).Error(0)
 }
 
+func (m *MockConfigsUseCase) UpdateConfig(ctx context.Context, cmd inbound.UpdateConfigCommand) (*model.Configuration, error) {
+	args := m.Called(ctx, cmd)
+	if c := args.Get(0); c != nil {
+		return c.(*model.Configuration), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 func setupConfigTestRouter(mockUC *MockConfigsUseCase) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -60,6 +68,7 @@ func setupConfigTestRouter(mockUC *MockConfigsUseCase) *gin.Engine {
 		v1.POST("", handler.CreateConfig)
 		v1.GET("", handler.ListConfigs)
 		v1.GET("/:configId", handler.GetConfig)
+		v1.PUT("/:configId", handler.UpdateConfig)
 		v1.DELETE("/:configId", handler.DeleteConfig)
 	}
 	return router
@@ -208,6 +217,69 @@ func TestConfigHandler_DeleteConfig(t *testing.T) {
 		router := setupConfigTestRouter(mockUC)
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/suites/s-1/configs/missing-c", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+	})
+}
+
+func TestConfigHandler_UpdateConfig(t *testing.T) {
+	t.Run("updates configuration returning HTTP 200 OK", func(t *testing.T) {
+		mockUC := new(MockConfigsUseCase)
+		cfg, _ := model.NewConfiguration("s-1", "staging-updated", "vus: 20", "suites/s-1/configs/c-1.yaml", true)
+		isDefault := true
+		mockUC.On("UpdateConfig", mock.Anything, inbound.UpdateConfigCommand{
+			SuiteID:     "s-1",
+			ConfigID:    "c-1",
+			Name:        "staging-updated",
+			ContentYAML: "vus: 20",
+			IsDefault:   &isDefault,
+		}).Return(cfg, nil).Once()
+
+		router := setupConfigTestRouter(mockUC)
+
+		body := []byte(`{"name":"staging-updated","content_yaml":"vus: 20","is_default":true}`)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/suites/s-1/configs/c-1", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var resp rest.ConfigResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, cfg.ID(), resp.ID)
+		assert.Equal(t, "staging-updated", resp.Name)
+		assert.Equal(t, "vus: 20", resp.ContentYAML)
+		assert.True(t, resp.IsDefault)
+		mockUC.AssertExpectations(t)
+	})
+
+	t.Run("returns HTTP 400 on invalid JSON body", func(t *testing.T) {
+		mockUC := new(MockConfigsUseCase)
+		router := setupConfigTestRouter(mockUC)
+
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/suites/s-1/configs/c-1", bytes.NewReader([]byte(`{"name":""}`)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("returns HTTP 404 when configuration to update is not found", func(t *testing.T) {
+		mockUC := new(MockConfigsUseCase)
+		mockUC.On("UpdateConfig", mock.Anything, mock.Anything).Return(nil, model.ErrNotFound).Once()
+
+		router := setupConfigTestRouter(mockUC)
+
+		body := []byte(`{"name":"name","content_yaml":"yaml"}`)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/suites/s-1/configs/missing", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
 		router.ServeHTTP(w, req)
