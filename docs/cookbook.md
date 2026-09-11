@@ -1310,7 +1310,20 @@ curl -s -i http://localhost:8081/manifest.webmanifest
 curl -s -i http://localhost:8081/sw.js
 ```
 
-#### 7. Automated Testing (Vitest & Testing Library)
+#### 7. Test Suite Catalog, Search Filters & Detail Management
+
+The Test Suite catalog view (`web/src/views/SuitesView.tsx`) provides high-density, responsive test scenario organization:
+- **Responsive Layout**: Renders an accessible data table on desktop and tablet screens ($\ge 768\text{px}$) with sortable column headers, and touch-friendly cards with minimum 44px tap targets on mobile screens ($< 768\text{px}$).
+- **Search & Live Filtering**: Real-time search filtering across test suite names, descriptions, and IDs, alongside lifecycle state filters (`ALL`, `ACTIVE`, `DRAFT`, `ARCHIVED`).
+- **Flexible Sorting & Pagination**: Sort by creation date (newest/oldest), alphabetical name, or recently updated timestamps, paired with configurable page size limits and pagination controls.
+- **Real-Time Name Uniqueness Validation**: Modal dialog (`CreateSuiteDialog.tsx`) performs live uniqueness validation as users type, preventing naming collisions before submitting requests to `POST /api/v1/suites`.
+- **Comprehensive Detail View (`SuiteDetailView.tsx`)**:
+  - Suite header metadata with state indicators and quick actions ("Trigger Run", "Upload Build", "Attach Config").
+  - **Attached Configurations**: List of attached YAML scenarios with inline YAML viewing and deletion controls.
+  - **Compiled Artifacts**: Cross-compiled binaries by target architecture with SHA256 integrity checksums and build logs.
+  - **Historical Runs**: Execution history filtered for the suite, displaying status badges, duration, TPS, and latency percentiles.
+
+#### 8. Automated Testing (Vitest & Testing Library)
 
 Execute unit and component tests for responsive layouts, navigation switching, and theme toggling:
 
@@ -1321,7 +1334,7 @@ make test-web
 pnpm --dir web test
 ```
 
-#### 8. Accessible Design System (WCAG 2.1 AA)
+#### 9. Accessible Design System (WCAG 2.1 AA)
 
 The web interface ships an accessible design system built on **Radix UI** headless primitives conforming to **WCAG 2.1 AA**. All interactive components inherit battle-tested ARIA patterns, focus management, and keyboard navigation from Radix's accessibility-first primitives.
 
