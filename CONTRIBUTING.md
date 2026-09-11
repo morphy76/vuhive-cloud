@@ -242,15 +242,38 @@ make test
 # Run tests with the Go race detector
 make test-race
 
+# Run Go BFF unit tests with race detector
+make test-bff
+
+# Run web client unit and component tests (Vitest)
+make test-web
+
+# Run web client type-checking and linter
+make lint-web
+
 # Run integration tests (requires Docker for testcontainers)
 make test-integration
 
 # Run benchmarks
 make test-bench
 
-# Run linter
+# Run Go linter
 make lint
 ```
+
+### Automated CI/CD Pipelines (GitHub Actions)
+
+Continuous integration and container image distribution are automated via GitHub Actions:
+
+- **Continuous Integration (`.github/workflows/ci.yaml`)**:
+  - **Triggers**: Executed on all pull requests targeting `main` and pushes to `main`.
+  - **Web Client Gate**: Installs dependencies with `pnpm install --frozen-lockfile`, verifies TypeScript typing and linter rules (`pnpm lint`), runs Vitest unit/component tests (`pnpm test`), and verifies production bundling (`pnpm build`).
+  - **Go BFF Gate**: Runs `golangci-lint` across `./cmd/bff/...` and `./internal/bff/...`, and executes tests with the race detector (`go test -v -race ./cmd/bff/... ./internal/bff/...`).
+- **Container Publishing (`.github/workflows/docker.yaml`)**:
+  - **Triggers**: On pushes to `main` and release tags (`v*`). Pull requests modifying container build contexts validate image buildability without pushing.
+  - **Multi-Arch Compilation**: Cross-compiles multi-platform images (`linux/amd64`, `linux/arm64`) using Docker Buildx and QEMU.
+  - **Image Tagging & GHCR**: Publishes images to `ghcr.io/morphy76/vuhive-cloud/bff` (along with `server` and `runner-init`), tagging `latest` on `main` and SemVer on release tags.
+  - **Cosign Image Signing**: Cryptographically signs release container images using keyless Sigstore Cosign with GitHub Actions OIDC identity.
 
 ---
 
