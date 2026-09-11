@@ -47,11 +47,12 @@ func (h *RunHandler) TriggerRun(c *gin.Context) {
 	}
 
 	cmd := inbound.TriggerRunCommand{
-		SuiteID:         req.SuiteID,
-		ArtifactID:      req.ArtifactID,
-		ConfigurationID: req.ConfigurationID,
-		RunnerProfileID: req.RunnerProfileID,
-		RunnerNamespace: req.RunnerNamespace,
+		SuiteID:               req.SuiteID,
+		ArtifactID:            req.ArtifactID,
+		ConfigurationID:       req.ConfigurationID,
+		RunnerProfileID:       req.RunnerProfileID,
+		RunnerNamespace:       req.RunnerNamespace,
+		ActiveDeadlineSeconds: req.ActiveDeadlineSeconds,
 	}
 
 	run, err := h.runsUC.TriggerRun(ctx, cmd)

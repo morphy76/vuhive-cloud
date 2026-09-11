@@ -168,8 +168,9 @@ func (s *RunService) TriggerRun(ctx context.Context, cmd inbound.TriggerRunComma
 
 	// 7. Dispatch Kubernetes Job
 	jobOpts := outbound.RunnerJobOptions{
-		S3BinaryKey: artifact.S3BinaryKey(),
-		S3ConfigKey: configKey,
+		S3BinaryKey:           artifact.S3BinaryKey(),
+		S3ConfigKey:           configKey,
+		ActiveDeadlineSeconds: cmd.ActiveDeadlineSeconds,
 	}
 
 	jobName, err := s.orchestrator.DispatchJob(ctx, run, profile, jobOpts)

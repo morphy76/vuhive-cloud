@@ -265,6 +265,7 @@ type mockRunnerOrchestrator struct {
 	abortedJobs    map[string]string
 	dispatchErr    error
 	abortErr       error
+	lastJobOpts    outbound.RunnerJobOptions
 }
 
 func newMockRunnerOrchestrator() *mockRunnerOrchestrator {
@@ -273,10 +274,11 @@ func newMockRunnerOrchestrator() *mockRunnerOrchestrator {
 		abortedJobs:    make(map[string]string),
 	}
 }
-func (m *mockRunnerOrchestrator) DispatchJob(_ context.Context, run *model.TestRun, _ *model.RunnerProfile, _ outbound.RunnerJobOptions) (string, error) {
+func (m *mockRunnerOrchestrator) DispatchJob(_ context.Context, run *model.TestRun, _ *model.RunnerProfile, opts outbound.RunnerJobOptions) (string, error) {
 	if m.dispatchErr != nil {
 		return "", m.dispatchErr
 	}
+	m.lastJobOpts = opts
 	jobName := "vuhive-run-" + run.ID()
 	m.dispatchedJobs[run.ID()] = jobName
 	return jobName, nil
@@ -456,6 +458,25 @@ func TestRunService_TriggerRun(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, run.ID(), saved.ID())
 		assert.Equal(t, model.DefaultRunnerNamespace, saved.K8sNamespace())
+	})
+
+	t.Run("successfully trigger run with active deadline seconds timeout override", func(t *testing.T) {
+		svc, _, _, _, _, _, orchestrator, suite, artifact, profile := setupTestRunService(t)
+
+		timeout := int64(2400)
+		cmd := inbound.TriggerRunCommand{
+			SuiteID:               suite.ID(),
+			ArtifactID:            artifact.ID(),
+			RunnerProfileID:       profile.ID(),
+			ActiveDeadlineSeconds: &timeout,
+		}
+
+		run, err := svc.TriggerRun(ctx, cmd)
+		require.NoError(t, err)
+		require.NotNil(t, run)
+
+		require.NotNil(t, orchestrator.lastJobOpts.ActiveDeadlineSeconds)
+		assert.Equal(t, int64(2400), *orchestrator.lastJobOpts.ActiveDeadlineSeconds)
 	})
 
 	t.Run("successfully trigger run respecting configured runner namespace on RunService", func(t *testing.T) {

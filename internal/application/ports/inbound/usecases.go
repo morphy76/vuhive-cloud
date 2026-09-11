@@ -53,11 +53,12 @@ type ConfigsUseCase interface {
 
 // TriggerRunCommand encapsulates input parameters for triggering a new test run.
 type TriggerRunCommand struct {
-	SuiteID         string
-	ArtifactID      string
-	ConfigurationID *string
-	RunnerProfileID string
-	RunnerNamespace *string
+	SuiteID               string
+	ArtifactID            string
+	ConfigurationID       *string
+	RunnerProfileID       string
+	RunnerNamespace       *string
+	ActiveDeadlineSeconds *int64
 }
 
 // CompleteRunCommand encapsulates input parameters for finalizing a completed test run.

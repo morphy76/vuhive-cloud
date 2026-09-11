@@ -1,52 +1,97 @@
 import React, { useState } from 'react'
-import { PlayCircle, Play, BookOpen } from 'lucide-react'
+import { PlayCircle, Play, BookOpen, Clock, AlertTriangle, AlertOctagon, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
+import { LiveRunMonitor } from '@/components/runs/LiveRunMonitor'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 import { useRecipe } from '@/context/RecipeContext'
+import { useRuns } from '@/hooks/use-runs'
+import { useSuites } from '@/hooks/use-suites'
+import { useRunEvents } from '@/hooks/use-events'
+import type { HistoricalRun } from '@/types/suite'
+
+function formatDurationMs(ms?: number): string {
+  if (!ms || ms <= 0) return '-'
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
+}
 
 export const RunsView: React.FC = () => {
   const [isRunDialogOpen, setIsRunDialogOpen] = useState(false)
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const { openRecipe } = useRecipe()
 
-  const sampleRuns = [
-    {
-      id: 'run-9f8e7d6c',
-      suite: 'Checkout & Payment Stress Test',
-      status: 'RUNNING',
-      runners: '8 / 8 Pods',
-      duration: '04m 12s',
-      tps: '1,420 req/s',
-      p95: '42ms',
-      errorRate: '0.01%',
-    },
-    {
-      id: 'run-3a2b1c0d',
-      suite: 'Product Catalog High Throughput',
-      status: 'COMPLETED',
-      runners: '16 Pods',
-      duration: '15m 00s',
-      tps: '4,850 req/s',
-      p95: '68ms',
-      errorRate: '0.00%',
-    },
-    {
-      id: 'run-7b6a5c4d',
-      suite: 'OAuth2 Token Grant Barrier Test',
-      status: 'COMPLETED',
-      runners: '4 Pods',
-      duration: '05m 00s',
-      tps: '920 req/s',
-      p95: '18ms',
-      errorRate: '0.00%',
-    },
-  ]
+  const { data: runs = [] } = useRuns()
+  const { data: suites = [] } = useSuites()
+
+  // Subscribe to live SSE status updates
+  useRunEvents()
+
+  const suiteMap = React.useMemo(() => {
+    const map = new Map<string, string>()
+    suites.forEach((s) => map.set(s.id, s.name))
+    return map
+  }, [suites])
+
+  const selectedRun = React.useMemo(() => {
+    if (!selectedRunId) return null
+    return runs.find((r) => r.id === selectedRunId) || null
+  }, [runs, selectedRunId])
+
+  const handleRunTriggered = (newRun: HistoricalRun) => {
+    setSelectedRunId(newRun.id)
+  }
+
+  const renderStatusBadge = (status: string) => {
+    switch (status) {
+      case 'RUNNING':
+        return (
+          <Badge variant="warning" className="gap-1.5 font-mono text-[11px]">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            RUNNING
+          </Badge>
+        )
+      case 'QUEUED':
+        return (
+          <Badge variant="outline" className="gap-1.5 font-mono text-[11px] text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-800">
+            <Clock className="w-3 h-3 animate-spin" />
+            QUEUED
+          </Badge>
+        )
+      case 'COMPLETED':
+        return (
+          <Badge variant="success" className="gap-1 font-mono text-[11px]">
+            <CheckCircle2 className="w-3 h-3" />
+            COMPLETED
+          </Badge>
+        )
+      case 'FAILED':
+        return (
+          <Badge variant="error" className="gap-1 font-mono text-[11px]">
+            <AlertTriangle className="w-3 h-3" />
+            FAILED
+          </Badge>
+        )
+      case 'ABORTED':
+        return (
+          <Badge variant="error" className="gap-1 font-mono text-[11px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700">
+            <AlertOctagon className="w-3 h-3 text-amber-500" />
+            ABORTED
+          </Badge>
+        )
+      default:
+        return <Badge variant="outline">{status}</Badge>
+    }
+  }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
@@ -71,6 +116,7 @@ export const RunsView: React.FC = () => {
           <Button
             onClick={() => setIsRunDialogOpen(true)}
             className="min-h-[44px] gap-2"
+            aria-label="New Execution"
           >
             <Play className="w-4 h-4 fill-current" />
             <span>New Execution</span>
@@ -78,6 +124,28 @@ export const RunsView: React.FC = () => {
         </div>
       </div>
 
+      {/* Selected Run Live Execution Monitor */}
+      {selectedRun && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 px-1">
+            <span>ACTIVE INSPECTION MONITOR</span>
+            <button
+              type="button"
+              onClick={() => setSelectedRunId(null)}
+              className="text-brand-600 hover:text-brand-700 dark:text-brand-400 text-xs font-medium cursor-pointer"
+            >
+              Close Monitor
+            </button>
+          </div>
+          <LiveRunMonitor
+            run={selectedRun}
+            onClose={() => setSelectedRunId(null)}
+            onRunAborted={() => {}}
+          />
+        </div>
+      )}
+
+      {/* Runs Table */}
       <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
@@ -98,9 +166,9 @@ export const RunsView: React.FC = () => {
                 </th>
                 <th scope="col" className="px-6 py-4">
                   <div className="flex items-center gap-1.5">
-                    <span>Pods</span>
+                    <span>Job / Pods</span>
                     <HelpTooltip
-                      text="Number of parallel runner pods assigned and participating in the distributed test run."
+                      text="Kubernetes Job name and runner pod workload assignment."
                       label="Help for pods column"
                     />
                   </div>
@@ -144,40 +212,62 @@ export const RunsView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {sampleRuns.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
-                    <div className="flex items-center gap-3">
-                      <PlayCircle className="w-5 h-5 text-brand-500 flex-shrink-0" />
-                      <div>
-                        <div>{r.suite}</div>
-                        <div className="text-xs text-slate-400 font-mono">{r.id}</div>
+              {runs.map((r) => {
+                const suiteName = suiteMap.get(r.suiteId) || r.suiteId
+                const isSelected = r.id === selectedRunId
+
+                return (
+                  <tr
+                    key={r.id}
+                    onClick={() => setSelectedRunId(r.id)}
+                    className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer ${
+                      isSelected ? 'bg-brand-50/40 dark:bg-brand-950/20' : ''
+                    }`}
+                  >
+                    <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
+                      <div className="flex items-center gap-3">
+                        <PlayCircle className="w-5 h-5 text-brand-500 flex-shrink-0" />
+                        <div>
+                          <div>{suiteName}</div>
+                          <div className="text-xs text-slate-400 font-mono">{r.id}</div>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {r.status === 'RUNNING' ? (
-                      <Badge variant="warning">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                        RUNNING
-                      </Badge>
-                    ) : (
-                      <Badge variant="success">COMPLETED</Badge>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 font-mono text-xs">{r.runners}</td>
-                  <td className="px-6 py-4 font-mono text-xs">{r.duration}</td>
-                  <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white font-mono text-xs">{r.tps}</td>
-                  <td className="px-6 py-4 font-mono text-xs">{r.p95}</td>
-                  <td className="px-6 py-4 font-mono text-xs text-emerald-600 dark:text-emerald-400">{r.errorRate}</td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4">
+                      {renderStatusBadge(r.status)}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs">
+                      {r.k8sJobName || 'vuhive-runners'}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs">
+                      {r.status === 'RUNNING' || r.status === 'QUEUED'
+                        ? 'Active...'
+                        : formatDurationMs(r.durationMs)}
+                    </td>
+                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white font-mono text-xs">
+                      {r.metrics?.avgTps ? `${r.metrics.avgTps.toLocaleString()} req/s` : '-'}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs">
+                      {r.metrics?.p95DurationMs !== undefined ? `${r.metrics.p95DurationMs}ms` : '-'}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-xs text-emerald-600 dark:text-emerald-400">
+                      {r.metrics?.errorRatePct !== undefined
+                        ? `${(r.metrics.errorRatePct * 100).toFixed(2)}%`
+                        : '-'}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
       </div>
 
-      <TriggerRunDialog open={isRunDialogOpen} onOpenChange={setIsRunDialogOpen} />
+      <TriggerRunDialog
+        open={isRunDialogOpen}
+        onOpenChange={setIsRunDialogOpen}
+        onRunTriggered={handleRunTriggered}
+      />
     </div>
   )
 }

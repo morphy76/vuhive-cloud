@@ -530,9 +530,13 @@ curl -i -X POST http://localhost:8080/api/v1/runs \
     "suite_id": "suite-auth-checkout",
     "artifact_id": "c7a6e118-20ab-48d6-953b-e01140026e61",
     "runner_profile_id": "e8d665b1-2e67-4228-8ab6-79c5b248a31e",
-    "configuration_id": "d1a85f64-5717-4562-b3fc-2c963f66afa7"
+    "configuration_id": "d1a85f64-5717-4562-b3fc-2c963f66afa7",
+    "active_deadline_seconds": 900
   }'
 ```
+
+> **Execution Timeout Override**:
+> - `active_deadline_seconds` (optional integer, $\ge 1$): Explicit execution deadline (in seconds) for the spawned `batch/v1` Job. When specified, overrides the runner profile's default `active_deadline_seconds`. If the load test exceeds this duration, Kubernetes automatically sends SIGTERM, marks the Job deadline exceeded, and terminates runner pods.
 
 ##### Response (`201 Created`):
 
@@ -565,9 +569,19 @@ The control plane:
 2. Validates that the target `Artifact` is in `READY` status and belongs to the suite.
 3. Validates the `RunnerProfile` and resource limits.
 4. Creates a `TestRun` domain entity in `QUEUED` status and persists it in PostgreSQL.
-5. Dispatches an ephemeral Kubernetes `batch/v1` `Job` named `vuhive-run-<run_id>` in the runner namespace (`vuhive-runners`).
+5. Dispatches an ephemeral Kubernetes `batch/v1` `Job` named `vuhive-run-<run_id>` in the runner namespace (`vuhive-runners`), enforcing `activeDeadlineSeconds` if specified on the request or runner profile.
 
-#### 2. Dispatching from a Configured Schedule Template:
+#### 2. Triggering via Web Dashboard & Live Monitor:
+
+Operators can also launch and monitor executions directly in the React 19 web interface:
+1. Navigate to **Test Runs** (`/runs`) or open any active test suite in **Test Suites** (`/suites/:id`).
+2. Click **New Execution** (or **Trigger Run**) to open `<TriggerRunDialog />`.
+3. Select an active test suite, choose an artifact (optionally filtered by target platform architecture `linux/amd64` or `linux/arm64`), select a scenario configuration, and pick a runner profile.
+4. Optionally customize the **Execution Timeout Override** (`activeDeadlineSeconds`) to enforce a custom deadline for runaway workloads.
+5. Click **Trigger Run**. The web application dispatches the execution, transitions directly to the `<LiveRunMonitor />`, and subscribes to real-time Server-Sent Events (`run_status_changed`).
+6. The live monitor presents a phase transition timeline (`QUEUED` $\to$ `RUNNING` $\to$ `COMPLETED` / `FAILED` / `ABORTED`), a 1-second wall-clock execution timer, live performance KPIs, and pod/job metadata.
+
+#### 3. Dispatching from a Configured Schedule Template:
 
 To run an immediate ad-hoc test execution using the pre-configured runner profile, artifact, and environment from an existing Schedule, instantiate a Job directly from the CronJob:
 
@@ -888,6 +902,13 @@ curl -i -X POST http://localhost:8080/api/v1/runs/98bc19d4-1a3b-4882-a982-ff0124
 - **Graceful SIGTERM Propagation**: The runner wrapper traps `SIGTERM`, forwards it to the scenario process, allows an initial grace window for partial stdout/stderr log flushing, and attempts guaranteed upload of remaining logs to S3.
 - **State Machine Protection**: Only `QUEUED` and `RUNNING` executions can be aborted. If a run has already finalized (`COMPLETED`, `FAILED`, or `ABORTED`), the endpoint returns `409 Conflict`.
 - **Informer Watcher Resilience**: The Kubernetes informer watcher cleanly detects the deletion timestamp and avoids falsely flagging the aborted run as a system failure.
+
+#### 3. Aborting via Web Dashboard:
+In the web dashboard live monitor (`<LiveRunMonitor />`) or runs table (`/runs`):
+1. While a run is in `QUEUED` or `RUNNING` status, click the high-contrast red **Abort Test** button.
+2. The `<AbortConfirmationDialog />` modal opens, detailing that runner pods will receive `SIGTERM` for graceful log flushing, the underlying Kubernetes Job will be deleted, and the run will be permanently marked `ABORTED`.
+3. Optionally enter an **Abort Reason** (e.g., "Manual operator intervention - system under test degradation").
+4. Click **Confirm Abort**. The dashboard dispatches `POST /api/v1/runs/{id}/abort`, immediately updates the UI status to `ABORTED`, displays the abort badge, and stops active duration timers.
 
 ---
 

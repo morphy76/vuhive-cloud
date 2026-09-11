@@ -62,5 +62,17 @@ export interface HistoricalRun {
   exitCode?: number
   slaPassed?: boolean
   metrics?: RunMetrics
+  k8sNamespace?: string
+  abortReason?: string
+  activeDeadlineSeconds?: number
   createdAt: string
+}
+
+export interface TriggerRunInput {
+  suite_id: string
+  artifact_id: string
+  runner_profile_id: string
+  configuration_id?: string
+  runner_namespace?: string
+  active_deadline_seconds?: number
 }
