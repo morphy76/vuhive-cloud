@@ -7,6 +7,7 @@ import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
 import { LiveRunMonitor } from '@/components/runs/LiveRunMonitor'
 import { RunSummaryDashboard } from '@/components/runs/RunSummaryDashboard'
+import { SummaryReportInspector } from '@/components/runs/SummaryReportInspector'
 import { VirtualizedLogViewer } from '@/components/logs/VirtualizedLogViewer'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 import { useRecipe } from '@/context/RecipeContext'
@@ -45,7 +46,7 @@ export const RunsView: React.FC = () => {
     return runs.find((r) => r.id === selectedRunId) || null
   }, [runs, selectedRunId])
 
-  const [inspectorTab, setInspectorTab] = useState<'summary' | 'monitor' | 'logs'>('summary')
+  const [inspectorTab, setInspectorTab] = useState<'summary' | 'monitor' | 'logs' | 'report'>('summary')
 
   const isActive = selectedRun?.status === 'RUNNING' || selectedRun?.status === 'QUEUED'
   const { data: runLogs = '', isLoading: isLogsLoading } = useRunLogs(
@@ -192,6 +193,17 @@ export const RunsView: React.FC = () => {
                 >
                   Execution Logs
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectorTab('report')}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors cursor-pointer ${
+                    inspectorTab === 'report'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Telemetry Report
+                </button>
               </div>
             </div>
 
@@ -210,6 +222,7 @@ export const RunsView: React.FC = () => {
                 run={selectedRun}
                 onClose={() => setSelectedRunId(null)}
                 onViewLogs={() => setInspectorTab('logs')}
+                onViewReport={() => setInspectorTab('report')}
               />
             </div>
           ) : inspectorTab === 'monitor' ? (
@@ -220,7 +233,7 @@ export const RunsView: React.FC = () => {
               onViewSummary={() => setInspectorTab('summary')}
               onViewLogs={() => setInspectorTab('logs')}
             />
-          ) : (
+          ) : inspectorTab === 'logs' ? (
             <VirtualizedLogViewer
               logs={runLogs}
               runId={selectedRun.id}
@@ -229,6 +242,13 @@ export const RunsView: React.FC = () => {
               isLoading={isLogsLoading}
               onClose={() => setSelectedRunId(null)}
             />
+          ) : (
+            <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs p-6">
+              <SummaryReportInspector
+                runId={selectedRun.id}
+                onClose={() => setSelectedRunId(null)}
+              />
+            </div>
           )}
         </div>
       )}

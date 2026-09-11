@@ -5,6 +5,7 @@ import type {
   HistoricalRun,
   TriggerRunInput,
 } from '@/types/suite'
+import type { SummaryReport } from '@/types/report'
 import type {
   RunnerProfile,
   CreateProfileInput,
@@ -744,6 +745,145 @@ export const api = {
       `\u001b[38;5;244m[2026-09-11 20:30:11] \u001b[1;32m[vuhive-reporter]\u001b[0m Writing telemetry summaries to object storage: s3://vuhive-reports/runs/${id}/summary.json`,
       `\u001b[38;5;244m[2026-09-11 20:30:12] \u001b[1;32m[vuhive-runner]\u001b[0m Execution finalized with exit status 0 (SLA passed)`,
     ].join('\n')
+  },
+
+  async getRunReport(id: string): Promise<SummaryReport> {
+    for (const prefix of BASE_PREFIXES) {
+      try {
+        const targetUrl = getTargetUrl(prefix, `/runs/${encodeURIComponent(id)}/report`)
+        const response = await fetch(targetUrl, {
+          headers: {
+            Accept: 'application/json',
+          },
+        })
+        if (response.status === 404 && prefix === BASE_PREFIXES[0]) {
+          continue
+        }
+        if (response.ok) {
+          return (await response.json()) as SummaryReport
+        }
+      } catch {
+        // try next prefix or fallback
+      }
+    }
+    return {
+      suite_name: 'Ecommerce Checkout Suite',
+      scenario: 'checkout_funnel',
+      version: '1.2.0',
+      commit: '7337da6',
+      started_at: new Date(Date.now() - 3600000).toISOString(),
+      ended_at: new Date(Date.now() - 3540000).toISOString(),
+      duration: 60000,
+      status: 'PASS',
+      passed: true,
+      sla_passed: true,
+      total_iterations: 1250,
+      total_requests: 3750,
+      avg_tps: 62.5,
+      p50_duration_ms: 16.4,
+      p90_duration_ms: 32.5,
+      p95_duration_ms: 48.2,
+      p99_duration_ms: 84.1,
+      error_rate_pct: 0.27,
+      steps: [
+        {
+          name: 'GET /api/v1/products',
+          scenario: 'checkout_funnel',
+          requests: 1250,
+          tps: 20.8,
+          p50_ms: 14.2,
+          p90_ms: 22.0,
+          p95_ms: 28.5,
+          p99_ms: 36.1,
+          failed_requests: 0,
+          error_rate_pct: 0.0,
+          status: 'PASS',
+        },
+        {
+          name: 'POST /api/v1/cart/items',
+          scenario: 'checkout_funnel',
+          requests: 1250,
+          tps: 20.8,
+          p50_ms: 22.8,
+          p90_ms: 35.4,
+          p95_ms: 44.1,
+          p99_ms: 58.7,
+          failed_requests: 2,
+          error_rate_pct: 0.16,
+          status: 'PASS',
+        },
+        {
+          name: 'POST /api/v1/checkout',
+          scenario: 'checkout_funnel',
+          requests: 1250,
+          tps: 20.8,
+          p50_ms: 84.1,
+          p90_ms: 124.0,
+          p95_ms: 162.5,
+          p99_ms: 215.3,
+          failed_requests: 8,
+          error_rate_pct: 0.64,
+          status: 'PASS',
+        },
+      ],
+      metrics: [
+        {
+          name: 'vuhive.vu.iterations_total',
+          type: 'counter',
+          count: 1250,
+        },
+        {
+          name: 'vuhive.vu.iterations_failed',
+          type: 'counter',
+          count: 4,
+        },
+        {
+          name: 'vuhive.http.reqs',
+          type: 'counter',
+          count: 3750,
+        },
+        {
+          name: 'vuhive.http.req_failed',
+          type: 'rate',
+          rate: 0.0027,
+        },
+        {
+          name: 'vuhive.http.req_duration',
+          type: 'duration',
+          count: 3750,
+          min: 2.1,
+          mean: 28.4,
+          p50: 16.4,
+          p90: 32.5,
+          p95: 48.2,
+          p99: 84.1,
+          max: 245.0,
+        },
+      ],
+      thresholds: [
+        {
+          metric: 'vuhive.http.req_duration',
+          stat: 'p95',
+          operator: '<=',
+          target: '100ms',
+          actual: '48.2ms',
+          passed: true,
+        },
+        {
+          metric: 'vuhive.http.req_failed',
+          stat: 'rate',
+          operator: '<=',
+          target: '0.01',
+          actual: '0.0027',
+          passed: true,
+        },
+      ],
+      custom_metrics: {
+        db_pool_active_connections: 14,
+        redis_cache_hit_ratio: 0.942,
+        gateway_p99_jitter_ms: 12.8,
+      },
+    }
   },
 
   async getProfiles(): Promise<RunnerProfile[]> {
