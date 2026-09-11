@@ -133,6 +133,7 @@ export default defineConfig({
             'yaml',
             'diff',
           ],
+          'vendor-charts': ['recharts'],
         },
       },
     },
