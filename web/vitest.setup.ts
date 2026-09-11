@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom'
+import { configure } from '@testing-library/react'
 import { expect } from 'vitest'
 import * as matchers from 'vitest-axe/matchers'
+
+// Set global Testing Library timeout to 10s to prevent flakiness in slow CI environments
+configure({ asyncUtilTimeout: 10000 })
 
 // Register vitest-axe matchers for toHaveNoViolations
 expect.extend(matchers)
