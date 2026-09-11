@@ -31,6 +31,10 @@ build-web: ## Build web SPA static assets with pnpm
 test-web: ## Run web unit and component tests
 	pnpm --dir web test
 
+.PHONY: lint-web
+lint-web: ## Run web type checking and linter
+	pnpm --dir web lint
+
 .PHONY: build-server
 build-server: ## Build control plane server binary
 	@mkdir -p bin
@@ -98,6 +102,10 @@ test: ## Run unit tests
 .PHONY: test-race
 test-race: ## Run unit tests with race detector
 	go test -v -race ./...
+
+.PHONY: test-bff
+test-bff: ## Run Go BFF unit tests with race detector
+	go test -v -race ./cmd/bff/... ./internal/bff/...
 
 .PHONY: test-integration
 test-integration: ## Run integration tests

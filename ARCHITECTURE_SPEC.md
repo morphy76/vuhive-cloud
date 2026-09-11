@@ -592,6 +592,9 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
   - Add community health documentation (`CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`).
   - Configure automated dependency scanning via Dependabot (`.github/dependabot.yml`) and CodeQL static analysis.
   - Document and configure branch protection rules for `main`.
+- [**Issue 1.5.4: CI/CD Automation for BFF & Web Client**](https://github.com/morphy76/vuhive-cloud/issues/78)
+  - Implement `.github/workflows/ci.yaml` with frontend linter (`pnpm lint`), Vitest unit tests (`pnpm test`), production asset build (`pnpm build`), and Go BFF verification (`golangci-lint`, `go test -v -race ./cmd/bff/... ./internal/bff/...`).
+  - Implement `.github/workflows/docker.yaml` for multi-arch Docker image compilation (`linux/amd64`, `linux/arm64`) and GHCR publishing (`ghcr.io/morphy76/vuhive-cloud/bff`) with Cosign keyless signing on SemVer release tags.
 
 ---
 
