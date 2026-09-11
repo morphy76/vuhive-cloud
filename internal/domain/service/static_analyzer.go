@@ -2,6 +2,7 @@ package service
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"compress/gzip"
@@ -75,7 +76,7 @@ func (a *StaticAnalyzer) AnalyzeArchive(r io.Reader, opts StaticAnalysisOptions)
 		return nil, fmt.Errorf("%w: source archive cannot be nil", model.ErrValidation)
 	}
 
-	files, err := extractTarGz(r)
+	files, err := extractArchive(r)
 	if err != nil {
 		return nil, err
 	}
@@ -456,6 +457,68 @@ func typeString(expr ast.Expr) string {
 	default:
 		return ""
 	}
+}
+
+func extractArchive(r io.Reader) (map[string][]byte, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed reading source archive: %v", model.ErrInvalidArchive, err)
+	}
+	if len(data) < 4 {
+		return nil, fmt.Errorf("%w: archive too small", model.ErrInvalidArchive)
+	}
+
+	// Sniff magic bytes
+	// Gzip: 0x1f 0x8b
+	if data[0] == 0x1f && data[1] == 0x8b {
+		return extractTarGz(bytes.NewReader(data))
+	}
+
+	// Zip: 0x50 0x4b (PK\x03\x04 or PK\x05\x06)
+	if data[0] == 0x50 && data[1] == 0x4b {
+		return extractZip(bytes.NewReader(data), int64(len(data)))
+	}
+
+	// Fallback attempts
+	if files, err := extractTarGz(bytes.NewReader(data)); err == nil {
+		return files, nil
+	}
+	if files, err := extractZip(bytes.NewReader(data), int64(len(data))); err == nil {
+		return files, nil
+	}
+
+	return nil, fmt.Errorf("%w: unsupported archive format, must be .tar.gz or .zip", model.ErrInvalidArchive)
+}
+
+func extractZip(ra io.ReaderAt, size int64) (map[string][]byte, error) {
+	zr, err := zip.NewReader(ra, size)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid zip archive: %v", model.ErrInvalidArchive, err)
+	}
+
+	files := make(map[string][]byte)
+	for _, f := range zr.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return nil, fmt.Errorf("%w: error opening zip entry %s: %v", model.ErrInvalidArchive, f.Name, err)
+		}
+
+		var buf bytes.Buffer
+		if _, err := io.Copy(&buf, rc); err != nil {
+			_ = rc.Close()
+			return nil, fmt.Errorf("%w: error reading zip entry %s: %v", model.ErrInvalidArchive, f.Name, err)
+		}
+		_ = rc.Close()
+
+		cleanName := strings.TrimPrefix(path.Clean(f.Name), "/")
+		files[cleanName] = buf.Bytes()
+	}
+
+	return files, nil
 }
 
 func extractTarGz(r io.Reader) (map[string][]byte, error) {

@@ -138,9 +138,22 @@ export function useUploadSuiteBuild(suiteId: string) {
 
   return useMutation(
     {
-      mutationFn: (formData: FormData) => api.uploadSuiteBuild(suiteId, formData),
+      mutationFn: (
+        args:
+          | FormData
+          | {
+              formData: FormData
+              onProgress?: (percent: number) => void
+            }
+      ) => {
+        if (args instanceof FormData) {
+          return api.uploadSuiteBuild(suiteId, args)
+        }
+        return api.uploadSuiteBuild(suiteId, args.formData, args.onProgress)
+      },
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['suites', suiteId, 'artifacts'] })
+        queryClient.invalidateQueries({ queryKey: ['suites'] })
       },
     },
     queryClient

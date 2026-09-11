@@ -10,6 +10,7 @@ import {
   Trash2,
   Eye,
   Plus,
+  Terminal,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,12 +18,14 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
 import { AttachConfigDialog } from '@/components/dialogs/AttachConfigDialog'
 import { UploadBuildDialog } from '@/components/dialogs/UploadBuildDialog'
+import { BuildLogViewer } from '@/components/build/BuildLogViewer'
 import {
   useSuiteConfigs,
   useDeleteSuiteConfig,
   useSuiteArtifacts,
   useSuiteRuns,
 } from '@/hooks/use-suites'
+import { useBuildEvents } from '@/hooks/use-events'
 import type { TestSuite, SuiteConfiguration } from '@/types/suite'
 
 export interface SuiteDetailViewProps {
@@ -36,6 +39,10 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   const [isUploadBuildOpen, setIsUploadBuildOpen] = useState(false)
   const [isAttachConfigOpen, setIsAttachConfigOpen] = useState(false)
   const [selectedYamlConfig, setSelectedYamlConfig] = useState<SuiteConfiguration | null>(null)
+  const [expandedArtifactLogs, setExpandedArtifactLogs] = useState<Record<string, boolean>>({})
+
+  // Subscribe to live SSE build status changes for reactive artifact updates
+  useBuildEvents(suite.id)
 
   const { data: configs = [], isLoading: isLoadingConfigs } = useSuiteConfigs(suite.id)
   const deleteConfigMutation = useDeleteSuiteConfig(suite.id)
@@ -271,45 +278,79 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
               </div>
             ) : (
               <div className="space-y-3">
-                {artifacts.map((art) => (
-                  <div
-                    key={art.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-brand-50 dark:bg-brand-950 text-brand-700 dark:text-brand-300">
-                          {art.platform}
-                        </span>
-                        <Badge
-                          variant={
-                            art.status === 'READY'
-                              ? 'success'
-                              : art.status === 'BUILDING'
-                              ? 'info'
-                              : 'error'
-                          }
-                        >
-                          {art.status}
-                        </Badge>
+                {artifacts.map((art) => {
+                  const hasLogs = Boolean(art.errorMessage || art.buildLogsS3Key || art.status === 'FAILED')
+                  const isLogExpanded = Boolean(expandedArtifactLogs[art.id])
+
+                  return (
+                    <div
+                      key={art.id}
+                      className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-brand-50 dark:bg-brand-950 text-brand-700 dark:text-brand-300">
+                              {art.platform}
+                            </span>
+                            <Badge
+                              variant={
+                                art.status === 'READY'
+                                  ? 'success'
+                                  : art.status === 'BUILDING'
+                                  ? 'info'
+                                  : 'error'
+                              }
+                            >
+                              {art.status}
+                            </Badge>
+                          </div>
+                          {art.sha256Checksum && (
+                            <div className="text-xs text-slate-500 font-mono mt-1 truncate max-w-md">
+                              SHA256: {art.sha256Checksum}
+                            </div>
+                          )}
+                          {art.errorMessage && (
+                            <div className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              <span>{art.errorMessage}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          {hasLogs && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setExpandedArtifactLogs((prev) => ({
+                                  ...prev,
+                                  [art.id]: !prev[art.id],
+                                }))
+                              }
+                              className="gap-1.5 min-h-[36px] text-xs"
+                            >
+                              <Terminal className="w-3.5 h-3.5" />
+                              <span>{isLogExpanded ? 'Hide Logs' : 'View Logs'}</span>
+                            </Button>
+                          )}
+                          <div className="text-xs text-slate-400 font-mono">
+                            {new Date(art.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
                       </div>
-                      {art.sha256Checksum && (
-                        <div className="text-xs text-slate-500 font-mono mt-1 truncate max-w-md">
-                          SHA256: {art.sha256Checksum}
-                        </div>
-                      )}
-                      {art.errorMessage && (
-                        <div className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3.5 h-3.5" />
-                          <span>{art.errorMessage}</span>
-                        </div>
+
+                      {hasLogs && isLogExpanded && (
+                        <BuildLogViewer
+                          logs={art.errorMessage || 'No additional log details available.'}
+                          title={`Build Logs (${art.platform})`}
+                          defaultExpanded={true}
+                        />
                       )}
                     </div>
-                    <div className="text-xs text-slate-400 font-mono">
-                      {new Date(art.createdAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
