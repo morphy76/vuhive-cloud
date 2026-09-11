@@ -21,6 +21,7 @@ export interface LiveRunMonitorProps {
   run: HistoricalRun
   onClose?: () => void
   onRunAborted?: (run: HistoricalRun) => void
+  onViewSummary?: () => void
 }
 
 function formatDuration(ms: number): string {
@@ -42,6 +43,7 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
   run: initialRun,
   onClose,
   onRunAborted,
+  onViewSummary,
 }) => {
   const [run, setRun] = React.useState<HistoricalRun>(initialRun)
   const [isAbortDialogOpen, setIsAbortDialogOpen] = React.useState(false)
@@ -148,6 +150,18 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
             >
               <ShieldAlert className="w-4 h-4" />
               <span>Abort Test</span>
+            </Button>
+          )}
+
+          {onViewSummary && !canAbort && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onViewSummary}
+              className="text-xs font-semibold min-h-[38px] px-3 gap-1.5 border-brand-200 text-brand-600 hover:bg-brand-50 dark:border-brand-800 dark:text-brand-400"
+              aria-label="View Executive Summary"
+            >
+              <span>View Executive Summary</span>
             </Button>
           )}
 

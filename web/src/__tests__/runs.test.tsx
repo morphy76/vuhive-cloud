@@ -397,5 +397,59 @@ describe('Ad-Hoc Load Test Execution Dispatcher & Live Monitor', () => {
         expect(screen.getByRole('button', { name: /abort test/i })).toBeInTheDocument()
       })
     })
+
+    it('renders execution runs and selects completed run into RunSummaryDashboard with SLA status', async () => {
+      vi.spyOn(api, 'getRuns').mockResolvedValue([
+        {
+          id: 'run-completed-1',
+          suiteId: 'suite-1',
+          artifactId: 'art-arm64',
+          runnerProfileId: 'profile-1',
+          status: 'COMPLETED',
+          k8sJobName: 'job-done',
+          k8sNamespace: 'vuhive-runners',
+          durationMs: 300000,
+          exitCode: 0,
+          slaPassed: true,
+          metrics: {
+            totalIterations: 20000,
+            totalRequests: 60000,
+            avgTps: 2000,
+            p50DurationMs: 20,
+            p90DurationMs: 30,
+            p95DurationMs: 40,
+            p99DurationMs: 60,
+            errorRatePct: 0.0,
+          },
+          createdAt: new Date().toISOString(),
+        },
+      ])
+
+      renderWithProviders(<RunsView />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Execution Runs')).toBeInTheDocument()
+        expect(screen.getByText('run-completed-1')).toBeInTheDocument()
+      })
+
+      // Click on row to open summary dashboard
+      const runRow = screen.getByText('run-completed-1')
+      fireEvent.click(runRow)
+
+      await waitFor(() => {
+        expect(screen.getByText('SLA PASSED')).toBeInTheDocument()
+        expect(screen.getByText('Executive Summary')).toBeInTheDocument()
+        expect(screen.getByText('Execution Details')).toBeInTheDocument()
+        expect(screen.getByText('20,000')).toBeInTheDocument()
+      })
+
+      // Toggle to execution details
+      const detailsBtn = screen.getByRole('button', { name: /execution details/i })
+      fireEvent.click(detailsBtn)
+
+      await waitFor(() => {
+        expect(screen.getByText('Live Execution Monitor')).toBeInTheDocument()
+      })
+    })
   })
 })
