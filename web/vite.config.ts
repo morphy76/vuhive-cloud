@@ -134,6 +134,7 @@ export default defineConfig({
             'diff',
           ],
           'vendor-charts': ['recharts'],
+          'vendor-markdown': ['react-markdown', 'remark-gfm'],
         },
       },
     },
