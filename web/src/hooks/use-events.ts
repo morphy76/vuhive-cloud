@@ -14,6 +14,30 @@ export interface BuildStatusChangedEvent {
   timestamp: string
 }
 
+export interface RunStatusChangedEvent {
+  run_id: string
+  suite_id: string
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'ABORTED'
+  previous_status?: string
+  started_at?: string
+  finished_at?: string
+  duration_ms?: number
+  exit_code?: number
+  sla_passed?: boolean
+  k8s_job_name?: string
+  metrics?: {
+    total_iterations?: number
+    total_requests?: number
+    avg_tps?: number
+    p50_duration_ms?: number
+    p90_duration_ms?: number
+    p95_duration_ms?: number
+    p99_duration_ms?: number
+    error_rate_pct?: number
+  }
+  timestamp: string
+}
+
 function useSafeQueryClient() {
   try {
     return useQueryClient()
@@ -90,4 +114,76 @@ export function useBuildEvents(
       }
     }
   }, [suiteId, queryClient])
+}
+
+/**
+ * Hook for subscribing to live test run status updates via SSE.
+ */
+export function useRunEvents(
+  runId?: string,
+  onRunStatusChange?: (event: RunStatusChangedEvent) => void
+) {
+  const queryClient = useSafeQueryClient()
+  const onRunStatusChangeRef = useRef(onRunStatusChange)
+  onRunStatusChangeRef.current = onRunStatusChange
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+      return
+    }
+
+    let es: EventSource | null = null
+    let activeIndex = 0
+
+    const connect = () => {
+      const targetUrl = SSE_PREFIXES[activeIndex]
+      try {
+        es = new EventSource(targetUrl)
+
+        es.addEventListener('run_status_changed', (e: MessageEvent) => {
+          try {
+            const data: RunStatusChangedEvent = JSON.parse(e.data)
+            if (!runId || data.run_id === runId) {
+              if (onRunStatusChangeRef.current) {
+                onRunStatusChangeRef.current(data)
+              }
+              // Invalidate related queries so UI updates reactively
+              queryClient.invalidateQueries({
+                queryKey: ['runs'],
+              })
+              queryClient.invalidateQueries({
+                queryKey: ['runs', data.run_id],
+              })
+              if (data.suite_id) {
+                queryClient.invalidateQueries({
+                  queryKey: ['suites', data.suite_id, 'runs'],
+                })
+              }
+            }
+          } catch (err) {
+            console.warn('Failed parsing run_status_changed SSE payload:', err)
+          }
+        })
+
+        es.onerror = () => {
+          if (es) {
+            es.close()
+            es = null
+          }
+          activeIndex = (activeIndex + 1) % SSE_PREFIXES.length
+        }
+      } catch (err) {
+        console.warn('Unable to connect to SSE events stream:', err)
+      }
+    }
+
+    connect()
+
+    return () => {
+      if (es) {
+        es.close()
+        es = null
+      }
+    }
+  }, [runId, queryClient])
 }

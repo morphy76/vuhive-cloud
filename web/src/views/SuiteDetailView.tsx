@@ -511,7 +511,11 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
       </Tabs>
 
       {/* Action Dialogs */}
-      <TriggerRunDialog open={isTriggerRunOpen} onOpenChange={setIsTriggerRunOpen} />
+      <TriggerRunDialog
+        open={isTriggerRunOpen}
+        onOpenChange={setIsTriggerRunOpen}
+        initialSuiteId={suite.id}
+      />
       <UploadBuildDialog
         suiteId={suite.id}
         open={isUploadBuildOpen}

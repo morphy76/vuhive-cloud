@@ -3,6 +3,7 @@ import type {
   SuiteConfiguration,
   CompiledArtifact,
   HistoricalRun,
+  TriggerRunInput,
 } from '@/types/suite'
 import type {
   RunnerProfile,
@@ -188,6 +189,114 @@ export const FALLBACK_PROFILES: RunnerProfile[] = [
     updated_at: new Date(Date.now() - 1800000).toISOString(),
   },
 ]
+
+export const FALLBACK_RUNS: HistoricalRun[] = [
+  {
+    id: 'run-9f8e7d6c',
+    suiteId: 'suite-e2e-checkout',
+    artifactId: 'art-suite-e2e-checkout-arm64',
+    runnerProfileId: 'profile-standard-single-node',
+    status: 'RUNNING',
+    k8sJobName: 'vuhive-run-run-9f8e7d6c',
+    k8sNamespace: 'vuhive-runners',
+    durationMs: 252000,
+    startedAt: new Date(Date.now() - 252000).toISOString(),
+    createdAt: new Date(Date.now() - 260000).toISOString(),
+    metrics: {
+      totalIterations: 14200,
+      totalRequests: 42600,
+      avgTps: 1420,
+      p50DurationMs: 28,
+      p90DurationMs: 38,
+      p95DurationMs: 42,
+      p99DurationMs: 58,
+      errorRatePct: 0.01,
+    },
+  },
+  {
+    id: 'run-3a2b1c0d',
+    suiteId: 'suite-search-catalog',
+    artifactId: 'art-suite-search-catalog-arm64',
+    runnerProfileId: 'profile-high-throughput-dedicated',
+    status: 'COMPLETED',
+    k8sJobName: 'vuhive-run-run-3a2b1c0d',
+    k8sNamespace: 'vuhive-runners',
+    durationMs: 900000,
+    exitCode: 0,
+    slaPassed: true,
+    startedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    finishedAt: new Date(Date.now() - 3600000 * 2 + 900000).toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 2 - 10000).toISOString(),
+    metrics: {
+      totalIterations: 58000,
+      totalRequests: 232000,
+      avgTps: 4850,
+      p50DurationMs: 45,
+      p90DurationMs: 62,
+      p95DurationMs: 68,
+      p99DurationMs: 92,
+      errorRatePct: 0.0,
+    },
+  },
+  {
+    id: 'run-7b6a5c4d',
+    suiteId: 'suite-auth-flood',
+    artifactId: 'art-suite-auth-flood-amd64',
+    runnerProfileId: 'profile-kernel-isolated-gvisor',
+    status: 'COMPLETED',
+    k8sJobName: 'vuhive-run-run-7b6a5c4d',
+    k8sNamespace: 'vuhive-runners',
+    durationMs: 300000,
+    exitCode: 0,
+    slaPassed: true,
+    startedAt: new Date(Date.now() - 3600000 * 5).toISOString(),
+    finishedAt: new Date(Date.now() - 3600000 * 5 + 300000).toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 5 - 10000).toISOString(),
+    metrics: {
+      totalIterations: 12000,
+      totalRequests: 36000,
+      avgTps: 920,
+      p50DurationMs: 12,
+      p90DurationMs: 16,
+      p95DurationMs: 18,
+      p99DurationMs: 25,
+      errorRatePct: 0.0,
+    },
+  },
+]
+
+function mapRunResponse(r: any): HistoricalRun {
+  return {
+    id: r.id,
+    suiteId: r.suite_id || r.suiteId,
+    artifactId: r.artifact_id || r.artifactId,
+    configurationId: r.configuration_id || r.configurationId,
+    runnerProfileId: r.runner_profile_id || r.runnerProfileId,
+    status: r.status,
+    k8sJobName: r.k8s_job_name || r.k8sJobName,
+    k8sNamespace: r.k8s_namespace || r.k8sNamespace,
+    abortReason: r.abort_reason || r.abortReason,
+    activeDeadlineSeconds: r.active_deadline_seconds || r.activeDeadlineSeconds,
+    startedAt: r.started_at || r.startedAt,
+    finishedAt: r.finished_at || r.finishedAt,
+    durationMs: r.duration_ms || r.durationMs,
+    exitCode: r.exit_code !== undefined ? r.exit_code : r.exitCode,
+    slaPassed: r.sla_passed !== undefined ? r.sla_passed : r.slaPassed,
+    metrics: r.metrics
+      ? {
+          totalIterations: r.metrics.total_iterations ?? r.metrics.totalIterations,
+          totalRequests: r.metrics.total_requests ?? r.metrics.totalRequests,
+          avgTps: r.metrics.avg_tps ?? r.metrics.avgTps,
+          p50DurationMs: r.metrics.p50_duration_ms ?? r.metrics.p50DurationMs,
+          p90DurationMs: r.metrics.p90_duration_ms ?? r.metrics.p90DurationMs,
+          p95DurationMs: r.metrics.p95_duration_ms ?? r.metrics.p95DurationMs,
+          p99DurationMs: r.metrics.p99_duration_ms ?? r.metrics.p99DurationMs,
+          errorRatePct: r.metrics.error_rate_pct ?? r.metrics.errorRatePct,
+        }
+      : undefined,
+    createdAt: r.created_at || r.createdAt || new Date().toISOString(),
+  }
+}
 
 export const api = {
   async getSuites(): Promise<TestSuite[]> {
@@ -479,61 +588,61 @@ export const api = {
     })
   },
 
-  async getSuiteRuns(suiteId: string): Promise<HistoricalRun[]> {
+  async getRuns(filter?: { suiteId?: string; status?: string }): Promise<HistoricalRun[]> {
     try {
-      const res = await apiRequest<{ runs: any[] }>(
-        `/runs?suite_id=${encodeURIComponent(suiteId)}`
-      )
+      const params = new URLSearchParams()
+      if (filter?.suiteId) params.set('suite_id', filter.suiteId)
+      if (filter?.status) params.set('status', filter.status)
+      const query = params.toString() ? `?${params.toString()}` : ''
+      const res = await apiRequest<{ runs: any[]; total: number }>(`/runs${query}`)
       if (res && Array.isArray(res.runs)) {
-        return res.runs.map((r) => ({
-          id: r.id,
-          suiteId: r.suite_id,
-          artifactId: r.artifact_id,
-          configurationId: r.configuration_id,
-          runnerProfileId: r.runner_profile_id,
-          status: r.status,
-          k8sJobName: r.k8s_job_name,
-          startedAt: r.started_at,
-          finishedAt: r.finished_at,
-          durationMs: r.duration_ms,
-          exitCode: r.exit_code,
-          slaPassed: r.sla_passed,
-          metrics: r.metrics
-            ? {
-                totalIterations: r.metrics.total_iterations,
-                totalRequests: r.metrics.total_requests,
-                avgTps: r.metrics.avg_tps,
-                p50DurationMs: r.metrics.p50_duration_ms,
-                p90DurationMs: r.metrics.p90_duration_ms,
-                p95DurationMs: r.metrics.p95_duration_ms,
-                p99DurationMs: r.metrics.p99_duration_ms,
-                errorRatePct: r.metrics.error_rate_pct,
-              }
-            : undefined,
-          createdAt: r.created_at,
-        }))
+        return res.runs.map(mapRunResponse)
       }
-      return []
+      return FALLBACK_RUNS.filter((r) => {
+        if (filter?.suiteId && r.suiteId !== filter.suiteId) return false
+        if (filter?.status && r.status !== filter.status) return false
+        return true
+      })
     } catch {
-      return [
-        {
-          id: `run-${suiteId}-01`,
-          suiteId,
-          status: 'COMPLETED',
-          durationMs: 300000,
-          exitCode: 0,
-          slaPassed: true,
-          startedAt: new Date(Date.now() - 7200000).toISOString(),
-          finishedAt: new Date(Date.now() - 6900000).toISOString(),
-          metrics: {
-            avgTps: 1850,
-            p95DurationMs: 42,
-            errorRatePct: 0.0,
-          },
-          createdAt: new Date(Date.now() - 7200000).toISOString(),
-        },
-      ]
+      return FALLBACK_RUNS.filter((r) => {
+        if (filter?.suiteId && r.suiteId !== filter.suiteId) return false
+        if (filter?.status && r.status !== filter.status) return false
+        return true
+      })
     }
+  },
+
+  async getRun(id: string): Promise<HistoricalRun> {
+    try {
+      const res = await apiRequest<any>(`/runs/${encodeURIComponent(id)}`)
+      return mapRunResponse(res)
+    } catch {
+      const found = FALLBACK_RUNS.find((r) => r.id === id)
+      if (found) return found
+      throw new Error(`Run ${id} not found`)
+    }
+  },
+
+  async triggerRun(data: TriggerRunInput): Promise<HistoricalRun> {
+    const res = await apiRequest<any>('/runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return mapRunResponse(res)
+  },
+
+  async abortRun(id: string, reason?: string): Promise<HistoricalRun> {
+    const res = await apiRequest<any>(`/runs/${encodeURIComponent(id)}/abort`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reason ? { reason } : {}),
+    })
+    return mapRunResponse(res)
+  },
+
+  async getSuiteRuns(suiteId: string): Promise<HistoricalRun[]> {
+    return this.getRuns({ suiteId })
   },
 
   async getProfiles(): Promise<RunnerProfile[]> {

@@ -313,11 +313,12 @@ func ToScheduleListResponse(schedules []*model.Schedule) ScheduleListResponse {
 
 // TriggerRunRequest defines the JSON request payload for triggering an ad-hoc test run.
 type TriggerRunRequest struct {
-	SuiteID         string  `json:"suite_id" binding:"required"`
-	ArtifactID      string  `json:"artifact_id" binding:"required"`
-	ConfigurationID *string `json:"configuration_id,omitempty"`
-	RunnerProfileID string  `json:"runner_profile_id" binding:"required"`
-	RunnerNamespace *string `json:"runner_namespace,omitempty"`
+	SuiteID               string  `json:"suite_id" binding:"required"`
+	ArtifactID            string  `json:"artifact_id" binding:"required"`
+	ConfigurationID       *string `json:"configuration_id,omitempty"`
+	RunnerProfileID       string  `json:"runner_profile_id" binding:"required"`
+	RunnerNamespace       *string `json:"runner_namespace,omitempty"`
+	ActiveDeadlineSeconds *int64  `json:"active_deadline_seconds,omitempty"`
 }
 
 // CompleteRunRequest encapsulates the request body for POST /api/v1/runs/{id}/complete.

@@ -2137,6 +2137,14 @@ components:
             Optional Kubernetes namespace override where the runner Job executes.
             When omitted, defaults to the control plane's configured RUNNER_NAMESPACE or vuhive-runners.
           example: "vuhive-runners"
+        active_deadline_seconds:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            Optional execution timeout override in seconds for the Kubernetes batch/v1 Job.
+            When omitted, falls back to the RunnerProfile activeDeadlineSeconds or system default (3600s).
+          example: 1800
 
     CompleteRunRequest:
       type: object

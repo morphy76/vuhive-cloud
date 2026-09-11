@@ -608,6 +608,7 @@ func TestRunHandler_TriggerRun(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("successful trigger run with all fields returns HTTP 201 Created", func(t *testing.T) {
+		timeoutOverride := int64(1800)
 		mockUC := &mockRunsUseCase{
 			triggerRunFunc: func(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error) {
 				assert.Equal(t, "suite-100", cmd.SuiteID)
@@ -615,6 +616,8 @@ func TestRunHandler_TriggerRun(t *testing.T) {
 				require.NotNil(t, cmd.ConfigurationID)
 				assert.Equal(t, "cfg-456", *cmd.ConfigurationID)
 				assert.Equal(t, "prof-300", cmd.RunnerProfileID)
+				require.NotNil(t, cmd.ActiveDeadlineSeconds)
+				assert.Equal(t, int64(1800), *cmd.ActiveDeadlineSeconds)
 				return queuedRun, nil
 			},
 		}
@@ -622,10 +625,11 @@ func TestRunHandler_TriggerRun(t *testing.T) {
 		router := rest.SetupRouter(nil, nil, nil, mockUC)
 
 		reqBody := rest.TriggerRunRequest{
-			SuiteID:         "suite-100",
-			ArtifactID:      "art-200",
-			ConfigurationID: &configID,
-			RunnerProfileID: "prof-300",
+			SuiteID:               "suite-100",
+			ArtifactID:            "art-200",
+			ConfigurationID:       &configID,
+			RunnerProfileID:       "prof-300",
+			ActiveDeadlineSeconds: &timeoutOverride,
 		}
 		raw, err := json.Marshal(reqBody)
 		require.NoError(t, err)
