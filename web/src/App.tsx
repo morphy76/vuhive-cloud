@@ -13,6 +13,8 @@ import { queryClient, idbPersister } from '@/lib/query-client'
 
 import { RecipeProvider } from '@/context/RecipeContext'
 
+const CookbookView = React.lazy(() => import('@/views/CookbookView'))
+
 export const AppContent: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<RouteId>('dashboard')
 
@@ -24,6 +26,20 @@ export const AppContent: React.FC = () => {
         {currentRoute === 'runs' && <RunsView />}
         {currentRoute === 'schedules' && <SchedulesView />}
         {currentRoute === 'profiles' && <ProfilesView />}
+        {currentRoute === 'cookbook' && (
+          <React.Suspense
+            fallback={
+              <div className="flex items-center justify-center p-12 text-slate-400">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                  <span>Loading Cookbook...</span>
+                </div>
+              </div>
+            }
+          >
+            <CookbookView />
+          </React.Suspense>
+        )}
       </Shell>
     </RecipeProvider>
   )

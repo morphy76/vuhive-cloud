@@ -1,6 +1,6 @@
-import { LucideIcon, LayoutDashboard, Layers, PlayCircle, CalendarClock, Sliders } from 'lucide-react'
+import { LucideIcon, LayoutDashboard, Layers, PlayCircle, CalendarClock, Sliders, BookOpen } from 'lucide-react'
 
-export type RouteId = 'dashboard' | 'suites' | 'runs' | 'schedules' | 'profiles'
+export type RouteId = 'dashboard' | 'suites' | 'runs' | 'schedules' | 'profiles' | 'cookbook'
 
 export interface NavItem {
   id: RouteId
@@ -39,5 +39,11 @@ export const PRIMARY_NAV_ITEMS: NavItem[] = [
     label: 'Profiles',
     icon: Sliders,
     description: 'Kubernetes compute resources, affinities, and tolerations',
+  },
+  {
+    id: 'cookbook',
+    label: 'Cookbook',
+    icon: BookOpen,
+    description: 'Control plane adoption guide and API recipes',
   },
 ]

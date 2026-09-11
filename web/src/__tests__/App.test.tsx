@@ -15,7 +15,7 @@ describe('App & Responsive Shell Layout', () => {
     expect(screen.getByText('Active Runners')).toBeInTheDocument()
   })
 
-  it('switches navigation between primary views', () => {
+  it('switches navigation between primary views', async () => {
     render(<App />)
 
     // Navigate to Suites
@@ -41,10 +41,26 @@ describe('App & Responsive Shell Layout', () => {
     fireEvent.click(profilesButtons[0])
     expect(screen.getByRole('heading', { name: /runner profiles/i })).toBeInTheDocument()
 
+    // Navigate to Cookbook
+    const cookbookButtons = screen.getAllByRole('button', { name: /cookbook/i })
+    fireEvent.click(cookbookButtons[0])
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /control plane adoption guide/i })).toBeInTheDocument()
+    })
+
     // Back to Dashboard
     const dashboardButtons = screen.getAllByRole('button', { name: /dashboard/i })
     fireEvent.click(dashboardButtons[0])
     expect(screen.getByText('Control Plane Overview')).toBeInTheDocument()
+  })
+
+  it('navigates to Cookbook when clicking Control Plane Cookbook on Dashboard', async () => {
+    render(<App />)
+    const cookbookCardBtn = screen.getByRole('button', { name: /control plane cookbook/i })
+    fireEvent.click(cookbookCardBtn)
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /control plane adoption guide/i })).toBeInTheDocument()
+    })
   })
 
   it('toggles dark and light mode themes', () => {

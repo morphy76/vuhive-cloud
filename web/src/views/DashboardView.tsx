@@ -208,18 +208,17 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
 
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <a
-                      href="https://github.com/morphy76/vuhive-cloud/blob/main/docs/cookbook.md"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300"
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.('cookbook')}
+                      className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300 text-left"
                     >
                       <span>Control Plane Cookbook</span>
                       <ArrowUpRight className="w-4 h-4 text-slate-400" />
-                    </a>
+                    </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    Read the developer cookbook for advanced configuration recipes
+                    Read the in-app developer cookbook for advanced configuration recipes
                   </TooltipContent>
                 </Tooltip>
               </div>
