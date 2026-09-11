@@ -1,15 +1,10 @@
 COMPONENT := vuhive
-VERSION ?= $(shell cat VERSION.$(COMPONENT) 2>/dev/null || echo "0.0.0")
-VERSION_BFF ?= $(shell cat VERSION.bff 2>/dev/null || echo "$(VERSION)")
+VERSION ?= $(shell cat VERSION.$(COMPONENT) 2>/dev/null || cat VERSION 2>/dev/null || echo "0.0.0")
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 MODULE := github.com/morphy76/vuhive-cloud
 LDFLAGS := -s -w \
   -X '$(MODULE)/internal/version.Version=$(VERSION)' \
-  -X '$(MODULE)/internal/version.Commit=$(COMMIT)' \
-  -X '$(MODULE)/internal/version.BuildTime=$(BUILD_TIME)'
-LDFLAGS_BFF := -s -w \
-  -X '$(MODULE)/internal/version.Version=$(VERSION_BFF)' \
   -X '$(MODULE)/internal/version.Commit=$(COMMIT)' \
   -X '$(MODULE)/internal/version.BuildTime=$(BUILD_TIME)'
 
@@ -66,7 +61,7 @@ build-cli: ## Build developer CLI binary
 .PHONY: build-bff
 build-bff: ## Build Backend-For-Frontend (BFF) service binary
 	@mkdir -p bin
-	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS_BFF)" -o bin/bff ./cmd/bff
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/bff ./cmd/bff
 
 .PHONY: build-runner-wrapper
 build-runner-wrapper: ## Build runner wrapper binary
@@ -93,7 +88,7 @@ docker-build-server: ## Build control plane server container image with --load
 .PHONY: docker-build-bff
 docker-build-bff: ## Build BFF service container image with --load
 	$(DOCKER) build --load --provenance=false \
-		--build-arg VERSION=$(VERSION_BFF) \
+		--build-arg VERSION=$(VERSION) \
 		--build-arg COMMIT=$(COMMIT) \
 		--build-arg BUILD_TIME=$(BUILD_TIME) \
 		-t $(BFF_IMAGE) \

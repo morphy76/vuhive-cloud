@@ -50,7 +50,7 @@ See [`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md) for full details.
 
 ### Building Local Binaries and Frontend Assets
 
-All binaries and static web assets are compiled via the root `Makefile` with compile-time version metadata injected via `ldflags` (reading from `VERSION.vuhive` and `VERSION.bff`):
+All binaries and static web assets are compiled via the root `Makefile` with compile-time version metadata injected via `ldflags` (reading from the monorepo version file `VERSION.vuhive`):
 
 ```bash
 # Build all local binaries and frontend production assets
@@ -64,7 +64,7 @@ make web-build
 
 # Build individual backend binaries
 make build-server
-make build-bff       # Injects version metadata from VERSION.bff
+make build-bff
 make build-runner-wrapper
 make build-runner-init
 make build-cli

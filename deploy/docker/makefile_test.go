@@ -20,14 +20,18 @@ func TestMakefileBFFAndWebTargets(t *testing.T) {
 	require.NoError(t, err, "Makefile must exist at repository root")
 	content := string(contentBytes)
 
-	t.Run("VERSION.bff Existence and SemVer Format", func(t *testing.T) {
-		versionBffPath := filepath.Join(repoRoot, "VERSION.bff")
-		versionBytes, err := os.ReadFile(versionBffPath)
-		require.NoError(t, err, "VERSION.bff must exist at repository root")
+	t.Run("Single Monorepo Version File (VERSION.vuhive)", func(t *testing.T) {
+		versionPath := filepath.Join(repoRoot, "VERSION.vuhive")
+		versionBytes, err := os.ReadFile(versionPath)
+		require.NoError(t, err, "VERSION.vuhive must exist at repository root as the single version file")
 
 		versionStr := strings.TrimSpace(string(versionBytes))
 		assert.Regexp(t, regexp.MustCompile(`^\d+\.\d+\.\d+$`), versionStr,
-			"VERSION.bff must follow Semantic Versioning (e.g. 0.0.1 or 0.1.0)")
+			"VERSION.vuhive must follow Semantic Versioning (e.g. 0.0.1)")
+
+		versionBffPath := filepath.Join(repoRoot, "VERSION.bff")
+		_, err = os.Stat(versionBffPath)
+		assert.True(t, os.IsNotExist(err), "VERSION.bff must NOT exist; monorepo uses single version file")
 	})
 
 	requiredTargets := []string{
@@ -50,10 +54,6 @@ func TestMakefileBFFAndWebTargets(t *testing.T) {
 			assert.Regexp(t, phonyRegex, content, "target %s must be marked as .PHONY", target)
 		})
 	}
-
-	t.Run("BFF Version Injection via VERSION.bff", func(t *testing.T) {
-		assert.Contains(t, content, "VERSION.bff", "Makefile must reference VERSION.bff for BFF version injection")
-	})
 
 	t.Run("Make Help Output Coverage", func(t *testing.T) {
 		cmd := exec.Command("make", "-C", repoRoot, "help")
