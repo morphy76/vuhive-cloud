@@ -1,5 +1,5 @@
 COMPONENT := vuhive
-VERSION ?= $(shell cat VERSION.$(COMPONENT) 2>/dev/null || echo "0.0.0")
+VERSION ?= $(shell cat VERSION.$(COMPONENT) 2>/dev/null || cat VERSION 2>/dev/null || echo "0.0.0")
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 MODULE := github.com/morphy76/vuhive-cloud
@@ -21,19 +21,32 @@ help: ## Display this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: build
-build: build-web build-server build-runner-wrapper build-runner-init build-bff build-cli ## Build all binaries and web assets
+build: web-build build-server build-runner-wrapper build-runner-init build-bff build-cli ## Build all binaries and web assets
 
-.PHONY: build-web
-build-web: ## Build web SPA static assets with pnpm
+.PHONY: web-install
+web-install: ## Install frontend dependencies via pnpm in web/
+	pnpm --dir web install
+
+.PHONY: web-build
+web-build: ## Build frontend production assets with pnpm in web/
 	pnpm --dir web build
 
-.PHONY: test-web
-test-web: ## Run web unit and component tests
+.PHONY: web-test
+web-test: ## Run frontend Vitest component tests in web/
 	pnpm --dir web test
 
-.PHONY: lint-web
-lint-web: ## Run web type checking and linter
+.PHONY: web-lint
+web-lint: ## Run frontend linter and type checking in web/
 	pnpm --dir web lint
+
+.PHONY: build-web
+build-web: web-build ## Alias for web-build
+
+.PHONY: test-web
+test-web: web-test ## Alias for web-test
+
+.PHONY: lint-web
+lint-web: web-lint ## Alias for web-lint
 
 .PHONY: build-server
 build-server: ## Build control plane server binary
@@ -122,6 +135,10 @@ test-examples: ## Build and verify examples
 .PHONY: lint
 lint: ## Run golangci-lint
 	@which golangci-lint > /dev/null 2>&1 && golangci-lint run ./... || echo "golangci-lint not installed"
+
+.PHONY: lint-bff
+lint-bff: ## Run golangci-lint on BFF code
+	@which golangci-lint > /dev/null 2>&1 && golangci-lint run ./cmd/bff/... ./internal/bff/... || echo "golangci-lint not installed"
 
 .PHONY: generate
 generate: ## Run go generate
