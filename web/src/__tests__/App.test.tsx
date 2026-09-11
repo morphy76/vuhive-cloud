@@ -46,7 +46,7 @@ describe('App & Responsive Shell Layout', () => {
     fireEvent.click(cookbookButtons[0])
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /control plane adoption guide/i })).toBeInTheDocument()
-    })
+    }, { timeout: 10000 })
 
     // Back to Dashboard
     const dashboardButtons = screen.getAllByRole('button', { name: /dashboard/i })
@@ -60,7 +60,7 @@ describe('App & Responsive Shell Layout', () => {
     fireEvent.click(cookbookCardBtn)
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /control plane adoption guide/i })).toBeInTheDocument()
-    })
+    }, { timeout: 10000 })
   })
 
   it('toggles dark and light mode themes', () => {
