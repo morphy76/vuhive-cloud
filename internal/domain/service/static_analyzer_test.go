@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"io"
@@ -14,6 +15,22 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 	"github.com/morphy76/vuhive-cloud/internal/domain/service"
 )
+
+func createTestZip(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	for name, content := range files {
+		w, err := zw.Create(name)
+		require.NoError(t, err)
+		_, err = w.Write([]byte(content))
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, zw.Close())
+	return buf.Bytes()
+}
 
 func createTestTarGz(t *testing.T, files map[string]string) []byte {
 	t.Helper()
@@ -281,6 +298,20 @@ func Helper() {
 		assert.Empty(t, res.SuspiciousImports)
 	})
 
+	t.Run("succeeds with valid zip archive containing scenario package", func(t *testing.T) {
+		zipArchive := createTestZip(t, map[string]string{
+			"go.mod":      validGoMod(),
+			"scenario.go": validScenarioCode(),
+		})
+		res, err := analyzer.AnalyzeArchive(bytes.NewReader(zipArchive), service.StaticAnalysisOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, "mytest", res.ModuleName)
+		assert.Equal(t, "scenario", res.PackageName)
+		assert.Equal(t, "NewScenario", res.EntrypointName)
+		assert.False(t, res.IsDangerous)
+		assert.Empty(t, res.SuspiciousImports)
+	})
+
 	t.Run("succeeds with function Scenario", func(t *testing.T) {
 		archive := createTestTarGz(t, map[string]string{
 			"go.mod": validGoMod(),
@@ -455,5 +486,39 @@ func TestStaticAnalyzer_PrepareSourceArchive(t *testing.T) {
 		assert.Contains(t, mainContent, `"summary-export"`)
 		assert.Contains(t, mainContent, `"github.com/morphy76/vuhive/pkg/vuhive"`)
 		assert.NotContains(t, mainContent, "\t\"github.com/morphy76/vuhive\"\n")
+	})
+
+	t.Run("successfully repackages zip archive into tar.gz with injected main.go", func(t *testing.T) {
+		zipArchive := createTestZip(t, map[string]string{
+			"go.mod":      validGoMod(),
+			"scenario.go": validScenarioCode(),
+		})
+
+		preparedBytes, res, err := analyzer.PrepareSourceArchive(bytes.NewReader(zipArchive), service.StaticAnalysisOptions{})
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		assert.Equal(t, "mytest", res.ModuleName)
+
+		gr, err := gzip.NewReader(bytes.NewReader(preparedBytes))
+		require.NoError(t, err)
+		tr := tar.NewReader(gr)
+
+		entries := make(map[string]string)
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			var content bytes.Buffer
+			_, err = io.Copy(&content, tr)
+			require.NoError(t, err)
+			entries[hdr.Name] = content.String()
+		}
+
+		assert.Contains(t, entries, "go.mod")
+		assert.Contains(t, entries, "main.go")
+		assert.Contains(t, entries, "scenario/scenario.go")
+		assert.Contains(t, entries["main.go"], "scenario.NewScenario()")
 	})
 }

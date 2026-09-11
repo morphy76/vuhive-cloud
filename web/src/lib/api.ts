@@ -296,10 +296,77 @@ export const api = {
     }
   },
 
-  async uploadSuiteBuild(suiteId: string, formData: FormData): Promise<any> {
-    return apiRequest<any>(`/suites/${encodeURIComponent(suiteId)}/builds`, {
-      method: 'POST',
-      body: formData,
+  async uploadSuiteBuild(
+    suiteId: string,
+    formData: FormData,
+    onProgress?: (percent: number) => void
+  ): Promise<any> {
+    if (!onProgress || typeof XMLHttpRequest === 'undefined') {
+      return apiRequest<any>(`/suites/${encodeURIComponent(suiteId)}/builds`, {
+        method: 'POST',
+        body: formData,
+      })
+    }
+
+    return new Promise((resolve, reject) => {
+      const path = `/suites/${encodeURIComponent(suiteId)}/builds`
+      let prefixIndex = 0
+
+      const attemptUpload = () => {
+        const prefix = BASE_PREFIXES[prefixIndex]
+        const targetUrl = getTargetUrl(prefix, path)
+        const xhr = new XMLHttpRequest()
+
+        xhr.open('POST', targetUrl)
+        xhr.setRequestHeader('Accept', 'application/json')
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100)
+            onProgress(percent)
+          }
+        }
+
+        xhr.onload = () => {
+          if (xhr.status === 404 && prefixIndex < BASE_PREFIXES.length - 1) {
+            prefixIndex++
+            attemptUpload()
+            return
+          }
+
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const res = xhr.responseText ? JSON.parse(xhr.responseText) : {}
+              resolve(res)
+            } catch {
+              resolve({})
+            }
+            return
+          }
+
+          let errMessage = `HTTP error ${xhr.status}`
+          try {
+            const body = JSON.parse(xhr.responseText)
+            if (body.error) errMessage = body.error
+          } catch {
+            // ignore
+          }
+          reject(new Error(errMessage))
+        }
+
+        xhr.onerror = () => {
+          if (prefixIndex < BASE_PREFIXES.length - 1) {
+            prefixIndex++
+            attemptUpload()
+          } else {
+            reject(new Error('Network request failed'))
+          }
+        }
+
+        xhr.send(formData)
+      }
+
+      attemptUpload()
     })
   },
 
