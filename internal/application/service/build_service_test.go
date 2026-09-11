@@ -581,7 +581,16 @@ func TestBuildService_TriggerBuild_RetryAfterFailure(t *testing.T) {
 
 		// Async build mocks
 		repo.On("FindByID", mock.Anything, failedArtifact.ID()).Return(func(ctx context.Context, id string) *model.Artifact {
-			return failedArtifact
+			artCopy, _ := model.NewArtifactWithID(
+				failedArtifact.ID(),
+				failedArtifact.SuiteID(),
+				failedArtifact.Platform(),
+				"", "", "",
+				model.ArtifactStatusPending,
+				"",
+				failedArtifact.CreatedAt(),
+			)
+			return artCopy
 		}, nil).Maybe()
 		storage.On("Exists", mock.Anything, "suites/"+suiteID+"/sources/source.tar.gz").Return(true, nil).Maybe()
 		storage.On("PresignDownload", mock.Anything, mock.Anything, mock.Anything).Return("https://download", nil).Maybe()
