@@ -1,6 +1,6 @@
-import { LucideIcon, LayoutDashboard, Layers, PlayCircle, CalendarClock } from 'lucide-react'
+import { LucideIcon, LayoutDashboard, Layers, PlayCircle, CalendarClock, Sliders } from 'lucide-react'
 
-export type RouteId = 'dashboard' | 'suites' | 'runs' | 'schedules'
+export type RouteId = 'dashboard' | 'suites' | 'runs' | 'schedules' | 'profiles'
 
 export interface NavItem {
   id: RouteId
@@ -33,5 +33,11 @@ export const PRIMARY_NAV_ITEMS: NavItem[] = [
     label: 'Schedules',
     icon: CalendarClock,
     description: 'Native Kubernetes CronJob schedules',
+  },
+  {
+    id: 'profiles',
+    label: 'Profiles',
+    icon: Sliders,
+    description: 'Kubernetes compute resources, affinities, and tolerations',
   },
 ]

@@ -4,6 +4,11 @@ import type {
   CompiledArtifact,
   HistoricalRun,
 } from '@/types/suite'
+import type {
+  RunnerProfile,
+  CreateProfileInput,
+  UpdateProfileInput,
+} from '@/types/profile'
 
 const BASE_PREFIXES = ['/api/bff/v1', '/api/v1']
 
@@ -102,6 +107,85 @@ export const FALLBACK_SUITES: TestSuite[] = [
     createdAt: new Date(Date.now() - 3600000 * 24 * 30).toISOString(),
     updatedAt: new Date(Date.now() - 86400000).toISOString(),
     runCount: 8,
+  },
+]
+
+export const FALLBACK_PROFILES: RunnerProfile[] = [
+  {
+    id: 'profile-standard-single-node',
+    name: 'standard-single-node',
+    description: 'Standard single-node load runner profile (1 vCPU, 1Gi RAM)',
+    runner_image: 'alpine:3.20',
+    cpu_request: '500m',
+    cpu_limit: '1000m',
+    memory_request: '512Mi',
+    memory_limit: '1Gi',
+    node_selector: {},
+    affinity: { node_selector_terms: [] },
+    tolerations: [],
+    active_deadline_seconds: 3600,
+    runtime_class_name: null,
+    created_at: new Date(Date.now() - 86400000 * 7).toISOString(),
+    updated_at: new Date(Date.now() - 86400000).toISOString(),
+  },
+  {
+    id: 'profile-high-throughput-dedicated',
+    name: 'high-throughput-dedicated',
+    description: 'Dedicated high-compute performance testing node pool profile',
+    runner_image: 'alpine:3.20',
+    cpu_request: '2000m',
+    cpu_limit: '4000m',
+    memory_request: '4Gi',
+    memory_limit: '8Gi',
+    node_selector: {
+      'node-role.kubernetes.io/performance-runner': 'true',
+    },
+    affinity: {
+      node_selector_terms: [
+        {
+          key: 'node.kubernetes.io/instance-type',
+          operator: 'In',
+          values: ['c5.4xlarge', 'c6i.4xlarge'],
+        },
+      ],
+    },
+    tolerations: [
+      {
+        key: 'dedicated',
+        operator: 'Equal',
+        value: 'loadgen',
+        effect: 'NoSchedule',
+      },
+    ],
+    active_deadline_seconds: 7200,
+    runtime_class_name: null,
+    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+    updated_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+  },
+  {
+    id: 'profile-kernel-isolated-gvisor',
+    name: 'kernel-isolated-gvisor',
+    description: 'Multi-tenant gVisor sandboxed runner for untrusted scenarios',
+    runner_image: 'alpine:3.20',
+    cpu_request: '1000m',
+    cpu_limit: '2000m',
+    memory_request: '1Gi',
+    memory_limit: '2Gi',
+    node_selector: {
+      'kubernetes.io/arch': 'amd64',
+    },
+    affinity: { node_selector_terms: [] },
+    tolerations: [
+      {
+        key: 'sandbox.gvisor.io/runtime',
+        operator: 'Exists',
+        effect: 'NoSchedule',
+      },
+    ],
+    active_deadline_seconds: 3600,
+    runtime_class_name: 'gvisor',
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updated_at: new Date(Date.now() - 1800000).toISOString(),
   },
 ]
 
@@ -450,5 +534,117 @@ export const api = {
         },
       ]
     }
+  },
+
+  async getProfiles(): Promise<RunnerProfile[]> {
+    try {
+      const res = await apiRequest<{ profiles: any[]; count: number }>('/profiles')
+      if (res && Array.isArray(res.profiles)) {
+        return res.profiles.map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || '',
+          runner_image: p.runner_image || 'alpine:3.20',
+          cpu_request: p.cpu_request || '500m',
+          cpu_limit: p.cpu_limit || '1000m',
+          memory_request: p.memory_request || '512Mi',
+          memory_limit: p.memory_limit || '1Gi',
+          node_selector: p.node_selector || {},
+          affinity: p.affinity || { node_selector_terms: [] },
+          tolerations: p.tolerations || [],
+          active_deadline_seconds: p.active_deadline_seconds,
+          runtime_class_name: p.runtime_class_name,
+          created_at: p.created_at || new Date().toISOString(),
+          updated_at: p.updated_at || new Date().toISOString(),
+        }))
+      }
+      return FALLBACK_PROFILES
+    } catch (e) {
+      console.warn('Unable to load live profiles from API, using fallback cache:', e)
+      return FALLBACK_PROFILES
+    }
+  },
+
+  async getProfile(id: string): Promise<RunnerProfile> {
+    try {
+      const p = await apiRequest<any>(`/profiles/${encodeURIComponent(id)}`)
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description || '',
+        runner_image: p.runner_image || 'alpine:3.20',
+        cpu_request: p.cpu_request || '500m',
+        cpu_limit: p.cpu_limit || '1000m',
+        memory_request: p.memory_request || '512Mi',
+        memory_limit: p.memory_limit || '1Gi',
+        node_selector: p.node_selector || {},
+        affinity: p.affinity || { node_selector_terms: [] },
+        tolerations: p.tolerations || [],
+        active_deadline_seconds: p.active_deadline_seconds,
+        runtime_class_name: p.runtime_class_name,
+        created_at: p.created_at || new Date().toISOString(),
+        updated_at: p.updated_at || new Date().toISOString(),
+      }
+    } catch {
+      const found = FALLBACK_PROFILES.find((p) => p.id === id)
+      if (found) return found
+      throw new Error(`Profile ${id} not found`)
+    }
+  },
+
+  async createProfile(data: CreateProfileInput): Promise<RunnerProfile> {
+    const p = await apiRequest<any>('/profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description || '',
+      runner_image: p.runner_image || 'alpine:3.20',
+      cpu_request: p.cpu_request || '500m',
+      cpu_limit: p.cpu_limit || '1000m',
+      memory_request: p.memory_request || '512Mi',
+      memory_limit: p.memory_limit || '1Gi',
+      node_selector: p.node_selector || {},
+      affinity: p.affinity || { node_selector_terms: [] },
+      tolerations: p.tolerations || [],
+      active_deadline_seconds: p.active_deadline_seconds,
+      runtime_class_name: p.runtime_class_name,
+      created_at: p.created_at || new Date().toISOString(),
+      updated_at: p.updated_at || new Date().toISOString(),
+    }
+  },
+
+  async updateProfile(id: string, data: UpdateProfileInput): Promise<RunnerProfile> {
+    const p = await apiRequest<any>(`/profiles/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description || '',
+      runner_image: p.runner_image || 'alpine:3.20',
+      cpu_request: p.cpu_request || '500m',
+      cpu_limit: p.cpu_limit || '1000m',
+      memory_request: p.memory_request || '512Mi',
+      memory_limit: p.memory_limit || '1Gi',
+      node_selector: p.node_selector || {},
+      affinity: p.affinity || { node_selector_terms: [] },
+      tolerations: p.tolerations || [],
+      active_deadline_seconds: p.active_deadline_seconds,
+      runtime_class_name: p.runtime_class_name,
+      created_at: p.created_at || new Date().toISOString(),
+      updated_at: p.updated_at || new Date().toISOString(),
+    }
+  },
+
+  async deleteProfile(id: string): Promise<void> {
+    await apiRequest<void>(`/profiles/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
   },
 }
