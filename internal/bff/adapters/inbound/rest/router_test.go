@@ -341,6 +341,14 @@ func TestRouter_TransparentProxy(t *testing.T) {
 				Body:       io.NopCloser(bytes.NewBufferString(`{"runs":[],"total":0}`)),
 				Request:    req,
 			}, nil
+		case "/api/v1/runs/run-spawned/logs":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"text/plain"}},
+				Body:       io.NopCloser(bytes.NewBufferString("[INFO] container started\n")),
+				Request:    req,
+			}, nil
 		default:
 			return &http.Response{
 				StatusCode: http.StatusNotFound,
@@ -389,6 +397,15 @@ func TestRouter_TransparentProxy(t *testing.T) {
 
 		assert.Equal(t, http.StatusCreated, rec.Code)
 		assert.Contains(t, rec.Body.String(), "run-spawned")
+	})
+
+	t.Run("proxies GET /api/bff/v1/runs/:id/logs to /api/v1/runs/:id/logs", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/api/bff/v1/runs/run-spawned/logs", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), "[INFO] container started")
 	})
 }
 

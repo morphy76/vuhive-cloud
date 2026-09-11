@@ -34,6 +34,19 @@ export function useRun(id?: string) {
   )
 }
 
+export function useRunLogs(id?: string, refetchInterval?: number | false) {
+  const client = useSafeQueryClient()
+  return useQuery(
+    {
+      queryKey: ['runs', id, 'logs'],
+      queryFn: () => api.getRunLogs(id!),
+      enabled: Boolean(id),
+      refetchInterval,
+    },
+    client
+  )
+}
+
 export function useTriggerRun() {
   const queryClient = useSafeQueryClient()
 

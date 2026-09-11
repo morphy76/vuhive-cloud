@@ -21,11 +21,13 @@ import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { useProfile } from '@/hooks/use-profiles'
 import { useSuiteArtifacts } from '@/hooks/use-suites'
 import { VisualAnalyticsSection } from '@/components/charts/VisualAnalyticsSection'
+import { ExecutionLogDialog } from '@/components/dialogs/ExecutionLogDialog'
 import type { HistoricalRun } from '@/types/suite'
 
 export interface RunSummaryDashboardProps {
   run: HistoricalRun
   onClose?: () => void
+  onViewLogs?: () => void
 }
 
 function formatDuration(ms?: number): string {
@@ -59,8 +61,10 @@ function formatTimestamp(isoStr?: string): { local: string; utc: string } {
 export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
   run,
   onClose,
+  onViewLogs,
 }) => {
   const [copiedChecksum, setCopiedChecksum] = React.useState(false)
+  const [isLogDialogOpen, setIsLogDialogOpen] = React.useState(false)
 
   // Fetch contextual runner profile details
   const { data: profile } = useProfile(run.runnerProfileId || '')
@@ -180,18 +184,19 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
           <Button
             variant="outline"
             size="sm"
-            asChild
+            type="button"
+            onClick={() => {
+              if (onViewLogs) {
+                onViewLogs()
+              } else {
+                setIsLogDialogOpen(true)
+              }
+            }}
             className="min-h-[40px] gap-2 border-slate-200 dark:border-slate-800"
+            aria-label="View execution logs"
           >
-            <a
-              href={`/api/v1/runs/${encodeURIComponent(run.id)}/logs?presign=true`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Download execution logs"
-            >
-              <FileText className="w-4 h-4 text-slate-500" />
-              <span>Run Logs</span>
-            </a>
+            <FileText className="w-4 h-4 text-slate-500" />
+            <span>Run Logs</span>
           </Button>
 
           {onClose && (
@@ -598,6 +603,12 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      <ExecutionLogDialog
+        open={isLogDialogOpen}
+        onOpenChange={setIsLogDialogOpen}
+        run={run}
+      />
     </div>
   )
 }
