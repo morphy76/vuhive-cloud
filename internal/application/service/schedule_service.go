@@ -205,43 +205,47 @@ func (s *ScheduleService) GetSchedule(ctx context.Context, id string) (*model.Sc
 	return schedule, nil
 }
 
-// ListSchedules returns all active Schedule aggregates.
+// ListSchedules returns all Schedule aggregates.
 func (s *ScheduleService) ListSchedules(ctx context.Context) ([]*model.Schedule, error) {
 	start := time.Now()
 	log := zerolog.Ctx(ctx).With().
 		Str("op", "ScheduleService.ListSchedules").
 		Logger()
-	log.Debug().Msg("listing active schedules")
+	log.Debug().Msg("listing schedules")
 
-	schedules, err := s.scheduleRepo.ListActive(ctx)
+	schedules, err := s.scheduleRepo.ListAll(ctx)
 	if err != nil {
-		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed listing active schedules")
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed listing schedules")
 		return nil, err
 	}
 
 	log.Info().
 		Int("count", len(schedules)).
 		Dur("duration_ms", time.Since(start)).
-		Msg("completed active schedules listing")
+		Msg("completed schedules listing")
 
 	return schedules, nil
 }
 
-// UpdateSchedule updates the cron expression and synchronizes with the native Kubernetes CronJob.
-func (s *ScheduleService) UpdateSchedule(ctx context.Context, id string, cronExpr string) (*model.Schedule, error) {
+// UpdateSchedule updates the cron expression and/or active state, and synchronizes with the native Kubernetes CronJob.
+func (s *ScheduleService) UpdateSchedule(ctx context.Context, id string, cronExpr *string, isActive *bool) (*model.Schedule, error) {
 	start := time.Now()
 	trimmedID := strings.TrimSpace(id)
-	trimmedCronExpr := strings.TrimSpace(cronExpr)
 
 	log := zerolog.Ctx(ctx).With().
 		Str("op", "ScheduleService.UpdateSchedule").
 		Str("schedule_id", trimmedID).
-		Str("cron_expression", trimmedCronExpr).
 		Logger()
 	log.Debug().Msg("starting schedule update")
 
 	if trimmedID == "" {
 		return nil, fmt.Errorf("%w: schedule id cannot be empty", model.ErrValidation)
+	}
+
+	if (cronExpr == nil || strings.TrimSpace(*cronExpr) == "") && isActive == nil {
+		err := fmt.Errorf("%w: at least one field (cron_expression or is_active) must be provided", model.ErrValidation)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("update schedule validation failed")
+		return nil, err
 	}
 
 	schedule, err := s.scheduleRepo.FindByID(ctx, trimmedID)
@@ -250,9 +254,26 @@ func (s *ScheduleService) UpdateSchedule(ctx context.Context, id string, cronExp
 		return nil, err
 	}
 
-	if err := schedule.UpdateCronExpression(trimmedCronExpr); err != nil {
-		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed updating schedule cron expression")
-		return nil, err
+	if cronExpr != nil && strings.TrimSpace(*cronExpr) != "" {
+		trimmedCron := strings.TrimSpace(*cronExpr)
+		if err := schedule.UpdateCronExpression(trimmedCron); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed updating schedule cron expression")
+			return nil, err
+		}
+	}
+
+	if isActive != nil {
+		if *isActive && !schedule.IsActive() {
+			if err := schedule.Activate(); err != nil {
+				log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed activating schedule")
+				return nil, err
+			}
+		} else if !*isActive && schedule.IsActive() {
+			if err := schedule.Deactivate(); err != nil {
+				log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed deactivating schedule")
+				return nil, err
+			}
+		}
 	}
 
 	if err := s.orchestrator.UpdateCronJob(ctx, schedule); err != nil {

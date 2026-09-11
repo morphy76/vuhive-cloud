@@ -11,7 +11,7 @@ function useSafeQueryClient() {
   }
 }
 
-export function useRuns(filter?: { suiteId?: string; status?: string }) {
+export function useRuns(filter?: { suiteId?: string; status?: string; scheduleId?: string }) {
   const client = useSafeQueryClient()
   return useQuery(
     {

@@ -54,6 +54,7 @@ export interface HistoricalRun {
   artifactId?: string
   configurationId?: string
   runnerProfileId?: string
+  scheduleId?: string
   status: RunExecutionStatus
   k8sJobName?: string
   startedAt?: string

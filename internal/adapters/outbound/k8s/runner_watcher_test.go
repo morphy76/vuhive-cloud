@@ -206,6 +206,16 @@ func (r *inMemoryScheduleRepo) ListActive(_ context.Context) ([]*model.Schedule,
 	return list, nil
 }
 
+func (r *inMemoryScheduleRepo) ListAll(_ context.Context) ([]*model.Schedule, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var list []*model.Schedule
+	for _, s := range r.schedules {
+		list = append(list, s)
+	}
+	return list, nil
+}
+
 func (r *inMemoryScheduleRepo) Delete(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

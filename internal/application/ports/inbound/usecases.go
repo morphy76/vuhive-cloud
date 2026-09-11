@@ -89,7 +89,7 @@ type SchedulesUseCase interface {
 	CreateSchedule(ctx context.Context, suiteID, artifactID string, configID *string, runnerProfileID, name, cronExpr string) (*model.Schedule, error)
 	GetSchedule(ctx context.Context, id string) (*model.Schedule, error)
 	ListSchedules(ctx context.Context) ([]*model.Schedule, error)
-	UpdateSchedule(ctx context.Context, id string, cronExpr string) (*model.Schedule, error)
+	UpdateSchedule(ctx context.Context, id string, cronExpr *string, isActive *bool) (*model.Schedule, error)
 	DeleteSchedule(ctx context.Context, id string) error
 }
 

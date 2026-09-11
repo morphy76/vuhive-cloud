@@ -10,6 +10,11 @@ import type {
   CreateProfileInput,
   UpdateProfileInput,
 } from '@/types/profile'
+import type {
+  Schedule,
+  CreateScheduleInput,
+  UpdateScheduleInput,
+} from '@/types/schedule'
 
 const BASE_PREFIXES = ['/api/bff/v1', '/api/v1']
 
@@ -190,12 +195,52 @@ export const FALLBACK_PROFILES: RunnerProfile[] = [
   },
 ]
 
+export const FALLBACK_SCHEDULES: Schedule[] = [
+  {
+    id: 'sched-nightly-soak',
+    suiteId: 'suite-e2e-checkout',
+    artifactId: 'art-suite-e2e-checkout-arm64',
+    runnerProfileId: 'profile-standard-single-node',
+    name: 'Nightly Soak Test (2h)',
+    cronExpression: '0 2 * * *',
+    k8sCronJobName: 'vuhive-sched-nightly-soak',
+    isActive: true,
+    createdAt: new Date(Date.now() - 3600000 * 24 * 7).toISOString(),
+    updatedAt: new Date(Date.now() - 3600000 * 24 * 7).toISOString(),
+  },
+  {
+    id: 'sched-hourly-health',
+    suiteId: 'suite-search-catalog',
+    artifactId: 'art-suite-search-catalog-arm64',
+    runnerProfileId: 'profile-high-throughput-dedicated',
+    name: 'Hourly Performance Canary',
+    cronExpression: '0 * * * *',
+    k8sCronJobName: 'vuhive-sched-hourly-health',
+    isActive: true,
+    createdAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString(),
+    updatedAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString(),
+  },
+  {
+    id: 'sched-weekend-scale',
+    suiteId: 'suite-auth-flood',
+    artifactId: 'art-suite-auth-flood-amd64',
+    runnerProfileId: 'profile-kernel-isolated-gvisor',
+    name: 'Weekend Massive Concurrency',
+    cronExpression: '0 4 * * 6',
+    k8sCronJobName: 'vuhive-sched-weekend-scale',
+    isActive: false,
+    createdAt: new Date(Date.now() - 3600000 * 24 * 10).toISOString(),
+    updatedAt: new Date(Date.now() - 3600000 * 12).toISOString(),
+  },
+]
+
 export const FALLBACK_RUNS: HistoricalRun[] = [
   {
     id: 'run-9f8e7d6c',
     suiteId: 'suite-e2e-checkout',
     artifactId: 'art-suite-e2e-checkout-arm64',
     runnerProfileId: 'profile-standard-single-node',
+    scheduleId: 'sched-nightly-soak',
     status: 'RUNNING',
     k8sJobName: 'vuhive-run-run-9f8e7d6c',
     k8sNamespace: 'vuhive-runners',
@@ -218,6 +263,7 @@ export const FALLBACK_RUNS: HistoricalRun[] = [
     suiteId: 'suite-search-catalog',
     artifactId: 'art-suite-search-catalog-arm64',
     runnerProfileId: 'profile-high-throughput-dedicated',
+    scheduleId: 'sched-hourly-health',
     status: 'COMPLETED',
     k8sJobName: 'vuhive-run-run-3a2b1c0d',
     k8sNamespace: 'vuhive-runners',
@@ -243,6 +289,7 @@ export const FALLBACK_RUNS: HistoricalRun[] = [
     suiteId: 'suite-auth-flood',
     artifactId: 'art-suite-auth-flood-amd64',
     runnerProfileId: 'profile-kernel-isolated-gvisor',
+    scheduleId: 'sched-weekend-scale',
     status: 'COMPLETED',
     k8sJobName: 'vuhive-run-run-7b6a5c4d',
     k8sNamespace: 'vuhive-runners',
@@ -265,6 +312,22 @@ export const FALLBACK_RUNS: HistoricalRun[] = [
   },
 ]
 
+function mapScheduleResponse(s: any): Schedule {
+  return {
+    id: s.id,
+    suiteId: s.suite_id || s.suiteId,
+    artifactId: s.artifact_id || s.artifactId,
+    configurationId: s.configuration_id || s.configurationId,
+    runnerProfileId: s.runner_profile_id || s.runnerProfileId,
+    name: s.name,
+    cronExpression: s.cron_expression || s.cronExpression,
+    k8sCronJobName: s.k8s_cronjob_name || s.k8sCronJobName,
+    isActive: s.is_active !== undefined ? Boolean(s.is_active) : s.isActive !== undefined ? Boolean(s.isActive) : true,
+    createdAt: s.created_at || s.createdAt || new Date().toISOString(),
+    updatedAt: s.updated_at || s.updatedAt || new Date().toISOString(),
+  }
+}
+
 function mapRunResponse(r: any): HistoricalRun {
   return {
     id: r.id,
@@ -272,6 +335,7 @@ function mapRunResponse(r: any): HistoricalRun {
     artifactId: r.artifact_id || r.artifactId,
     configurationId: r.configuration_id || r.configurationId,
     runnerProfileId: r.runner_profile_id || r.runnerProfileId,
+    scheduleId: r.schedule_id || r.scheduleId,
     status: r.status,
     k8sJobName: r.k8s_job_name || r.k8sJobName,
     k8sNamespace: r.k8s_namespace || r.k8sNamespace,
@@ -588,11 +652,12 @@ export const api = {
     })
   },
 
-  async getRuns(filter?: { suiteId?: string; status?: string }): Promise<HistoricalRun[]> {
+  async getRuns(filter?: { suiteId?: string; status?: string; scheduleId?: string }): Promise<HistoricalRun[]> {
     try {
       const params = new URLSearchParams()
       if (filter?.suiteId) params.set('suite_id', filter.suiteId)
       if (filter?.status) params.set('status', filter.status)
+      if (filter?.scheduleId) params.set('schedule_id', filter.scheduleId)
       const query = params.toString() ? `?${params.toString()}` : ''
       const res = await apiRequest<{ runs: any[]; total: number }>(`/runs${query}`)
       if (res && Array.isArray(res.runs)) {
@@ -601,12 +666,14 @@ export const api = {
       return FALLBACK_RUNS.filter((r) => {
         if (filter?.suiteId && r.suiteId !== filter.suiteId) return false
         if (filter?.status && r.status !== filter.status) return false
+        if (filter?.scheduleId && r.scheduleId !== filter.scheduleId) return false
         return true
       })
     } catch {
       return FALLBACK_RUNS.filter((r) => {
         if (filter?.suiteId && r.suiteId !== filter.suiteId) return false
         if (filter?.status && r.status !== filter.status) return false
+        if (filter?.scheduleId && r.scheduleId !== filter.scheduleId) return false
         return true
       })
     }
@@ -753,6 +820,54 @@ export const api = {
 
   async deleteProfile(id: string): Promise<void> {
     await apiRequest<void>(`/profiles/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async getSchedules(): Promise<Schedule[]> {
+    try {
+      const res = await apiRequest<{ schedules: any[]; count: number }>('/schedules')
+      if (res && Array.isArray(res.schedules)) {
+        return res.schedules.map(mapScheduleResponse)
+      }
+      return FALLBACK_SCHEDULES
+    } catch (e) {
+      console.warn('Unable to load live schedules from API, using fallback cache:', e)
+      return FALLBACK_SCHEDULES
+    }
+  },
+
+  async getSchedule(id: string): Promise<Schedule> {
+    try {
+      const s = await apiRequest<any>(`/schedules/${encodeURIComponent(id)}`)
+      return mapScheduleResponse(s)
+    } catch {
+      const found = FALLBACK_SCHEDULES.find((s) => s.id === id)
+      if (found) return found
+      throw new Error(`Schedule ${id} not found`)
+    }
+  },
+
+  async createSchedule(data: CreateScheduleInput): Promise<Schedule> {
+    const s = await apiRequest<any>('/schedules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return mapScheduleResponse(s)
+  },
+
+  async updateSchedule(id: string, data: UpdateScheduleInput): Promise<Schedule> {
+    const s = await apiRequest<any>(`/schedules/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return mapScheduleResponse(s)
+  },
+
+  async deleteSchedule(id: string): Promise<void> {
+    await apiRequest<void>(`/schedules/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     })
   },

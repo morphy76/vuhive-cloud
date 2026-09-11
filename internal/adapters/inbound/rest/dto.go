@@ -258,7 +258,8 @@ type CreateScheduleRequest struct {
 
 // UpdateScheduleRequest defines the JSON payload for updating an existing schedule.
 type UpdateScheduleRequest struct {
-	CronExpression string `json:"cron_expression" binding:"required"`
+	CronExpression *string `json:"cron_expression,omitempty"`
+	IsActive       *bool   `json:"is_active,omitempty"`
 }
 
 // ScheduleResponse represents the JSON response for a Schedule aggregate.

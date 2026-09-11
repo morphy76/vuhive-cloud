@@ -133,7 +133,13 @@ func (h *ScheduleHandler) UpdateSchedule(c *gin.Context) {
 		return
 	}
 
-	schedule, err := h.schedulesUC.UpdateSchedule(ctx, id, req.CronExpression)
+	if (req.CronExpression == nil || strings.TrimSpace(*req.CronExpression) == "") && req.IsActive == nil {
+		log.Warn().Msg("neither cron_expression nor is_active provided in update schedule payload")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "at least one of cron_expression or is_active must be provided"})
+		return
+	}
+
+	schedule, err := h.schedulesUC.UpdateSchedule(ctx, id, req.CronExpression, req.IsActive)
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed updating schedule")
 		HandleError(c, err)
