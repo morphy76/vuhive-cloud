@@ -101,7 +101,31 @@ describe('Layout Components Unit Tests', () => {
     expect(handleClose).toHaveBeenCalledTimes(1)
   })
 
-  it('BottomNav provides 4 primary route buttons', () => {
+  it('NavDrawer renders Cookbook navigation button and triggers route change', async () => {
+    const handleClose = vi.fn()
+    const handleSelectRoute = vi.fn()
+
+    render(
+      withProviders(
+        <NavDrawer
+          isOpen={true}
+          onClose={handleClose}
+          currentRoute="dashboard"
+          onSelectRoute={handleSelectRoute}
+        />
+      )
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /cookbook/i })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /cookbook/i }))
+    expect(handleSelectRoute).toHaveBeenCalledWith('cookbook')
+    expect(handleClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('BottomNav provides primary route buttons including Cookbook', () => {
     const handleSelectRoute = vi.fn()
 
     render(
@@ -114,9 +138,9 @@ describe('Layout Components Unit Tests', () => {
     const nav = screen.getByRole('navigation', { name: /mobile bottom navigation/i })
     expect(nav).toBeInTheDocument()
 
-    const schedulesBtn = screen.getByRole('button', { name: 'Schedules' })
-    fireEvent.click(schedulesBtn)
-    expect(handleSelectRoute).toHaveBeenCalledWith('schedules')
+    const cookbookBtn = screen.getByRole('button', { name: 'Cookbook' })
+    fireEvent.click(cookbookBtn)
+    expect(handleSelectRoute).toHaveBeenCalledWith('cookbook')
   })
 
   it('BottomNav marks active item with aria-current="page"', () => {

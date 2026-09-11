@@ -51,6 +51,34 @@ describe('WCAG 2.1 AA Accessibility Compliance', () => {
     expect(results).toHaveNoViolations()
   })
 
+  it('CookbookView has no accessibility violations', async () => {
+    const { CookbookView } = await import('../views/CookbookView')
+    const sampleContent = `
+# Control Plane Adoption Guide
+
+Welcome to the adoption guide.
+
+## 1. Core Domain Concepts
+- [x] Test suite definition
+- [ ] Runner profile configuration
+
+### Recipe 1: Registering a Test Suite
+\`\`\`bash
+curl -X POST http://localhost:8080/api/v1/suites
+\`\`\`
+
+> [!TIP]
+> This is an accessible tip callout.
+
+| Column 1 | Column 2 |
+| :--- | :--- |
+| Val 1 | Val 2 |
+`
+    const { container } = render(withTooltipProvider(<CookbookView content={sampleContent} />))
+    const results = await axe(container)
+    expect(results).toHaveNoViolations()
+  }, 20000)
+
   it('YamlDiffViewer has no accessibility violations', async () => {
     const { YamlDiffViewer } = await import('../components/editor/YamlDiffViewer')
     const { container } = render(

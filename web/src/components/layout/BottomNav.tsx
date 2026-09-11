@@ -13,7 +13,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentRoute, onSelectRout
       aria-label="Mobile bottom navigation"
       className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 pb-safe transition-colors"
     >
-      <div className="grid grid-cols-5 h-16 max-w-lg mx-auto">
+      <div className="grid grid-cols-6 h-16 max-w-lg mx-auto">
         {PRIMARY_NAV_ITEMS.map((item) => {
           const Icon = item.icon
           const isActive = currentRoute === item.id
