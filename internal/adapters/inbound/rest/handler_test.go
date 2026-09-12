@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,6 +70,27 @@ func (m *MockBuildsUseCase) ListArtifacts(ctx context.Context, suiteID string) (
 		return a.([]*model.Artifact), args.Error(1)
 	}
 	return nil, args.Error(1)
+}
+
+func (m *MockBuildsUseCase) CancelBuild(ctx context.Context, suiteID, artifactID, reason string) (*model.Artifact, error) {
+	args := m.Called(ctx, suiteID, artifactID, reason)
+	if a := args.Get(0); a != nil {
+		return a.(*model.Artifact), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockBuildsUseCase) RetryBuild(ctx context.Context, suiteID, artifactID string) (*model.Artifact, error) {
+	args := m.Called(ctx, suiteID, artifactID)
+	if a := args.Get(0); a != nil {
+		return a.(*model.Artifact), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockBuildsUseCase) DeleteArtifact(ctx context.Context, suiteID, artifactID string) error {
+	args := m.Called(ctx, suiteID, artifactID)
+	return args.Error(0)
 }
 
 var _ inbound.BuildsUseCase = (*MockBuildsUseCase)(nil)
@@ -431,4 +454,147 @@ func TestHealthCheck(t *testing.T) {
 	err := json.Unmarshal(rec.Body.Bytes(), &body)
 	require.NoError(t, err)
 	assert.Equal(t, "ok", body["status"])
+}
+
+func TestArtifactHandler_CancelBuild(t *testing.T) {
+	suiteID := "suite-123"
+	artifactID := "art-456"
+
+	t.Run("success: cancels build and returns 200 with cancelled artifact", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		cancelledArt, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		_ = cancelledArt.Cancel("user stopped build")
+
+		mockUC.On("CancelBuild", mock.Anything, suiteID, artifactID, "user stopped build").Return(cancelledArt, nil)
+
+		body := `{"reason":"user stopped build"}`
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/suites/%s/artifacts/%s/cancel", suiteID, artifactID), strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var resp rest.ArtifactResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, "CANCELLED", resp.Status)
+		assert.Equal(t, "user stopped build", resp.ErrorMessage)
+	})
+
+	t.Run("failure: returns 409 conflict when artifact in terminal state", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		mockUC.On("CancelBuild", mock.Anything, suiteID, artifactID, "").Return(nil, model.ErrTerminalState)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/suites/%s/artifacts/%s/cancel", suiteID, artifactID), nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusConflict, rec.Code)
+	})
+
+	t.Run("failure: returns 404 when artifact not found", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		mockUC.On("CancelBuild", mock.Anything, suiteID, artifactID, "").Return(nil, model.ErrNotFound)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/suites/%s/artifacts/%s/cancel", suiteID, artifactID), nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+	})
+}
+
+func TestArtifactHandler_RetryBuild(t *testing.T) {
+	suiteID := "suite-123"
+	artifactID := "art-456"
+
+	t.Run("success: retries build and returns 202 accepted with pending artifact", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		retriedArt, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+
+		mockUC.On("RetryBuild", mock.Anything, suiteID, artifactID).Return(retriedArt, nil)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/suites/%s/artifacts/%s/retry", suiteID, artifactID), nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusAccepted, rec.Code)
+		var resp rest.ArtifactResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, "PENDING", resp.Status)
+	})
+
+	t.Run("failure: returns 400 when artifact cannot be retried", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		mockUC.On("RetryBuild", mock.Anything, suiteID, artifactID).Return(nil, model.ErrInvalidStateTransition)
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/suites/%s/artifacts/%s/retry", suiteID, artifactID), nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+}
+
+func TestArtifactHandler_DeleteArtifact(t *testing.T) {
+	suiteID := "suite-123"
+	artifactID := "art-456"
+
+	t.Run("success: deletes artifact and returns 204 no content", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		mockUC.On("DeleteArtifact", mock.Anything, suiteID, artifactID).Return(nil)
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/suites/%s/artifacts/%s", suiteID, artifactID), nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNoContent, rec.Code)
+	})
+
+	t.Run("failure: returns 409 conflict when artifact is currently building", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		mockUC.On("DeleteArtifact", mock.Anything, suiteID, artifactID).Return(model.ErrConflict)
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/suites/%s/artifacts/%s", suiteID, artifactID), nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusConflict, rec.Code)
+	})
+
+	t.Run("failure: returns 404 when artifact not found", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		mockUC.On("DeleteArtifact", mock.Anything, suiteID, artifactID).Return(model.ErrNotFound)
+
+		req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/suites/%s/artifacts/%s", suiteID, artifactID), nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+	})
 }

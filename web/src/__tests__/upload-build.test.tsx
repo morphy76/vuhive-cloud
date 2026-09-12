@@ -250,6 +250,111 @@ describe('UploadBuildDialog & Drag-and-Drop Build Workflow', () => {
     uploadSpy.mockRestore()
   })
 
+  it('allows cancelling an active build from the dialog', async () => {
+    const uploadSpy = vi.spyOn(api, 'uploadSuiteBuild').mockResolvedValueOnce({
+      message: 'build triggered successfully',
+      artifacts: [
+        {
+          id: 'art-12345',
+          suite_id: 'suite-test-123',
+          platform: 'linux/amd64',
+          status: 'PENDING',
+          created_at: new Date().toISOString(),
+        },
+      ],
+    })
+    const cancelSpy = vi.spyOn(api, 'cancelSuiteBuild').mockResolvedValueOnce({
+      id: 'art-12345',
+      suiteId: 'suite-test-123',
+      platform: 'linux/amd64',
+      status: 'CANCELLED',
+      createdAt: new Date().toISOString(),
+    })
+
+    render(
+      <UploadBuildDialog
+        suiteId="suite-test-123"
+        open={true}
+        onOpenChange={mockOnOpenChange}
+      />,
+      { wrapper: createTestWrapper() }
+    )
+
+    const file = new File(['scenario content'], 'scenario.tar.gz', { type: 'application/gzip' })
+    const input = screen.getByTestId('source-file-input')
+    fireEvent.change(input, { target: { files: [file] } })
+
+    const submitBtn = screen.getByRole('button', { name: /Upload & Build/i })
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Cancel Build/i })).toBeInTheDocument()
+    })
+
+    const cancelBtn = screen.getByRole('button', { name: /Cancel Build/i })
+    fireEvent.click(cancelBtn)
+
+    await waitFor(() => {
+      expect(cancelSpy).toHaveBeenCalledWith('suite-test-123', 'art-12345', expect.any(String))
+      expect(screen.getAllByText(/Build Cancelled/i).length).toBeGreaterThanOrEqual(1)
+    })
+
+    uploadSpy.mockRestore()
+    cancelSpy.mockRestore()
+  })
+
+  it('allows retrying a failed build from the dialog', async () => {
+    const uploadSpy = vi.spyOn(api, 'uploadSuiteBuild').mockResolvedValueOnce({
+      message: 'build triggered successfully',
+      artifacts: [
+        {
+          id: 'art-fail-1',
+          suite_id: 'suite-test-123',
+          platform: 'linux/amd64',
+          status: 'FAILED',
+          created_at: new Date().toISOString(),
+        },
+      ],
+    })
+    const retrySpy = vi.spyOn(api, 'retrySuiteBuild').mockResolvedValueOnce({
+      id: 'art-fail-1',
+      suiteId: 'suite-test-123',
+      platform: 'linux/amd64',
+      status: 'BUILDING',
+      createdAt: new Date().toISOString(),
+    })
+
+    render(
+      <UploadBuildDialog
+        suiteId="suite-test-123"
+        open={true}
+        onOpenChange={mockOnOpenChange}
+      />,
+      { wrapper: createTestWrapper() }
+    )
+
+    const file = new File(['scenario content'], 'scenario.tar.gz', { type: 'application/gzip' })
+    const input = screen.getByTestId('source-file-input')
+    fireEvent.change(input, { target: { files: [file] } })
+
+    const submitBtn = screen.getByRole('button', { name: /Upload & Build/i })
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Retry Build/i })).toBeInTheDocument()
+    })
+
+    const retryBtn = screen.getByRole('button', { name: /Retry Build/i })
+    fireEvent.click(retryBtn)
+
+    await waitFor(() => {
+      expect(retrySpy).toHaveBeenCalledWith('suite-test-123', 'art-fail-1')
+    })
+
+    uploadSpy.mockRestore()
+    retrySpy.mockRestore()
+  })
+
   it('has no accessibility violations in initial state', async () => {
     const { container } = render(
       <UploadBuildDialog
@@ -288,6 +393,12 @@ describe('BuildStatusStepper', () => {
     render(<BuildStatusStepper currentStatus="FAILED" platform="linux/amd64" />)
     expect(screen.getByText('Failed')).toBeInTheDocument()
     expect(screen.getByText('Compilation error')).toBeInTheDocument()
+  })
+
+  it('renders cancelled status with cancellation indication', () => {
+    render(<BuildStatusStepper currentStatus="CANCELLED" platform="linux/amd64" />)
+    expect(screen.getByText('Cancelled')).toBeInTheDocument()
+    expect(screen.getByText('Build cancelled')).toBeInTheDocument()
   })
 })
 

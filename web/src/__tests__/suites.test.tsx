@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { axe } from 'vitest-axe'
 import React from 'react'
@@ -8,6 +8,7 @@ import { SuiteDetailView } from '@/views/SuiteDetailView'
 import { CreateSuiteDialog } from '@/components/dialogs/CreateSuiteDialog'
 import { RecipeProvider } from '@/context/RecipeContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { api } from '@/lib/api'
 import type { TestSuite } from '@/types/suite'
 
 const createTestWrapper = () => {
@@ -248,5 +249,95 @@ describe('SuitesView Delete Action', () => {
 
     fireEvent.click(deleteButtons[0])
     expect(await screen.findByRole('heading', { name: /delete test suite/i })).toBeInTheDocument()
+  })
+})
+
+describe('SuiteDetailView Artifact Actions (Cancel, Retry, Delete)', () => {
+  it('allows cancelling building artifact, retrying failed artifact, and deleting artifact', async () => {
+    const mockArtifacts = [
+      {
+        id: 'art-building-1',
+        suiteId: mockSuites[0].id,
+        platform: 'linux/amd64',
+        status: 'BUILDING' as const,
+        createdAt: '2026-03-10T10:00:00Z',
+      },
+      {
+        id: 'art-failed-2',
+        suiteId: mockSuites[0].id,
+        platform: 'linux/arm64',
+        status: 'FAILED' as const,
+        errorMessage: 'exit code 1',
+        createdAt: '2026-03-10T11:00:00Z',
+      },
+      {
+        id: 'art-cancelled-3',
+        suiteId: mockSuites[0].id,
+        platform: 'linux/amd64',
+        status: 'CANCELLED' as const,
+        errorMessage: 'Cancelled by user',
+        createdAt: '2026-03-10T12:00:00Z',
+      },
+    ]
+
+    const getArtifactsSpy = vi.spyOn(api, 'getSuiteArtifacts').mockResolvedValue(mockArtifacts)
+    const cancelSpy = vi.spyOn(api, 'cancelSuiteBuild').mockResolvedValue({
+      id: 'art-building-1',
+      suiteId: mockSuites[0].id,
+      platform: 'linux/amd64',
+      status: 'CANCELLED',
+      createdAt: '2026-03-10T10:00:00Z',
+    })
+    const retrySpy = vi.spyOn(api, 'retrySuiteBuild').mockResolvedValue({
+      id: 'art-failed-2',
+      suiteId: mockSuites[0].id,
+      platform: 'linux/arm64',
+      status: 'BUILDING',
+      createdAt: '2026-03-10T11:00:00Z',
+    })
+    const deleteSpy = vi.spyOn(api, 'deleteSuiteArtifact').mockResolvedValue(undefined)
+
+    const Wrapper = createTestWrapper()
+    render(<SuiteDetailView suite={mockSuites[0]} onBack={() => {}} />, { wrapper: Wrapper })
+
+    // Switch to Artifacts tab
+    const artifactsTab = screen.getByRole('tab', { name: /artifacts/i })
+    fireEvent.mouseDown(artifactsTab, { button: 0 })
+    fireEvent.click(artifactsTab)
+
+    // Verify artifact rows rendered
+    expect(await screen.findByText('art-building-1')).toBeInTheDocument()
+    expect(screen.getByText('art-failed-2')).toBeInTheDocument()
+    expect(screen.getByText('art-cancelled-3')).toBeInTheDocument()
+
+    // Test Cancel on building artifact
+    const cancelBtn = screen.getByRole('button', { name: /cancel build for art-building-1/i })
+    fireEvent.click(cancelBtn)
+    await waitFor(() => {
+      expect(cancelSpy).toHaveBeenCalledWith(mockSuites[0].id, 'art-building-1', expect.any(String))
+    })
+
+    // Test Retry on failed artifact
+    const retryBtn = screen.getByRole('button', { name: /retry build for art-failed-2/i })
+    fireEvent.click(retryBtn)
+    await waitFor(() => {
+      expect(retrySpy).toHaveBeenCalledWith(mockSuites[0].id, 'art-failed-2')
+    })
+
+    // Test Delete on cancelled artifact opens DeleteArtifactDialog
+    const deleteBtn = screen.getByRole('button', { name: /delete artifact art-cancelled-3/i })
+    fireEvent.click(deleteBtn)
+
+    expect(await screen.findByRole('heading', { name: /delete artifact/i })).toBeInTheDocument()
+    const confirmDeleteBtn = screen.getByRole('button', { name: 'Delete Artifact' })
+    fireEvent.click(confirmDeleteBtn)
+    await waitFor(() => {
+      expect(deleteSpy).toHaveBeenCalledWith(mockSuites[0].id, 'art-cancelled-3')
+    })
+
+    getArtifactsSpy.mockRestore()
+    cancelSpy.mockRestore()
+    retrySpy.mockRestore()
+    deleteSpy.mockRestore()
   })
 })

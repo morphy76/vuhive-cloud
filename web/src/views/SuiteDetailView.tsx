@@ -12,6 +12,8 @@ import {
   Terminal,
   Split,
   FileEdit,
+  RotateCw,
+  Ban,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -28,11 +30,16 @@ import {
   useSuiteArtifacts,
   useSuiteRuns,
   useDeleteSuite,
+  useCancelSuiteBuild,
+  useRetrySuiteBuild,
+  useDeleteSuiteArtifact,
 } from '@/hooks/use-suites'
 import { useToast } from '@/hooks/use-toast'
 import { DeleteSuiteDialog } from '@/components/dialogs/DeleteSuiteDialog'
+import { DeleteArtifactDialog } from '@/components/dialogs/DeleteArtifactDialog'
 import { useBuildEvents } from '@/hooks/use-events'
-import type { TestSuite, SuiteConfiguration, HistoricalRun } from '@/types/suite'
+import type { TestSuite, SuiteConfiguration, HistoricalRun, CompiledArtifact } from '@/types/suite'
+import { cn } from '@/lib/utils'
 
 export interface SuiteDetailViewProps {
   suite: TestSuite
@@ -52,6 +59,8 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   const [selectedRunForSummary, setSelectedRunForSummary] = useState<HistoricalRun | null>(null)
   const [isRunSummaryOpen, setIsRunSummaryOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [selectedArtifactForDelete, setSelectedArtifactForDelete] = useState<CompiledArtifact | null>(null)
+  const [isDeleteArtifactOpen, setIsDeleteArtifactOpen] = useState(false)
 
   // Subscribe to live SSE build status changes for reactive artifact updates
   useBuildEvents(suite.id)
@@ -62,7 +71,61 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   const { data: artifacts = [], isLoading: isLoadingArtifacts } = useSuiteArtifacts(suite.id)
   const { data: runs = [], isLoading: isLoadingRuns } = useSuiteRuns(suite.id)
   const deleteSuiteMutation = useDeleteSuite()
+  const cancelBuildMutation = useCancelSuiteBuild(suite.id)
+  const retryBuildMutation = useRetrySuiteBuild(suite.id)
+  const deleteArtifactMutation = useDeleteSuiteArtifact(suite.id)
   const { toast } = useToast()
+
+  const handleCancelBuild = async (artifactId: string) => {
+    try {
+      await cancelBuildMutation.mutateAsync({ artifactId, reason: 'Cancelled from Artifacts view' })
+      toast({
+        title: 'Build Cancelled',
+        description: `Build artifact ${artifactId} was cancelled.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Failed to cancel build',
+        description: err.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleRetryBuild = async (artifactId: string) => {
+    try {
+      await retryBuildMutation.mutateAsync(artifactId)
+      toast({
+        title: 'Build Retried',
+        description: `Compilation job restarted for artifact ${artifactId}.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Failed to retry build',
+        description: err.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleConfirmDeleteArtifact = async () => {
+    if (!selectedArtifactForDelete) return
+    try {
+      await deleteArtifactMutation.mutateAsync(selectedArtifactForDelete.id)
+      toast({
+        title: 'Artifact Deleted',
+        description: `Artifact ${selectedArtifactForDelete.id} was permanently deleted.`,
+      })
+      setIsDeleteArtifactOpen(false)
+      setSelectedArtifactForDelete(null)
+    } catch (err: any) {
+      toast({
+        title: 'Failed to delete artifact',
+        description: err.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      })
+    }
+  }
 
   const hasActiveBuilds =
     suite.buildStatus === 'BUILDING' || artifacts.some((a) => a.status === 'BUILDING')
@@ -384,12 +447,17 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                             <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-brand-50 dark:bg-brand-950 text-brand-700 dark:text-brand-300">
                               {art.platform}
                             </span>
+                            <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                              {art.id}
+                            </span>
                             <Badge
                               variant={
                                 art.status === 'READY'
                                   ? 'success'
-                                  : art.status === 'BUILDING'
+                                  : art.status === 'BUILDING' || art.status === 'PENDING'
                                   ? 'info'
+                                  : art.status === 'CANCELLED'
+                                  ? 'warning'
                                   : 'error'
                               }
                             >
@@ -409,7 +477,33 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          {(art.status === 'BUILDING' || art.status === 'PENDING') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCancelBuild(art.id)}
+                              disabled={cancelBuildMutation.isPending}
+                              className="gap-1 min-h-[36px] text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/60"
+                              aria-label={`Cancel build for ${art.id}`}
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                              <span>Cancel</span>
+                            </Button>
+                          )}
+                          {(art.status === 'FAILED' || art.status === 'CANCELLED') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRetryBuild(art.id)}
+                              disabled={retryBuildMutation.isPending}
+                              className="gap-1 min-h-[36px] text-xs text-slate-700 dark:text-slate-300"
+                              aria-label={`Retry build for ${art.id}`}
+                            >
+                              <RotateCw className={cn('w-3.5 h-3.5', retryBuildMutation.isPending && 'animate-spin')} />
+                              <span>Retry</span>
+                            </Button>
+                          )}
                           {hasLogs && (
                             <Button
                               variant="outline"
@@ -426,7 +520,20 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                               <span>{isLogExpanded ? 'Hide Logs' : 'View Logs'}</span>
                             </Button>
                           )}
-                          <div className="text-xs text-slate-400 font-mono">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedArtifactForDelete(art)
+                              setIsDeleteArtifactOpen(true)
+                            }}
+                            disabled={art.status === 'BUILDING' || art.status === 'PENDING'}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 min-h-[36px]"
+                            aria-label={`Delete artifact ${art.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                          <div className="text-xs text-slate-400 font-mono hidden sm:block">
                             {new Date(art.createdAt).toLocaleDateString()}
                           </div>
                         </div>
@@ -608,6 +715,13 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
         isDeleting={deleteSuiteMutation.isPending}
         hasActiveBuilds={hasActiveBuilds}
         hasActiveRuns={hasActiveRuns}
+      />
+      <DeleteArtifactDialog
+        open={isDeleteArtifactOpen}
+        onOpenChange={setIsDeleteArtifactOpen}
+        artifact={selectedArtifactForDelete}
+        onConfirm={handleConfirmDeleteArtifact}
+        isDeleting={deleteArtifactMutation.isPending}
       />
     </div>
   )

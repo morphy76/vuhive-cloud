@@ -172,6 +172,9 @@ func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 					artifactHandler := NewArtifactHandler(cfg.BuildsUC)
 					suites.POST("/:id/builds", roleGuard(model.RoleDeveloper, model.RoleAdmin), artifactHandler.UploadAndBuild)
 					suites.GET("/:id/artifacts", roleGuard(model.RoleViewer, model.RoleDeveloper, model.RoleDeployer, model.RoleAdmin), artifactHandler.ListArtifacts)
+					suites.POST("/:id/artifacts/:artifactId/cancel", roleGuard(model.RoleDeveloper, model.RoleAdmin), artifactHandler.CancelBuild)
+					suites.POST("/:id/artifacts/:artifactId/retry", roleGuard(model.RoleDeveloper, model.RoleAdmin), artifactHandler.RetryBuild)
+					suites.DELETE("/:id/artifacts/:artifactId", roleGuard(model.RoleDeveloper, model.RoleAdmin), artifactHandler.DeleteArtifact)
 				}
 			}
 		}

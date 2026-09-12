@@ -132,3 +132,109 @@ func (h *ArtifactHandler) ListArtifacts(c *gin.Context) {
 
 	c.JSON(http.StatusOK, ToArtifactListResponse(artifacts))
 }
+
+// CancelBuild handles POST /api/v1/suites/:id/artifacts/:artifactId/cancel
+// Cancels an in-progress or pending build and terminates its Kubernetes Job.
+func (h *ArtifactHandler) CancelBuild(c *gin.Context) {
+	start := time.Now()
+	ctx := c.Request.Context()
+	suiteID := strings.TrimSpace(c.Param("id"))
+	artifactID := strings.TrimSpace(c.Param("artifactId"))
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "ArtifactHandler.CancelBuild").
+		Str("suite_id", suiteID).
+		Str("artifact_id", artifactID).
+		Logger()
+	log.Debug().Msg("handling cancel build request")
+
+	if suiteID == "" || artifactID == "" {
+		log.Warn().Msg("missing suite id or artifact id parameter")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "suite id and artifact id cannot be empty"})
+		return
+	}
+
+	var req CancelBuildRequest
+	_ = c.ShouldBindJSON(&req)
+
+	artifact, err := h.buildsUC.CancelBuild(ctx, suiteID, artifactID, req.Reason)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed cancelling build")
+		HandleError(c, err)
+		return
+	}
+
+	log.Info().
+		Str("status", string(artifact.Status())).
+		Dur("duration_ms", time.Since(start)).
+		Msg("successfully cancelled build")
+
+	c.JSON(http.StatusOK, ToArtifactResponse(artifact))
+}
+
+// RetryBuild handles POST /api/v1/suites/:id/artifacts/:artifactId/retry
+// Resets a FAILED or CANCELLED build to PENDING and triggers asynchronous re-compilation.
+func (h *ArtifactHandler) RetryBuild(c *gin.Context) {
+	start := time.Now()
+	ctx := c.Request.Context()
+	suiteID := strings.TrimSpace(c.Param("id"))
+	artifactID := strings.TrimSpace(c.Param("artifactId"))
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "ArtifactHandler.RetryBuild").
+		Str("suite_id", suiteID).
+		Str("artifact_id", artifactID).
+		Logger()
+	log.Debug().Msg("handling retry build request")
+
+	if suiteID == "" || artifactID == "" {
+		log.Warn().Msg("missing suite id or artifact id parameter")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "suite id and artifact id cannot be empty"})
+		return
+	}
+
+	artifact, err := h.buildsUC.RetryBuild(ctx, suiteID, artifactID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed retrying build")
+		HandleError(c, err)
+		return
+	}
+
+	log.Info().
+		Str("status", string(artifact.Status())).
+		Dur("duration_ms", time.Since(start)).
+		Msg("successfully triggered build retry")
+
+	c.JSON(http.StatusAccepted, ToArtifactResponse(artifact))
+}
+
+// DeleteArtifact handles DELETE /api/v1/suites/:id/artifacts/:artifactId
+// Deletes compiled binary and log storage assets and removes the artifact record.
+func (h *ArtifactHandler) DeleteArtifact(c *gin.Context) {
+	start := time.Now()
+	ctx := c.Request.Context()
+	suiteID := strings.TrimSpace(c.Param("id"))
+	artifactID := strings.TrimSpace(c.Param("artifactId"))
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "ArtifactHandler.DeleteArtifact").
+		Str("suite_id", suiteID).
+		Str("artifact_id", artifactID).
+		Logger()
+	log.Debug().Msg("handling delete artifact request")
+
+	if suiteID == "" || artifactID == "" {
+		log.Warn().Msg("missing suite id or artifact id parameter")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "suite id and artifact id cannot be empty"})
+		return
+	}
+
+	if err := h.buildsUC.DeleteArtifact(ctx, suiteID, artifactID); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed deleting artifact")
+		HandleError(c, err)
+		return
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed artifact deletion")
+	c.Status(http.StatusNoContent)
+}

@@ -211,4 +211,46 @@ func TestRouter_RBACProtection(t *testing.T) {
 		router.ServeHTTP(wSuite, suiteReq)
 		assert.Equal(t, http.StatusForbidden, wSuite.Code)
 	})
+
+	t.Run("developer can cancel, retry, and delete artifacts but viewer cannot", func(t *testing.T) {
+		art, _ := model.NewArtifact("suite-1", model.PlatformLinuxAmd64)
+		mockBuilds.On("CancelBuild", mock.Anything, "suite-1", "art-1", "").Return(art, nil).Once()
+		mockBuilds.On("RetryBuild", mock.Anything, "suite-1", "art-1").Return(art, nil).Once()
+		mockBuilds.On("DeleteArtifact", mock.Anything, "suite-1", "art-1").Return(nil).Once()
+
+		// Developer can cancel
+		req, _ := http.NewRequest(http.MethodPost, "/api/v1/suites/suite-1/artifacts/art-1/cancel", nil)
+		req.Header.Set("Authorization", "Bearer dev-token")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// Developer can retry
+		reqRetry, _ := http.NewRequest(http.MethodPost, "/api/v1/suites/suite-1/artifacts/art-1/retry", nil)
+		reqRetry.Header.Set("Authorization", "Bearer dev-token")
+		wRetry := httptest.NewRecorder()
+		router.ServeHTTP(wRetry, reqRetry)
+		assert.Equal(t, http.StatusAccepted, wRetry.Code)
+
+		// Developer can delete
+		reqDel, _ := http.NewRequest(http.MethodDelete, "/api/v1/suites/suite-1/artifacts/art-1", nil)
+		reqDel.Header.Set("Authorization", "Bearer dev-token")
+		wDel := httptest.NewRecorder()
+		router.ServeHTTP(wDel, reqDel)
+		assert.Equal(t, http.StatusNoContent, wDel.Code)
+
+		// Viewer cannot cancel
+		reqViewerCancel, _ := http.NewRequest(http.MethodPost, "/api/v1/suites/suite-1/artifacts/art-1/cancel", nil)
+		reqViewerCancel.Header.Set("Authorization", "Bearer viewer-token")
+		wVC := httptest.NewRecorder()
+		router.ServeHTTP(wVC, reqViewerCancel)
+		assert.Equal(t, http.StatusForbidden, wVC.Code)
+
+		// Viewer cannot delete
+		reqViewerDel, _ := http.NewRequest(http.MethodDelete, "/api/v1/suites/suite-1/artifacts/art-1", nil)
+		reqViewerDel.Header.Set("Authorization", "Bearer viewer-token")
+		wVD := httptest.NewRecorder()
+		router.ServeHTTP(wVD, reqViewerDel)
+		assert.Equal(t, http.StatusForbidden, wVD.Code)
+	})
 }

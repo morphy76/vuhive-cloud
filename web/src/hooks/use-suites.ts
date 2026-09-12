@@ -177,6 +177,52 @@ export function useUploadSuiteBuild(suiteId: string) {
   )
 }
 
+export function useCancelSuiteBuild(suiteId: string) {
+  const queryClient = useSafeQueryClient()
+
+  return useMutation(
+    {
+      mutationFn: (args: { artifactId: string; reason?: string }) =>
+        api.cancelSuiteBuild(suiteId, args.artifactId, args.reason),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['suites', suiteId, 'artifacts'] })
+        queryClient.invalidateQueries({ queryKey: ['suites'] })
+      },
+    },
+    queryClient
+  )
+}
+
+export function useRetrySuiteBuild(suiteId: string) {
+  const queryClient = useSafeQueryClient()
+
+  return useMutation(
+    {
+      mutationFn: (artifactId: string) => api.retrySuiteBuild(suiteId, artifactId),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['suites', suiteId, 'artifacts'] })
+        queryClient.invalidateQueries({ queryKey: ['suites'] })
+      },
+    },
+    queryClient
+  )
+}
+
+export function useDeleteSuiteArtifact(suiteId: string) {
+  const queryClient = useSafeQueryClient()
+
+  return useMutation(
+    {
+      mutationFn: (artifactId: string) => api.deleteSuiteArtifact(suiteId, artifactId),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['suites', suiteId, 'artifacts'] })
+        queryClient.invalidateQueries({ queryKey: ['suites'] })
+      },
+    },
+    queryClient
+  )
+}
+
 export function useSuiteRuns(suiteId: string) {
   const client = useSafeQueryClient()
   return useQuery(

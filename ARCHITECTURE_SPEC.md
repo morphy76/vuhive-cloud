@@ -356,6 +356,9 @@ All endpoints require Header `Authorization: Bearer <token>` or `X-API-Key: <key
 | `GET` | `/api/v1/suites/{id}` | Get Test Suite detail |
 | `POST` | `/api/v1/suites/{id}/builds` | Upload Go source archive & trigger build Job |
 | `GET` | `/api/v1/suites/{id}/artifacts` | List compiled binary artifacts |
+| `POST` | `/api/v1/suites/{id}/artifacts/{artifactId}/cancel` | Cancel in-progress build and delete ephemeral builder Job |
+| `POST` | `/api/v1/suites/{id}/artifacts/{artifactId}/retry` | Retry failed or cancelled build |
+| `DELETE` | `/api/v1/suites/{id}/artifacts/{artifactId}` | Delete artifact and purge binary from S3 |
 | `POST` | `/api/v1/suites/{id}/configs` | Attach a `vuhive.yaml` configuration |
 | `GET` | `/api/v1/suites/{id}/configs` | List attached configurations |
 | `POST` | `/api/v1/profiles` | Create a Runner Profile (affinity, tolerations, resources) |
