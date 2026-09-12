@@ -4,14 +4,14 @@ import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { SchedulesView } from '@/views/SchedulesView'
 import { CronBuilder } from '@/components/schedules/CronBuilder'
-import { api, FALLBACK_SCHEDULES, FALLBACK_RUNS } from '@/lib/api'
+import { api, FALLBACK_SCHEDULES, FALLBACK_RUNS, FALLBACK_SUITES } from '@/lib/api'
 import { RecipeProvider } from '@/context/RecipeContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 function renderWithProviders(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: {
-      queries: { retry: false },
+      queries: { retry: false, gcTime: 0 },
       mutations: { retry: false },
     },
   })
@@ -56,6 +56,9 @@ describe('CronBuilder Component', () => {
 describe('SchedulesView Component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(api, 'getSchedules').mockResolvedValue([...FALLBACK_SCHEDULES])
+    vi.spyOn(api, 'getSuites').mockResolvedValue([...FALLBACK_SUITES])
+    vi.spyOn(api, 'getRuns').mockResolvedValue([...FALLBACK_RUNS])
   })
 
   it('renders schedules table with names, suites, and badges', async () => {

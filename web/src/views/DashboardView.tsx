@@ -1,44 +1,111 @@
 import React from 'react'
-import { Activity, Layers, CalendarClock, CheckCircle2, Play, Cpu, ArrowUpRight } from 'lucide-react'
+import {
+  Activity,
+  Layers,
+  CalendarClock,
+  CheckCircle2,
+  Play,
+  Cpu,
+  ArrowUpRight,
+  AlertTriangle,
+  RefreshCw,
+  Clock,
+  PlayCircle,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
+import { useDashboard } from '@/hooks/use-dashboard'
+import type { RouteId } from '@/types/navigation'
+import type { HistoricalRun } from '@/types/suite'
 
-export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({ onNavigate }) => {
+function formatDurationMs(ms?: number): string {
+  if (!ms || ms <= 0) return '-'
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
+}
+
+function renderRunStatusBadge(status: string) {
+  switch (status) {
+    case 'RUNNING':
+      return (
+        <Badge variant="warning" className="gap-1.5 font-mono text-[11px]">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+          RUNNING
+        </Badge>
+      )
+    case 'QUEUED':
+      return (
+        <Badge variant="outline" className="gap-1.5 font-mono text-[11px] text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-800">
+          <Clock className="w-3 h-3 animate-spin" />
+          QUEUED
+        </Badge>
+      )
+    case 'COMPLETED':
+      return (
+        <Badge variant="success" className="gap-1 font-mono text-[11px]">
+          <CheckCircle2 className="w-3 h-3" />
+          COMPLETED
+        </Badge>
+      )
+    case 'FAILED':
+      return (
+        <Badge variant="error" className="gap-1 font-mono text-[11px]">
+          <AlertTriangle className="w-3 h-3" />
+          FAILED
+        </Badge>
+      )
+    case 'ABORTED':
+      return (
+        <Badge variant="error" className="gap-1 font-mono text-[11px] bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700">
+          ABORTED
+        </Badge>
+      )
+    default:
+      return <Badge variant="outline">{status}</Badge>
+  }
+}
+
+export const DashboardView: React.FC<{ onNavigate?: (route: RouteId) => void }> = ({ onNavigate }) => {
   const [isRunDialogOpen, setIsRunDialogOpen] = React.useState(false)
+  const { data: dashboard, isLoading, isError, error, refetch } = useDashboard()
+
+  const isUp = dashboard?.control_plane_status === 'UP'
 
   const stats = [
     {
       title: 'Active Runners',
-      value: '12',
-      trend: '+4 from last hour',
+      value: dashboard ? String(dashboard.active_runs_count) : isLoading ? '-' : '0',
+      trend: dashboard?.control_plane_status === 'UP' ? 'Live orchestrator' : 'Orchestrator degraded',
       icon: Activity,
       color: 'text-brand-500 bg-brand-50 dark:bg-brand-950/50',
       help: 'Number of currently executing Kubernetes runner pods across all active test runs.',
     },
     {
       title: 'Test Suites',
-      value: '8',
-      trend: 'All artifacts ready',
+      value: dashboard ? String(dashboard.suites_count) : isLoading ? '-' : '0',
+      trend: `${dashboard?.recent_suites?.length ?? 0} registered recently`,
       icon: Layers,
       color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/50',
       help: 'Configured load test scenarios and cross-compiled execution artifacts.',
     },
     {
       title: 'Cron Schedules',
-      value: '4',
-      trend: 'Next trigger in 14m',
+      value: dashboard ? String(dashboard.active_schedules_count) : isLoading ? '-' : '0',
+      trend: 'Recurring automated jobs',
       icon: CalendarClock,
       color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/50',
       help: 'Native Kubernetes CronJobs orchestrating automated recurring test executions.',
     },
     {
       title: 'SLA Pass Rate',
-      value: '99.4%',
-      trend: 'Last 24 hours',
+      value: dashboard ? `${dashboard.sla_pass_rate.toFixed(1)}%` : isLoading ? '-' : '100.0%',
+      trend: `Across ${dashboard?.total_runs_count ?? 0} runs`,
       icon: CheckCircle2,
       color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/50',
       help: 'Percentage of test runs satisfying all latency percentiles (p50, p90, p95, p99) and error rate SLAs.',
@@ -78,6 +145,30 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
           </Button>
         </div>
       </div>
+
+      {/* Error state banner */}
+      {isError && (
+        <div className="p-4 rounded-xl border border-red-200 bg-red-50 dark:bg-red-950/40 dark:border-red-800/60 flex items-center justify-between text-red-700 dark:text-red-300">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-500" />
+            <div>
+              <p className="text-sm font-semibold">Failed to load dashboard telemetry</p>
+              <p className="text-xs text-red-600/80 dark:text-red-400/80">
+                {(error as Error)?.message || 'Unable to communicate with the Go BFF gateway.'}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            className="border-red-300 dark:border-red-700 hover:bg-red-100 dark:hover:bg-red-900/50 text-xs gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Retry</span>
+          </Button>
+        </div>
+      )}
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -123,7 +214,9 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
                 Cluster Execution Pipeline
               </h2>
             </div>
-            <Badge variant="success">Synchronized</Badge>
+            <Badge variant={isUp ? 'success' : 'error'}>
+              {isUp ? 'Synchronized' : 'Degraded'}
+            </Badge>
           </div>
 
           <div className="space-y-3">
@@ -140,7 +233,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
                   Target architectures: linux/amd64, linux/arm64
                 </div>
               </div>
-              <Badge variant="success">Ready</Badge>
+              <Badge variant={isUp ? 'success' : 'warning'}>{isUp ? 'Ready' : 'Degraded'}</Badge>
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
@@ -156,7 +249,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
                   Zero clock-skew distributed synchronized firing
                 </div>
               </div>
-              <Badge variant="success">Active</Badge>
+              <Badge variant={isUp ? 'success' : 'warning'}>{isUp ? 'Active' : 'Offline'}</Badge>
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
@@ -211,7 +304,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
                     <button
                       type="button"
                       onClick={() => onNavigate?.('cookbook')}
-                      className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300 text-left"
+                      className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300 text-left cursor-pointer"
                     >
                       <span>Control Plane Cookbook</span>
                       <ArrowUpRight className="w-4 h-4 text-slate-400" />
@@ -229,6 +322,92 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
             vuhive-cloud • Reactive Go BFF & Embedded React 19 PWA
           </div>
         </div>
+      </div>
+
+      {/* Recent Run Activity Section */}
+      <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Activity className="w-5 h-5 text-brand-500" />
+            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
+              Recent Run Activity
+            </h2>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onNavigate?.('runs')}
+            className="text-xs font-medium text-brand-600 dark:text-brand-400 gap-1.5"
+            aria-label="View All Runs"
+          >
+            <span>View All Runs</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {dashboard?.recent_runs && dashboard.recent_runs.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-600 dark:text-slate-400">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th scope="col" className="px-4 py-3">Run Identifier</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3">Duration</th>
+                  <th scope="col" className="px-4 py-3">Avg TPS</th>
+                  <th scope="col" className="px-4 py-3">p95 Latency</th>
+                  <th scope="col" className="px-4 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                {dashboard.recent_runs.map((run: HistoricalRun) => (
+                  <tr
+                    key={run.id}
+                    onClick={() => onNavigate?.('runs')}
+                    className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">
+                      <div className="flex items-center gap-2">
+                        <PlayCircle className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                        <span className="font-mono text-xs">{run.id}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {renderRunStatusBadge(run.status)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      {run.status === 'RUNNING' || run.status === 'QUEUED'
+                        ? 'Active...'
+                        : formatDurationMs(run.durationMs)}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-900 dark:text-white">
+                      {run.metrics?.avgTps ? `${run.metrics.avgTps.toLocaleString()} req/s` : '-'}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      {run.metrics?.p95DurationMs !== undefined ? `${run.metrics.p95DurationMs}ms` : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onNavigate?.('runs')
+                        }}
+                        className="text-xs text-brand-600 dark:text-brand-400 h-8 px-2"
+                      >
+                        Inspect
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+            No execution runs recorded yet. Trigger a run or configure a schedule to start testing.
+          </div>
+        )}
       </div>
 
       <TriggerRunDialog

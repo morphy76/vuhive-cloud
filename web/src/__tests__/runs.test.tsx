@@ -451,5 +451,37 @@ describe('Ad-Hoc Load Test Execution Dispatcher & Live Monitor', () => {
         expect(screen.getByText('Live Execution Monitor')).toBeInTheDocument()
       })
     })
+
+    it('renders empty state when there are no execution runs', async () => {
+      vi.spyOn(api, 'getRuns').mockResolvedValue([])
+
+      renderWithProviders(<RunsView />)
+
+      await waitFor(() => {
+        expect(screen.getByText('No execution runs found')).toBeInTheDocument()
+        expect(screen.getByText(/trigger your first load test run/i)).toBeInTheDocument()
+      })
+    })
+
+    it('renders error state with retry button when fetching runs fails', async () => {
+      const getRunsSpy = vi.spyOn(api, 'getRuns')
+        .mockRejectedValueOnce(new Error('Failed to fetch runs'))
+        .mockResolvedValueOnce([])
+
+      renderWithProviders(<RunsView />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Failed to load execution runs')).toBeInTheDocument()
+      })
+
+      const retryBtn = screen.getByRole('button', { name: /retry/i })
+      fireEvent.click(retryBtn)
+
+      await waitFor(() => {
+        expect(screen.getByText('No execution runs found')).toBeInTheDocument()
+      })
+      expect(getRunsSpy).toHaveBeenCalledTimes(2)
+    })
   })
 })
+

@@ -29,7 +29,7 @@ export const RunsView: React.FC = () => {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const { openRecipe } = useRecipe()
 
-  const { data: runs = [] } = useRuns()
+  const { data: runs = [], isLoading, isError, error, refetch } = useRuns()
   const { data: suites = [] } = useSuites()
 
   // Subscribe to live SSE status updates
@@ -320,52 +320,91 @@ export const RunsView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-              {runs.map((r) => {
-                const suiteName = suiteMap.get(r.suiteId) || r.suiteId
-                const isSelected = r.id === selectedRunId
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-xs text-slate-500">
+                    Loading execution runs...
+                  </td>
+                </tr>
+              ) : isError ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2 text-red-600 dark:text-red-400">
+                      <AlertTriangle className="w-6 h-6" />
+                      <p className="text-sm font-semibold">Failed to load execution runs</p>
+                      <p className="text-xs text-slate-500">{(error as Error)?.message || 'An unexpected error occurred'}</p>
+                      <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-2 text-xs">
+                        Retry
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ) : runs.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <PlayCircle className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        No execution runs found
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Trigger your first load test run to inspect execution telemetry and latency metrics.
+                      </p>
+                      <Button onClick={() => setIsRunDialogOpen(true)} size="sm" className="mt-2 gap-1.5">
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>New Execution</span>
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                runs.map((r) => {
+                  const suiteName = suiteMap.get(r.suiteId) || r.suiteId
+                  const isSelected = r.id === selectedRunId
 
-                return (
-                  <tr
-                    key={r.id}
-                    onClick={() => setSelectedRunId(r.id)}
-                    className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer ${
-                      isSelected ? 'bg-brand-50/40 dark:bg-brand-950/20' : ''
-                    }`}
-                  >
-                    <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
-                      <div className="flex items-center gap-3">
-                        <PlayCircle className="w-5 h-5 text-brand-500 flex-shrink-0" />
-                        <div>
-                          <div>{suiteName}</div>
-                          <div className="text-xs text-slate-400 font-mono">{r.id}</div>
+                  return (
+                    <tr
+                      key={r.id}
+                      onClick={() => setSelectedRunId(r.id)}
+                      className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors cursor-pointer ${
+                        isSelected ? 'bg-brand-50/40 dark:bg-brand-950/20' : ''
+                      }`}
+                    >
+                      <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
+                        <div className="flex items-center gap-3">
+                          <PlayCircle className="w-5 h-5 text-brand-500 flex-shrink-0" />
+                          <div>
+                            <div>{suiteName}</div>
+                            <div className="text-xs text-slate-400 font-mono">{r.id}</div>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {renderStatusBadge(r.status)}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs">
-                      {r.k8sJobName || 'vuhive-runners'}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs">
-                      {r.status === 'RUNNING' || r.status === 'QUEUED'
-                        ? 'Active...'
-                        : formatDurationMs(r.durationMs)}
-                    </td>
-                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white font-mono text-xs">
-                      {r.metrics?.avgTps ? `${r.metrics.avgTps.toLocaleString()} req/s` : '-'}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs">
-                      {r.metrics?.p95DurationMs !== undefined ? `${r.metrics.p95DurationMs}ms` : '-'}
-                    </td>
-                    <td className="px-6 py-4 font-mono text-xs text-emerald-600 dark:text-emerald-400">
-                      {r.metrics?.errorRatePct !== undefined
-                        ? `${(r.metrics.errorRatePct * 100).toFixed(2)}%`
-                        : '-'}
-                    </td>
-                  </tr>
-                )
-              })}
+                      </td>
+                      <td className="px-6 py-4">
+                        {renderStatusBadge(r.status)}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs">
+                        {r.k8sJobName || 'vuhive-runners'}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs">
+                        {r.status === 'RUNNING' || r.status === 'QUEUED'
+                          ? 'Active...'
+                          : formatDurationMs(r.durationMs)}
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white font-mono text-xs">
+                        {r.metrics?.avgTps ? `${r.metrics.avgTps.toLocaleString()} req/s` : '-'}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs">
+                        {r.metrics?.p95DurationMs !== undefined ? `${r.metrics.p95DurationMs}ms` : '-'}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-emerald-600 dark:text-emerald-400">
+                        {r.metrics?.errorRatePct !== undefined
+                          ? `${(r.metrics.errorRatePct * 100).toFixed(2)}%`
+                          : '-'}
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>
