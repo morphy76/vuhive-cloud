@@ -33,15 +33,20 @@ type CreateSessionCommand struct {
 
 // DashboardOverview represents the composite telemetry and overview for the dashboard view.
 type DashboardOverview struct {
-	BFFStatus           string                    `json:"bff_status"`
-	BFFVersion          string                    `json:"bff_version"`
-	ControlPlaneStatus  string                    `json:"control_plane_status"`
-	ControlPlaneVersion string                    `json:"control_plane_version,omitempty"`
-	ActiveRunsCount     int64                     `json:"active_runs_count"`
-	RecentSuites        []outbound.SuiteSummary   `json:"recent_suites"`
-	ProfilesCount       int                       `json:"profiles_count"`
-	ProfilesSummary     []outbound.ProfileSummary `json:"profiles_summary"`
-	Timestamp           time.Time                 `json:"timestamp"`
+	BFFStatus            string                    `json:"bff_status"`
+	BFFVersion           string                    `json:"bff_version"`
+	ControlPlaneStatus   string                    `json:"control_plane_status"`
+	ControlPlaneVersion  string                    `json:"control_plane_version,omitempty"`
+	ActiveRunsCount      int64                     `json:"active_runs_count"`
+	SuitesCount          int                       `json:"suites_count"`
+	RecentSuites         []outbound.SuiteSummary   `json:"recent_suites"`
+	ProfilesCount        int                       `json:"profiles_count"`
+	ProfilesSummary      []outbound.ProfileSummary `json:"profiles_summary"`
+	ActiveSchedulesCount int                       `json:"active_schedules_count"`
+	RecentRuns           []outbound.RunDetail      `json:"recent_runs"`
+	SLAPassRate          float64                   `json:"sla_pass_rate"`
+	TotalRunsCount       int64                     `json:"total_runs_count"`
+	Timestamp            time.Time                 `json:"timestamp"`
 }
 
 // ArtifactLinks contains direct download links to run reports and logs.

@@ -19,6 +19,38 @@ import type {
 
 const BASE_PREFIXES = ['/api/bff/v1', '/api/v1']
 
+export interface DashboardData {
+  bff_status: string
+  bff_version: string
+  control_plane_status: string
+  control_plane_version?: string
+  active_runs_count: number
+  suites_count: number
+  recent_suites: Array<{
+    id: string
+    name: string
+    description?: string
+    state: string
+    created_at?: string
+    updated_at?: string
+  }>
+  profiles_count: number
+  profiles_summary: Array<{
+    id: string
+    name: string
+    description?: string
+    runner_image?: string
+    cpu_request?: string
+    cpu_limit?: string
+    memory_limit?: string
+  }>
+  active_schedules_count: number
+  recent_runs: HistoricalRun[]
+  sla_pass_rate: number
+  total_runs_count: number
+  timestamp: string
+}
+
 function getTargetUrl(prefix: string, path: string): string {
   const relPath = `${prefix}${path}`
   if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
@@ -45,8 +77,10 @@ async function apiRequest<T>(
       const targetUrl = getTargetUrl(prefix, path)
       const response = await fetch(targetUrl, {
         ...options,
+        credentials: 'same-origin',
         headers: {
           Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
           ...(options.headers || {}),
         },
       })
@@ -364,33 +398,31 @@ function mapRunResponse(r: any): HistoricalRun {
 }
 
 export const api = {
-  async getSuites(): Promise<TestSuite[]> {
-    try {
-      const data = await apiRequest<{ suites: any[]; count: number }>('/suites')
-      if (data && Array.isArray(data.suites)) {
-        return data.suites.map((s) => ({
-          id: s.id,
-          name: s.name,
-          description: s.description || '',
-          state: s.state || 'DRAFT',
-          createdAt: s.created_at || s.createdAt || new Date().toISOString(),
-          updatedAt: s.updated_at || s.updatedAt || new Date().toISOString(),
-          buildStatus: 'READY',
-          platforms: ['linux/amd64', 'linux/arm64'],
-          runCount: s.run_count || 0,
-        }))
-      }
-      return FALLBACK_SUITES
-    } catch (e) {
-      console.warn('Unable to load live suites from API, using fallback cache:', e)
-      return FALLBACK_SUITES
+  async getDashboard(): Promise<DashboardData> {
+    const res = await apiRequest<any>('/dashboard')
+    const recentRuns = (res.recent_runs || []).map(mapRunResponse)
+    return {
+      bff_status: res.bff_status || 'UP',
+      bff_version: res.bff_version || 'dev',
+      control_plane_status: res.control_plane_status || 'UNKNOWN',
+      control_plane_version: res.control_plane_version,
+      active_runs_count: res.active_runs_count ?? 0,
+      suites_count: res.suites_count ?? (res.recent_suites?.length || 0),
+      recent_suites: res.recent_suites || [],
+      profiles_count: res.profiles_count ?? (res.profiles_summary?.length || 0),
+      profiles_summary: res.profiles_summary || [],
+      active_schedules_count: res.active_schedules_count ?? 0,
+      recent_runs: recentRuns,
+      sla_pass_rate: res.sla_pass_rate ?? 100.0,
+      total_runs_count: res.total_runs_count ?? recentRuns.length,
+      timestamp: res.timestamp || new Date().toISOString(),
     }
   },
 
-  async getSuite(id: string): Promise<TestSuite> {
-    try {
-      const s = await apiRequest<any>(`/suites/${encodeURIComponent(id)}`)
-      return {
+  async getSuites(): Promise<TestSuite[]> {
+    const data = await apiRequest<{ suites: any[]; count: number }>('/suites')
+    if (data && Array.isArray(data.suites)) {
+      return data.suites.map((s) => ({
         id: s.id,
         name: s.name,
         description: s.description || '',
@@ -399,11 +431,23 @@ export const api = {
         updatedAt: s.updated_at || s.updatedAt || new Date().toISOString(),
         buildStatus: 'READY',
         platforms: ['linux/amd64', 'linux/arm64'],
-      }
-    } catch {
-      const found = FALLBACK_SUITES.find((s) => s.id === id)
-      if (found) return found
-      throw new Error(`Suite ${id} not found`)
+        runCount: s.run_count || 0,
+      }))
+    }
+    return []
+  },
+
+  async getSuite(id: string): Promise<TestSuite> {
+    const s = await apiRequest<any>(`/suites/${encodeURIComponent(id)}`)
+    return {
+      id: s.id,
+      name: s.name,
+      description: s.description || '',
+      state: s.state || 'DRAFT',
+      createdAt: s.created_at || s.createdAt || new Date().toISOString(),
+      updatedAt: s.updated_at || s.updatedAt || new Date().toISOString(),
+      buildStatus: 'READY',
+      platforms: ['linux/amd64', 'linux/arm64'],
     }
   },
 
@@ -453,34 +497,21 @@ export const api = {
   },
 
   async getSuiteConfigs(suiteId: string): Promise<SuiteConfiguration[]> {
-    try {
-      const res = await apiRequest<{ configs: any[] }>(
-        `/suites/${encodeURIComponent(suiteId)}/configs`
-      )
-      if (res && Array.isArray(res.configs)) {
-        return res.configs.map((c) => ({
-          id: c.id,
-          suiteId: c.suite_id || suiteId,
-          name: c.name,
-          contentYaml: c.content_yaml,
-          s3ConfigKey: c.s3_config_key,
-          isDefault: !!c.is_default,
-          createdAt: c.created_at,
-        }))
-      }
-      return []
-    } catch {
-      return [
-        {
-          id: `cfg-${suiteId}-default`,
-          suiteId,
-          name: 'default-config.yaml',
-          contentYaml: 'duration: 5m\nconcurrency: 50\nramp_up: 30s\n',
-          isDefault: true,
-          createdAt: new Date().toISOString(),
-        },
-      ]
+    const res = await apiRequest<{ configs: any[] }>(
+      `/suites/${encodeURIComponent(suiteId)}/configs`
+    )
+    if (res && Array.isArray(res.configs)) {
+      return res.configs.map((c) => ({
+        id: c.id,
+        suiteId: c.suite_id || suiteId,
+        name: c.name,
+        contentYaml: c.content_yaml,
+        s3ConfigKey: c.s3_config_key,
+        isDefault: !!c.is_default,
+        createdAt: c.created_at,
+      }))
     }
+    return []
   },
 
   async createSuiteConfig(
@@ -539,44 +570,23 @@ export const api = {
   },
 
   async getSuiteArtifacts(suiteId: string): Promise<CompiledArtifact[]> {
-    try {
-      const res = await apiRequest<{ artifacts: any[] }>(
-        `/suites/${encodeURIComponent(suiteId)}/artifacts`
-      )
-      if (res && Array.isArray(res.artifacts)) {
-        return res.artifacts.map((a) => ({
-          id: a.id,
-          suiteId: a.suite_id || suiteId,
-          platform: a.platform,
-          s3BinaryKey: a.s3_binary_key,
-          sha256Checksum: a.sha256_checksum,
-          buildLogsS3Key: a.build_logs_s3_key,
-          status: a.status || 'READY',
-          errorMessage: a.error_message,
-          createdAt: a.created_at,
-        }))
-      }
-      return []
-    } catch {
-      return [
-        {
-          id: `art-${suiteId}-amd64`,
-          suiteId,
-          platform: 'linux/amd64',
-          sha256Checksum: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-          status: 'READY',
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: `art-${suiteId}-arm64`,
-          suiteId,
-          platform: 'linux/arm64',
-          sha256Checksum: 'a7c938144298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852ba',
-          status: 'READY',
-          createdAt: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ]
+    const res = await apiRequest<{ artifacts: any[] }>(
+      `/suites/${encodeURIComponent(suiteId)}/artifacts`
+    )
+    if (res && Array.isArray(res.artifacts)) {
+      return res.artifacts.map((a) => ({
+        id: a.id,
+        suiteId: a.suite_id || suiteId,
+        platform: a.platform,
+        s3BinaryKey: a.s3_binary_key,
+        sha256Checksum: a.sha256_checksum,
+        buildLogsS3Key: a.build_logs_s3_key,
+        status: a.status || 'READY',
+        errorMessage: a.error_message,
+        createdAt: a.created_at,
+      }))
     }
+    return []
   },
 
   async uploadSuiteBuild(
@@ -654,41 +664,21 @@ export const api = {
   },
 
   async getRuns(filter?: { suiteId?: string; status?: string; scheduleId?: string }): Promise<HistoricalRun[]> {
-    try {
-      const params = new URLSearchParams()
-      if (filter?.suiteId) params.set('suite_id', filter.suiteId)
-      if (filter?.status) params.set('status', filter.status)
-      if (filter?.scheduleId) params.set('schedule_id', filter.scheduleId)
-      const query = params.toString() ? `?${params.toString()}` : ''
-      const res = await apiRequest<{ runs: any[]; total: number }>(`/runs${query}`)
-      if (res && Array.isArray(res.runs)) {
-        return res.runs.map(mapRunResponse)
-      }
-      return FALLBACK_RUNS.filter((r) => {
-        if (filter?.suiteId && r.suiteId !== filter.suiteId) return false
-        if (filter?.status && r.status !== filter.status) return false
-        if (filter?.scheduleId && r.scheduleId !== filter.scheduleId) return false
-        return true
-      })
-    } catch {
-      return FALLBACK_RUNS.filter((r) => {
-        if (filter?.suiteId && r.suiteId !== filter.suiteId) return false
-        if (filter?.status && r.status !== filter.status) return false
-        if (filter?.scheduleId && r.scheduleId !== filter.scheduleId) return false
-        return true
-      })
+    const params = new URLSearchParams()
+    if (filter?.suiteId) params.set('suite_id', filter.suiteId)
+    if (filter?.status) params.set('status', filter.status)
+    if (filter?.scheduleId) params.set('schedule_id', filter.scheduleId)
+    const query = params.toString() ? `?${params.toString()}` : ''
+    const res = await apiRequest<{ runs: any[]; total: number }>(`/runs${query}`)
+    if (res && Array.isArray(res.runs)) {
+      return res.runs.map(mapRunResponse)
     }
+    return []
   },
 
   async getRun(id: string): Promise<HistoricalRun> {
-    try {
-      const res = await apiRequest<any>(`/runs/${encodeURIComponent(id)}`)
-      return mapRunResponse(res)
-    } catch {
-      const found = FALLBACK_RUNS.find((r) => r.id === id)
-      if (found) return found
-      throw new Error(`Run ${id} not found`)
-    }
+    const res = await apiRequest<any>(`/runs/${encodeURIComponent(id)}`)
+    return mapRunResponse(res)
   },
 
   async triggerRun(data: TriggerRunInput): Promise<HistoricalRun> {
@@ -718,8 +708,10 @@ export const api = {
       try {
         const targetUrl = getTargetUrl(prefix, `/runs/${encodeURIComponent(id)}/logs`)
         const response = await fetch(targetUrl, {
+          credentials: 'same-origin',
           headers: {
             Accept: 'text/plain',
+            'X-Requested-With': 'XMLHttpRequest',
           },
         })
         if (response.status === 404 && prefix === BASE_PREFIXES[0]) {
@@ -729,22 +721,10 @@ export const api = {
           return await response.text()
         }
       } catch {
-        // try next prefix or fallback
+        // try next prefix
       }
     }
-    return [
-      `\u001b[38;5;244m[2026-09-11 20:30:00] \u001b[1;36m[vuhive-runner]\u001b[0m Initializing runtime container environment...`,
-      `\u001b[38;5;244m[2026-09-11 20:30:01] \u001b[1;32m[vuhive-barrier]\u001b[0m Connecting to distributed rendezvous barrier...`,
-      `\u001b[38;5;244m[2026-09-11 20:30:02] \u001b[1;32m[vuhive-barrier]\u001b[0m Barrier synchronization achieved across worker pods`,
-      `\u001b[38;5;244m[2026-09-11 20:30:03] \u001b[1;34m[vuhive-engine]\u001b[0m Starting scenario execution (ID: ${id})`,
-      `\u001b[38;5;244m[2026-09-11 20:30:04] \u001b[32m[STEP]\u001b[0m GET /api/v1/products - status: 200 OK (latency: 14.2ms)`,
-      `\u001b[38;5;244m[2026-09-11 20:30:05] \u001b[32m[STEP]\u001b[0m POST /api/v1/cart/items - status: 201 Created (latency: 22.8ms)`,
-      `\u001b[38;5;244m[2026-09-11 20:30:06] \u001b[32m[STEP]\u001b[0m POST /api/v1/checkout - status: 200 OK (latency: 84.1ms)`,
-      `\u001b[38;5;244m[2026-09-11 20:30:07] \u001b[33m[WARN]\u001b[0m High p99 jitter detected on gateway node pool (312ms)`,
-      `\u001b[38;5;244m[2026-09-11 20:30:10] \u001b[1;32m[vuhive-engine]\u001b[0m Completed iterations: 1,250 | Total requests: 3,750`,
-      `\u001b[38;5;244m[2026-09-11 20:30:11] \u001b[1;32m[vuhive-reporter]\u001b[0m Writing telemetry summaries to object storage: s3://vuhive-reports/runs/${id}/summary.json`,
-      `\u001b[38;5;244m[2026-09-11 20:30:12] \u001b[1;32m[vuhive-runner]\u001b[0m Execution finalized with exit status 0 (SLA passed)`,
-    ].join('\n')
+    return 'No logs available for this run.'
   },
 
   async getRunReport(id: string): Promise<SummaryReport> {
@@ -752,8 +732,10 @@ export const api = {
       try {
         const targetUrl = getTargetUrl(prefix, `/runs/${encodeURIComponent(id)}/report`)
         const response = await fetch(targetUrl, {
+          credentials: 'same-origin',
           headers: {
             Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
           },
         })
         if (response.status === 404 && prefix === BASE_PREFIXES[0]) {
@@ -763,162 +745,16 @@ export const api = {
           return (await response.json()) as SummaryReport
         }
       } catch {
-        // try next prefix or fallback
+        // try next prefix
       }
     }
-    return {
-      suite_name: 'Ecommerce Checkout Suite',
-      scenario: 'checkout_funnel',
-      version: '1.2.0',
-      commit: '7337da6',
-      started_at: new Date(Date.now() - 3600000).toISOString(),
-      ended_at: new Date(Date.now() - 3540000).toISOString(),
-      duration: 60000,
-      status: 'PASS',
-      passed: true,
-      sla_passed: true,
-      total_iterations: 1250,
-      total_requests: 3750,
-      avg_tps: 62.5,
-      p50_duration_ms: 16.4,
-      p90_duration_ms: 32.5,
-      p95_duration_ms: 48.2,
-      p99_duration_ms: 84.1,
-      error_rate_pct: 0.27,
-      steps: [
-        {
-          name: 'GET /api/v1/products',
-          scenario: 'checkout_funnel',
-          requests: 1250,
-          tps: 20.8,
-          p50_ms: 14.2,
-          p90_ms: 22.0,
-          p95_ms: 28.5,
-          p99_ms: 36.1,
-          failed_requests: 0,
-          error_rate_pct: 0.0,
-          status: 'PASS',
-        },
-        {
-          name: 'POST /api/v1/cart/items',
-          scenario: 'checkout_funnel',
-          requests: 1250,
-          tps: 20.8,
-          p50_ms: 22.8,
-          p90_ms: 35.4,
-          p95_ms: 44.1,
-          p99_ms: 58.7,
-          failed_requests: 2,
-          error_rate_pct: 0.16,
-          status: 'PASS',
-        },
-        {
-          name: 'POST /api/v1/checkout',
-          scenario: 'checkout_funnel',
-          requests: 1250,
-          tps: 20.8,
-          p50_ms: 84.1,
-          p90_ms: 124.0,
-          p95_ms: 162.5,
-          p99_ms: 215.3,
-          failed_requests: 8,
-          error_rate_pct: 0.64,
-          status: 'PASS',
-        },
-      ],
-      metrics: [
-        {
-          name: 'vuhive.vu.iterations_total',
-          type: 'counter',
-          count: 1250,
-        },
-        {
-          name: 'vuhive.vu.iterations_failed',
-          type: 'counter',
-          count: 4,
-        },
-        {
-          name: 'vuhive.http.reqs',
-          type: 'counter',
-          count: 3750,
-        },
-        {
-          name: 'vuhive.http.req_failed',
-          type: 'rate',
-          rate: 0.0027,
-        },
-        {
-          name: 'vuhive.http.req_duration',
-          type: 'duration',
-          count: 3750,
-          min: 2.1,
-          mean: 28.4,
-          p50: 16.4,
-          p90: 32.5,
-          p95: 48.2,
-          p99: 84.1,
-          max: 245.0,
-        },
-      ],
-      thresholds: [
-        {
-          metric: 'vuhive.http.req_duration',
-          stat: 'p95',
-          operator: '<=',
-          target: '100ms',
-          actual: '48.2ms',
-          passed: true,
-        },
-        {
-          metric: 'vuhive.http.req_failed',
-          stat: 'rate',
-          operator: '<=',
-          target: '0.01',
-          actual: '0.0027',
-          passed: true,
-        },
-      ],
-      custom_metrics: {
-        db_pool_active_connections: 14,
-        redis_cache_hit_ratio: 0.942,
-        gateway_p99_jitter_ms: 12.8,
-      },
-    }
+    throw new Error(`Report not available for run ${id}`)
   },
 
   async getProfiles(): Promise<RunnerProfile[]> {
-    try {
-      const res = await apiRequest<{ profiles: any[]; count: number }>('/profiles')
-      if (res && Array.isArray(res.profiles)) {
-        return res.profiles.map((p) => ({
-          id: p.id,
-          name: p.name,
-          description: p.description || '',
-          runner_image: p.runner_image || 'alpine:3.20',
-          cpu_request: p.cpu_request || '500m',
-          cpu_limit: p.cpu_limit || '1000m',
-          memory_request: p.memory_request || '512Mi',
-          memory_limit: p.memory_limit || '1Gi',
-          node_selector: p.node_selector || {},
-          affinity: p.affinity || { node_selector_terms: [] },
-          tolerations: p.tolerations || [],
-          active_deadline_seconds: p.active_deadline_seconds,
-          runtime_class_name: p.runtime_class_name,
-          created_at: p.created_at || new Date().toISOString(),
-          updated_at: p.updated_at || new Date().toISOString(),
-        }))
-      }
-      return FALLBACK_PROFILES
-    } catch (e) {
-      console.warn('Unable to load live profiles from API, using fallback cache:', e)
-      return FALLBACK_PROFILES
-    }
-  },
-
-  async getProfile(id: string): Promise<RunnerProfile> {
-    try {
-      const p = await apiRequest<any>(`/profiles/${encodeURIComponent(id)}`)
-      return {
+    const res = await apiRequest<{ profiles: any[]; count: number }>('/profiles')
+    if (res && Array.isArray(res.profiles)) {
+      return res.profiles.map((p) => ({
         id: p.id,
         name: p.name,
         description: p.description || '',
@@ -934,11 +770,29 @@ export const api = {
         runtime_class_name: p.runtime_class_name,
         created_at: p.created_at || new Date().toISOString(),
         updated_at: p.updated_at || new Date().toISOString(),
-      }
-    } catch {
-      const found = FALLBACK_PROFILES.find((p) => p.id === id)
-      if (found) return found
-      throw new Error(`Profile ${id} not found`)
+      }))
+    }
+    return []
+  },
+
+  async getProfile(id: string): Promise<RunnerProfile> {
+    const p = await apiRequest<any>(`/profiles/${encodeURIComponent(id)}`)
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description || '',
+      runner_image: p.runner_image || 'alpine:3.20',
+      cpu_request: p.cpu_request || '500m',
+      cpu_limit: p.cpu_limit || '1000m',
+      memory_request: p.memory_request || '512Mi',
+      memory_limit: p.memory_limit || '1Gi',
+      node_selector: p.node_selector || {},
+      affinity: p.affinity || { node_selector_terms: [] },
+      tolerations: p.tolerations || [],
+      active_deadline_seconds: p.active_deadline_seconds,
+      runtime_class_name: p.runtime_class_name,
+      created_at: p.created_at || new Date().toISOString(),
+      updated_at: p.updated_at || new Date().toISOString(),
     }
   },
 
@@ -999,27 +853,16 @@ export const api = {
   },
 
   async getSchedules(): Promise<Schedule[]> {
-    try {
-      const res = await apiRequest<{ schedules: any[]; count: number }>('/schedules')
-      if (res && Array.isArray(res.schedules)) {
-        return res.schedules.map(mapScheduleResponse)
-      }
-      return FALLBACK_SCHEDULES
-    } catch (e) {
-      console.warn('Unable to load live schedules from API, using fallback cache:', e)
-      return FALLBACK_SCHEDULES
+    const res = await apiRequest<{ schedules: any[]; count: number }>('/schedules')
+    if (res && Array.isArray(res.schedules)) {
+      return res.schedules.map(mapScheduleResponse)
     }
+    return []
   },
 
   async getSchedule(id: string): Promise<Schedule> {
-    try {
-      const s = await apiRequest<any>(`/schedules/${encodeURIComponent(id)}`)
-      return mapScheduleResponse(s)
-    } catch {
-      const found = FALLBACK_SCHEDULES.find((s) => s.id === id)
-      if (found) return found
-      throw new Error(`Schedule ${id} not found`)
-    }
+    const s = await apiRequest<any>(`/schedules/${encodeURIComponent(id)}`)
+    return mapScheduleResponse(s)
   },
 
   async createSchedule(data: CreateScheduleInput): Promise<Schedule> {

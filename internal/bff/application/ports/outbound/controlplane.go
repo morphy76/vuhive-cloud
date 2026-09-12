@@ -23,8 +23,11 @@ type ControlPlaneClient interface {
 	CheckHealth(ctx context.Context) (*ControlPlaneHealth, error)
 	GetVersion(ctx context.Context) (*ControlPlaneVersion, error)
 	GetActiveRunsCount(ctx context.Context) (int64, error)
+	GetTotalSuitesCount(ctx context.Context) (int, error)
 	ListRecentSuites(ctx context.Context, limit int) ([]SuiteSummary, error)
 	ListProfiles(ctx context.Context) ([]ProfileSummary, error)
+	GetActiveSchedulesCount(ctx context.Context) (int, error)
+	ListSchedules(ctx context.Context) ([]ScheduleSummary, error)
 	GetRun(ctx context.Context, id string) (*RunDetail, error)
 	GetRunReportURL(ctx context.Context, id string) (string, error)
 	GetRunLogsURL(ctx context.Context, id string) (string, error)
@@ -87,6 +90,21 @@ type ProfileSummary struct {
 	CPULimit    string `json:"cpu_limit"`
 	MemoryLimit string `json:"memory_limit"`
 	CreatedAt   string `json:"created_at"`
+}
+
+// ScheduleSummary models a recurring schedule entry.
+type ScheduleSummary struct {
+	ID              string  `json:"id"`
+	SuiteID         string  `json:"suite_id"`
+	ArtifactID      string  `json:"artifact_id"`
+	ConfigurationID *string `json:"configuration_id,omitempty"`
+	RunnerProfileID string  `json:"runner_profile_id"`
+	Name            string  `json:"name"`
+	CronExpression  string  `json:"cron_expression"`
+	K8sCronJobName  string  `json:"k8s_cronjob_name"`
+	IsActive        bool    `json:"is_active"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
 }
 
 // ArtifactDetail models compiled binary artifact metadata returned by the control plane.

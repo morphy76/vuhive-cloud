@@ -394,6 +394,106 @@ func (c *Client) ListProfiles(ctx context.Context) ([]outbound.ProfileSummary, e
 	return []outbound.ProfileSummary{}, nil
 }
 
+// GetTotalSuitesCount queries the total count of registered test suites from the control plane.
+func (c *Client) GetTotalSuitesCount(ctx context.Context) (int, error) {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "ControlPlaneClient.GetTotalSuitesCount").
+		Logger()
+	log.Debug().Msg("querying total test suites count")
+
+	targetURL := c.baseURL + "/api/v1/suites?limit=1"
+	resp, err := c.executeRequest(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed querying total suites count")
+		return 0, model.NewDomainError(model.ErrControlPlaneUnavailable, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return 0, nil
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		statusErr := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		log.Error().Err(statusErr).Dur("duration_ms", time.Since(start)).Msg("failed querying suites count")
+		return 0, model.NewDomainError(model.ErrControlPlaneUnavailable, statusErr)
+	}
+
+	var suitesResp struct {
+		Count int `json:"count"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&suitesResp); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed decoding suites count response")
+		return 0, model.NewDomainError(model.ErrInternal, err)
+	}
+
+	log.Info().Int("total_suites", suitesResp.Count).Dur("duration_ms", time.Since(start)).Msg("completed querying total suites count")
+	return suitesResp.Count, nil
+}
+
+// ListSchedules queries all test schedules from the control plane.
+func (c *Client) ListSchedules(ctx context.Context) ([]outbound.ScheduleSummary, error) {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "ControlPlaneClient.ListSchedules").
+		Logger()
+	log.Debug().Msg("listing test schedules")
+
+	targetURL := c.baseURL + "/api/v1/schedules"
+	resp, err := c.executeRequest(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed querying schedules")
+		return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return []outbound.ScheduleSummary{}, nil
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		statusErr := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		log.Error().Err(statusErr).Dur("duration_ms", time.Since(start)).Msg("failed listing test schedules")
+		return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, statusErr)
+	}
+
+	var schedResp struct {
+		Schedules []outbound.ScheduleSummary `json:"schedules"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&schedResp); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed decoding schedules response")
+		return nil, model.NewDomainError(model.ErrInternal, err)
+	}
+
+	log.Info().Int("count", len(schedResp.Schedules)).Dur("duration_ms", time.Since(start)).Msg("completed listing test schedules")
+	return schedResp.Schedules, nil
+}
+
+// GetActiveSchedulesCount returns the count of active test schedules.
+func (c *Client) GetActiveSchedulesCount(ctx context.Context) (int, error) {
+	start := time.Now()
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "ControlPlaneClient.GetActiveSchedulesCount").
+		Logger()
+	log.Debug().Msg("querying active schedules count")
+
+	schedules, err := c.ListSchedules(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	var activeCount int
+	for _, s := range schedules {
+		if s.IsActive {
+			activeCount++
+		}
+	}
+
+	log.Info().Int("active_schedules", activeCount).Dur("duration_ms", time.Since(start)).Msg("completed querying active schedules count")
+	return activeCount, nil
+}
+
 // GetRun queries execution metadata, duration, exit code, and indexed performance KPIs for a specific run.
 func (c *Client) GetRun(ctx context.Context, id string) (*outbound.RunDetail, error) {
 	start := time.Now()
