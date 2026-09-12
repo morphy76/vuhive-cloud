@@ -28,6 +28,21 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Build Frontend Assets
+        run: |
+          pnpm --dir web install --frozen-lockfile
+          pnpm --dir web run build
+
       - name: Set up Go
         uses: actions/setup-go@v7
         with:

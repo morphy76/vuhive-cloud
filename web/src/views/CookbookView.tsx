@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { BookOpen, CheckCircle2, ChevronUp } from 'lucide-react'
-import defaultCookbookMarkdown from '@/docs/cookbook.md?raw'
+import defaultCookbookMarkdown from '@docs/cookbook.md?raw'
 import { MarkdownViewer } from '@/components/markdown/MarkdownViewer'
 import { CookbookToc } from '@/components/markdown/CookbookToc'
 import { extractHeadings } from '@/lib/markdown-utils'

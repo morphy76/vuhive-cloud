@@ -153,7 +153,7 @@ func TestClient_GetVersion(t *testing.T) {
 
 	t.Run("successful version check", func(t *testing.T) {
 		mockTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
-			assert.Equal(t, "http://controlplane/version", req.URL.String())
+			assert.Equal(t, "http://controlplane/api/version", req.URL.String())
 			return &http.Response{
 				StatusCode: http.StatusOK,
 				Body:       io.NopCloser(bytes.NewBufferString(`{"version":"0.0.1","commit":"abc1234","build_time":"2026-09-05T10:00:00Z"}`)),

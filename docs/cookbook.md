@@ -6,7 +6,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
 > - **System Overview & Architecture**: [`README.md`](../README.md) and [`ARCHITECTURE_SPEC.md`](../ARCHITECTURE_SPEC.md)
 > - **Developer & Contributor Guide**: [`CONTRIBUTING.md`](../CONTRIBUTING.md)
 > - **Installation Guides**: [Control Plane Helm Chart (`deploy/helm/vuhive-cloud/README.md`)](../deploy/helm/vuhive-cloud/README.md) and [Infrastructure Helm Chart (`deploy/helm/vuhive-cloud-infra/README.md`)](../deploy/helm/vuhive-cloud-infra/README.md)
-> - **REST API Specification**: [OpenAPI 3.1 Reference (`api/openapi.yaml`)](../api/openapi.yaml) (served live at `GET /openapi.yaml` and `GET /openapi.json`)
+> - **REST API Specification**: [OpenAPI 3.1 Reference (`api/openapi.yaml`)](../api/openapi.yaml) (served live at `GET /api/openapi.yaml` and `GET /api/openapi.json`)
 > - **Engineering Philosophy**: [Spec-Driven Development & AI Disclosure (`AI_DISCLOSURE.md`)](../AI_DISCLOSURE.md)
 
 ---
@@ -150,7 +150,7 @@ All examples assume the control plane is reachable at `http://vuhive-cloud.vuhiv
 
 > [!TIP]
 > **Interactive API Exploration with Swagger UI**:
-> If you deployed the optional OpenAPI viewer in `vuhive-cloud-infra` (`openapiViewer.enabled: true`), you can test all API recipes interactively from your browser at `http://localhost:8081` (via `kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openapi-viewer 8081:8080`). When accessing via local port-forwarding, set `openapiViewer.specUrl="http://localhost:8080/openapi.json"` so your browser resolves the control plane specification. See [Recipe 12](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors) for detailed setup.
+> If you deployed the optional OpenAPI viewer in `vuhive-cloud-infra` (`openapiViewer.enabled: true`), you can test all API recipes interactively from your browser at `http://localhost:8081` (via `kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openapi-viewer 8081:8080`). When accessing via local port-forwarding, set `openapiViewer.specUrl="http://localhost:8080/api/openapi.json"` so your browser resolves the control plane specification. See [Recipe 12](#recipe-12-exploring-apis-with-swagger-ui--cross-origin-api-clients-cors) for detailed setup.
 
 ### Recipe 1: Registering a Test Suite, Attaching Configurations & Uploading Source Packages
 
@@ -1544,7 +1544,7 @@ To support private, air-gapped, and isolated Kubernetes deployments where extern
 
 ### Recipe 12: Exploring APIs with Swagger UI & Cross-Origin API Clients (CORS)
 
-`vuhive-cloud` exposes its machine-readable OpenAPI 3.1 specification at `GET /openapi.json` and `GET /openapi.yaml`. When integrating frontend applications or exploring endpoints through third-party tools like Swagger UI, browser clients execute cross-origin HTTP requests subject to the browser's Same-Origin Policy.
+`vuhive-cloud` exposes its machine-readable OpenAPI 3.1 specification at `GET /api/openapi.json` and `GET /api/openapi.yaml`. When integrating frontend applications or exploring endpoints through third-party tools like Swagger UI, browser clients execute cross-origin HTTP requests subject to the browser's Same-Origin Policy.
 
 The `vuhive-cloud` control plane includes built-in CORS middleware that automatically handles preflight `OPTIONS` requests and injects the necessary CORS headers.
 
@@ -1556,7 +1556,7 @@ Deploy Swagger UI using the infrastructure chart. Because Swagger UI is a client
 helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --namespace vuhive-system \
   --set openapiViewer.enabled=true \
-  --set openapiViewer.specUrl="http://localhost:8080/openapi.json"
+  --set openapiViewer.specUrl="http://localhost:8080/api/openapi.json"
 ```
 
 Forward ports to access both the OpenAPI viewer and the control plane:
@@ -1569,14 +1569,14 @@ kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openap
 kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080 &
 ```
 
-Open `http://localhost:8081` in your browser. Swagger UI initiates a client-side browser `fetch()` to `http://localhost:8080/openapi.json`. Because cross-origin headers are returned, the browser loads the complete OpenAPI specification seamlessly.
+Open `http://localhost:8081` in your browser. Swagger UI initiates a client-side browser `fetch()` to `http://localhost:8080/api/openapi.json`. Because cross-origin headers are returned, the browser loads the complete OpenAPI specification seamlessly.
 
 #### 2. Preflight OPTIONS Request Verification
 
 For complex HTTP requests (e.g. `POST /api/v1/suites/{id}/builds` with custom headers or multipart form data), web browsers first send an HTTP `OPTIONS` preflight request:
 
 ```bash
-curl -s -i -X OPTIONS http://localhost:8080/openapi.json \
+curl -s -i -X OPTIONS http://localhost:8080/api/openapi.json \
   -H "Origin: http://localhost:8081" \
   -H "Access-Control-Request-Method: GET" \
   -H "Access-Control-Request-Headers: Content-Type, X-Request-ID"
@@ -1648,7 +1648,7 @@ curl -f -s http://localhost:8080/healthz
 Retrieve the semantic version, git commit hash, and build timestamp injected via Go `ldflags`:
 
 ```bash
-curl -f -s http://localhost:8080/version
+curl -f -s http://localhost:8080/api/version
 ```
 
 Response payload:
@@ -1672,7 +1672,7 @@ ENDPOINT="${VUHIVE_ENDPOINT:-http://localhost:8080}"
 EXPECTED_MIN_VERSION="0.1.0"
 
 echo "Pinging vuhive-cloud control plane at ${ENDPOINT}..."
-VERSION_JSON=$(curl -f -s "${ENDPOINT}/version")
+VERSION_JSON=$(curl -f -s "${ENDPOINT}/api/version")
 SERVER_VERSION=$(echo "${VERSION_JSON}" | jq -r '.version')
 COMMIT_HASH=$(echo "${VERSION_JSON}" | jq -r '.commit')
 BUILD_TIME=$(echo "${VERSION_JSON}" | jq -r '.build_time')
@@ -2362,7 +2362,7 @@ The control plane injects `spec.template.spec.runtimeClassName: "gvisor"` into t
 
 ## 4. Next Steps
 
-- **[OpenAPI 3.1 Specification (`api/openapi.yaml`)](../api/openapi.yaml)**: Complete REST API contract, machine-readable schemas, and live endpoints (`GET /openapi.yaml`, `GET /openapi.json`).
+- **[OpenAPI 3.1 Specification (`api/openapi.yaml`)](../api/openapi.yaml)**: Complete REST API contract, machine-readable schemas, and live endpoints (`GET /api/openapi.yaml`, `GET /api/openapi.json`).
 - **[Main Project README](../README.md)**: System overview, architecture diagram, and repository roadmap.
 - **[vuhive-cloud Helm Chart](../deploy/helm/vuhive-cloud/README.md)**: Production deployment instructions and configuration parameter reference.
 - **[vuhive-cloud-infra Helm Chart](../deploy/helm/vuhive-cloud-infra/README.md)**: Local backing services guide (PostgreSQL + MinIO + Swagger UI OpenAPI viewer).

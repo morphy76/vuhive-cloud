@@ -62,6 +62,13 @@ spec:
                 name: {{ $fullName }}
                 port:
                   number: {{ $svcPort }}
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $svcPort }}
           {{- range .paths }}
           {{- if ne .path "/" }}
           - path: {{ .path }}
@@ -93,4 +100,3 @@ spec:
           {{- end }}
     {{- end }}
 {{- end }}
-

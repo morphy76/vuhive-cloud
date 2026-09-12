@@ -16,8 +16,8 @@ import (
 func TestRouter_VersionEndpoint(t *testing.T) {
 	router := rest.SetupRouter(nil, nil, nil, nil)
 
-	t.Run("GET /version returns HTTP 200 with populated version metadata", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/version", nil)
+	t.Run("GET /api/version returns HTTP 200 with populated version metadata", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -34,7 +34,7 @@ func TestRouter_VersionEndpoint(t *testing.T) {
 	})
 
 
-	t.Run("GET /version reflects dynamic runtime version overrides", func(t *testing.T) {
+	t.Run("GET /api/version reflects dynamic runtime version overrides", func(t *testing.T) {
 		origVersion, origCommit, origBuildTime := version.Version, version.Commit, version.BuildTime
 		defer func() {
 			version.Version = origVersion
@@ -46,7 +46,7 @@ func TestRouter_VersionEndpoint(t *testing.T) {
 		version.Commit = "fedcba9"
 		version.BuildTime = "2026-09-06T12:34:56Z"
 
-		req := httptest.NewRequest(http.MethodGet, "/version", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 

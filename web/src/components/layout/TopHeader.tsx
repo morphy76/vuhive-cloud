@@ -75,7 +75,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ currentRoute, onOpenDrawer
         <Tooltip>
           <TooltipTrigger asChild>
             <a
-              href="/openapi.yaml"
+              href="/api/openapi.yaml"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="OpenAPI Specification"

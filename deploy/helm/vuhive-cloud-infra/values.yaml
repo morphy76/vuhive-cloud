@@ -73,16 +73,16 @@ openapiViewer:
   # IMPORTANT: Swagger UI is a client-side Single Page Application (SPA) running directly inside
   # the operator's desktop browser (not a server-side proxy inside the cluster). The browser itself
   # must be able to resolve and reach this URL:
-  #   - In-Cluster Default ("http://vuhive-vuhive-cloud:8080/openapi.json"): Cluster-internal Service DNS name.
+  #   - In-Cluster Default ("http://vuhive-vuhive-cloud:8080/api/openapi.json"): Cluster-internal Service DNS name.
   #     Resolves only within the Kubernetes pod network (e.g. from an in-cluster browser or proxy).
   #   - Local Port-Forwarding (kubectl port-forward): Host desktop browsers cannot resolve cluster-internal
   #     DNS names ("vuhive-vuhive-cloud"). When port-forwarding Swagger UI to localhost, configure:
-  #       specUrl: "http://localhost:8080/openapi.json"
+  #       specUrl: "http://localhost:8080/api/openapi.json"
   #     and also port-forward the control plane service to localhost:8080.
   #   - Ingress / Reverse Proxy: When Swagger UI and the control plane are exposed behind an Ingress
   #     controller under the same hostname, configure a relative path:
-  #       specUrl: "/openapi.json"
-  specUrl: "http://vuhive-vuhive-cloud:8080/openapi.json"
+  #       specUrl: "/api/openapi.json"
+  specUrl: "http://vuhive-vuhive-cloud:8080/api/openapi.json"
   resources:
     requests:
       cpu: 50m
@@ -107,6 +107,7 @@ keycloak:
   adminPassword: "admin"
   # httpRelativePath specifies the dedicated URL context root / subpath where Keycloak is served.
   # Injected as KC_HTTP_RELATIVE_PATH in Keycloak. Defaults to "/auth" for path-based ingress routing.
+  # SmallRye health probes on management port 9000 automatically adapt to this prefix.
   httpRelativePath: "/auth"
   database:
     # Defaults to PostgreSQL service deployed by this infra chart when left empty

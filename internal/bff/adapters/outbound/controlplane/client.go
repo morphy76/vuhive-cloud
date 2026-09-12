@@ -193,7 +193,7 @@ func (c *Client) CheckHealth(ctx context.Context) (*outbound.ControlPlaneHealth,
 	return health, nil
 }
 
-// GetVersion queries the control plane /version endpoint.
+// GetVersion queries the control plane /api/version endpoint.
 func (c *Client) GetVersion(ctx context.Context) (*outbound.ControlPlaneVersion, error) {
 	start := time.Now()
 	log := zerolog.Ctx(ctx).With().
@@ -202,7 +202,7 @@ func (c *Client) GetVersion(ctx context.Context) (*outbound.ControlPlaneVersion,
 		Logger()
 	log.Debug().Msg("querying upstream control plane version")
 
-	resp, err := c.executeRequest(ctx, http.MethodGet, c.baseURL+"/version", nil)
+	resp, err := c.executeRequest(ctx, http.MethodGet, c.baseURL+"/api/version", nil)
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed executing version request")
 		return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, err)
