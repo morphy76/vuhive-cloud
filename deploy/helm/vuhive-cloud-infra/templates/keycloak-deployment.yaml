@@ -1,4 +1,8 @@
 {{- if .Values.keycloak.enabled -}}
+{{- $relPath := trimSuffix "/" (default "/auth" .Values.keycloak.httpRelativePath) -}}
+{{- if and $relPath (not (hasPrefix "/" $relPath)) -}}
+  {{- $relPath = printf "/%s" $relPath -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -47,7 +51,7 @@ spec:
             - name: KC_METRICS_ENABLED
               value: "true"
             - name: KC_HTTP_RELATIVE_PATH
-              value: {{ .Values.keycloak.httpRelativePath | default "/auth" | quote }}
+              value: {{ ($relPath | default "/") | quote }}
             - name: KC_PROXY_HEADERS
               value: "xforwarded"
           ports:
@@ -59,14 +63,14 @@ spec:
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /health/live
+              path: {{ printf "%s/health/live" $relPath }}
               port: management
             initialDelaySeconds: 45
             periodSeconds: 15
             timeoutSeconds: 5
           readinessProbe:
             httpGet:
-              path: /health/ready
+              path: {{ printf "%s/health/ready" $relPath }}
               port: management
             initialDelaySeconds: 25
             periodSeconds: 10
