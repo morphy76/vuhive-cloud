@@ -112,22 +112,26 @@ func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 	router.GET("/healthz", healthHandler)
 	router.GET("/api/v1/health", healthHandler)
 
-	// Runtime version endpoint
-	router.GET("/version", func(c *gin.Context) {
-		c.JSON(http.StatusOK, VersionResponse{
-			Version:   version.Version,
-			Commit:    version.Commit,
-			BuildTime: version.BuildTime,
+	// API routes
+	apiRoute := router.Group("/api")
+	{
+		// Runtime version endpoint
+		apiRoute.GET("/version", func(c *gin.Context) {
+			c.JSON(http.StatusOK, VersionResponse{
+				Version:   version.Version,
+				Commit:    version.Commit,
+				BuildTime: version.BuildTime,
+			})
 		})
-	})
 
-	// Machine-readable OpenAPI 3.1 specifications
-	router.GET("/openapi.yaml", func(c *gin.Context) {
-		c.Data(http.StatusOK, "application/yaml", api.OpenAPISpecYAML)
-	})
-	router.GET("/openapi.json", func(c *gin.Context) {
-		c.Data(http.StatusOK, "application/json", api.OpenAPISpecJSON)
-	})
+		// Machine-readable OpenAPI 3.1 specifications
+		apiRoute.GET("/openapi.yaml", func(c *gin.Context) {
+			c.Data(http.StatusOK, "application/yaml", api.OpenAPISpecYAML)
+		})
+		apiRoute.GET("/openapi.json", func(c *gin.Context) {
+			c.Data(http.StatusOK, "application/json", api.OpenAPISpecJSON)
+		})
+	}
 
 	// Helper to enforce role guards if auth is configured
 	roleGuard := func(roles ...string) gin.HandlerFunc {
@@ -138,7 +142,7 @@ func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 	}
 
 	// API v1 routes
-	v1 := router.Group("/api/v1")
+	v1 := apiRoute.Group("/v1")
 	if cfg.TokenVerifier != nil {
 		v1.Use(AuthMiddleware(cfg.TokenVerifier, false))
 	}

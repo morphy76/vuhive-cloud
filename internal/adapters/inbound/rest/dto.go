@@ -532,7 +532,7 @@ func ToBarrierResponse(s *model.BarrierSession) BarrierResponse {
 	}
 }
 
-// VersionResponse represents the response payload for /version.
+// VersionResponse represents the response payload for /api/version.
 type VersionResponse struct {
 	Version   string `json:"version"`
 	Commit    string `json:"commit"`

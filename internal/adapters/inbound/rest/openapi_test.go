@@ -21,8 +21,8 @@ func TestOpenAPI_Endpoints(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := rest.SetupRouter(nil, nil, nil, nil)
 
-	t.Run("GET /openapi.yaml returns HTTP 200 with application/yaml and valid OpenAPI 3.1", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil)
+	t.Run("GET /api/openapi.yaml returns HTTP 200 with application/yaml and valid OpenAPI 3.1", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/openapi.yaml", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -37,8 +37,8 @@ func TestOpenAPI_Endpoints(t *testing.T) {
 		assert.NotNil(t, doc["paths"])
 	})
 
-	t.Run("GET /openapi.json returns HTTP 200 with application/json and valid OpenAPI 3.1", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
+	t.Run("GET /api/openapi.json returns HTTP 200 with application/json and valid OpenAPI 3.1", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/openapi.json", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -53,8 +53,8 @@ func TestOpenAPI_Endpoints(t *testing.T) {
 		assert.NotNil(t, doc["paths"])
 	})
 
-	t.Run("GET /version returns HTTP 200 with VersionResponse", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/version", nil)
+	t.Run("GET /api/version returns HTTP 200 with VersionResponse", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 

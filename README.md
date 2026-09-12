@@ -163,15 +163,15 @@ Verify service liveness, version, and OpenAPI specifications:
 curl -i http://localhost:8080/healthz
 
 # Inspect runtime version & compile-time metadata (injected via ldflags)
-curl -i http://localhost:8080/version
+curl -i http://localhost:8080/api/version
 # Response: {"version":"0.1.0","commit":"aca4153","build_time":"2026-09-06T12:00:00Z"}
 
 # Fetch machine-readable OpenAPI 3.1 specification
-curl -i http://localhost:8080/openapi.json
-curl -i http://localhost:8080/openapi.yaml
+curl -i http://localhost:8080/api/openapi.json
+curl -i http://localhost:8080/api/openapi.yaml
 ```
 
-To create your first runner profile, upload test suites, and trigger ad-hoc runs (`POST /api/v1/runs`), follow the **[Adoption Cookbook (`docs/cookbook.md`)](./docs/cookbook.md)**. For full REST API endpoint specifications, refer to the **[OpenAPI Reference (`api/openapi.yaml`)](./api/openapi.yaml)** or fetch it live at `/openapi.yaml` / `/openapi.json`.
+To create your first runner profile, upload test suites, and trigger ad-hoc runs (`POST /api/v1/runs`), follow the **[Adoption Cookbook (`docs/cookbook.md`)](./docs/cookbook.md)**. For full REST API endpoint specifications, refer to the **[OpenAPI Reference (`api/openapi.yaml`)](./api/openapi.yaml)** or fetch it live at `/api/openapi.yaml` / `/api/openapi.json`.
 
 ---
 
@@ -348,7 +348,7 @@ For detailed Helm configuration options, see the chart READMEs:
    - **Roadmap & Epic Breakdown** (Direct references to GitHub Milestones and Issues)
 
 2. **[api/openapi.yaml](./api/openapi.yaml)**
-   - Full OpenAPI 3.1 specification for all REST API endpoints exposed by the control plane (served live at `/openapi.yaml` and `/openapi.json`).
+   - Full OpenAPI 3.1 specification for all REST API endpoints exposed by the control plane (served live at `/api/openapi.yaml` and `/api/openapi.json`).
 
 ## Project Tracking & Roadmap
 

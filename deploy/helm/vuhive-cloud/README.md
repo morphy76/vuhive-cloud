@@ -11,7 +11,7 @@ Official Helm chart for the `vuhive-cloud` control plane.
 > - **Developer & Contributor Guide**: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
 > - **Infrastructure Chart (PostgreSQL + MinIO + OpenAPI Viewer)**: [`deploy/helm/vuhive-cloud-infra/README.md`](../vuhive-cloud-infra/README.md)
 > - **Adoption Guide & API Recipes**: [`docs/cookbook.md`](../../docs/cookbook.md)
-> - **REST API Reference**: [OpenAPI 3.1 Specification (`api/openapi.yaml`)](../../api/openapi.yaml) (served live at `GET /openapi.yaml` and `GET /openapi.json`)
+> - **REST API Reference**: [OpenAPI 3.1 Specification (`api/openapi.yaml`)](../../api/openapi.yaml) (served live at `GET /api/openapi.yaml` and `GET /api/openapi.json`)
 > - **Engineering Philosophy**: [`AI_DISCLOSURE.md`](../../AI_DISCLOSURE.md)
 
 ### Architecture Components
@@ -108,14 +108,14 @@ kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080
 curl -i http://localhost:8080/healthz
 
 # Inspect runtime version and build metadata
-curl -i http://localhost:8080/version
+curl -i http://localhost:8080/api/version
 ```
 
 > [!NOTE]
 > **Stateful Health Probe Logging**:
 > Health probe endpoints (`/healthz`, `/api/v1/health`) use stateful logging to prevent log pollution from periodic Kubernetes liveness and readiness probes. Probes emit log entries only upon status change (`Info` on good status, `Warn` on bad status). Consecutive evaluations with unchanged status remain silent.
 
-Example `/version` response:
+Example `/api/version` response:
 ```json
 {
   "version": "0.1.0",
@@ -549,7 +549,7 @@ kubectl get pods -n vuhive-system -l app.kubernetes.io/name=vuhive-cloud
 # Verify service liveness
 kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080 &
 curl -i http://localhost:8080/healthz
-curl -i http://localhost:8080/version
+curl -i http://localhost:8080/api/version
 ```
 
 
@@ -651,14 +651,6 @@ The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway an
 - **Unified Run Detail (`/api/bff/v1/runs/{id}`)**: Enriches test run execution records with parsed summary KPIs and dynamically generated pre-signed S3 download URLs for `summary.json` and `run.log`.
 - **Live SSE Telemetry Stream (`/api/bff/v1/events`)**: Streams real-time Server-Sent Events (`text/event-stream`) for run state transitions (`run_status_changed`), compilation changes (`build_status_changed`), and periodic system heartbeats (`system_heartbeat`) without high-frequency browser polling.
 - **Transparent Reverse Proxying**: Routes under `/api/bff/v1/suites`, `/api/bff/v1/profiles`, `/api/bff/v1/schedules`, and `/api/bff/v1/runs` transparently proxy requests to the upstream control plane (`/api/v1/*`), handling HTTP header propagation (Bearer tokens, API keys) and connection pooling automatically.
-- **Unified Ingress Smart Routing**:
-  When `ingress.enabled=true` and `bff.enabled=true` (default), the chart's Ingress resource automatically partitions traffic:
-  - `/api/bff/v1/auth` and `/api/v1/bff/auth` → routed to the BFF service (port 8081) for OIDC PKCE login (`/login`), callback exchange (`/callback`), user identity (`/me`), logout (`/logout`), and Keycloak backchannel logout (`/backchannel-logout`).
-  - `/api/bff/v1` → routed to the BFF service (port 8081) for sub-50ms dashboard aggregations, unified run details, and live SSE event streams.
-  - `/api/v1/bff` → routed to the BFF service (port 8081) for legacy/backward-compatible endpoints.
-  - `/api/v1` → routed directly to the control plane server (port 8080) for core runner callbacks, barrier rendezvous, developer CLI, and REST API access.
-  - `/` → routed to the BFF service (port 8081) serving the embedded React 19 PWA dashboard and static web assets.
-  - If `bff.enabled=false`, all routes fallback to the core control plane server.
 - **Service Configuration**: Configured via CLI flags or environment variables:
   - `--control-plane-url` / `CONTROL_PLANE_URL`: Upstream control plane address (defaults to `http://<fullname>:8080`).
   - `--control-plane-token` / `CONTROL_PLANE_TOKEN`: Bearer token or API key forwarded in upstream requests.
@@ -753,7 +745,6 @@ For sensitive or untrusted load test workloads requiring hypervisor or gVisor ke
 | `rbac.clusterScoped` | Scope RBAC at cluster level instead of namespace level | `false` |
 | `service.type` | Service type | `ClusterIP` |
 | `service.port` | Service port | `8080` |
-| `ingress.enabled` | Enable Ingress | `false` |
 | `database.host` | PostgreSQL host | `vuhive-infra-postgresql` |
 | `database.port` | PostgreSQL port | `5432` |
 | `database.name` | PostgreSQL database name | `vuhive` |
