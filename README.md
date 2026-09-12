@@ -131,7 +131,7 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --wait --timeout=180s
 ```
 
-> For details on database and storage parameters, Keycloak IAM database isolation, and enabling the optional OpenAPI viewer (Swagger UI, including browser-accessible `specUrl` configuration for `kubectl port-forward`), see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
+> For details on database and storage parameters, Keycloak IAM database isolation, dedicated context roots (`/docs`, `/auth`, `/minio`, `/s3`), path-based Ingress routing, and enabling the optional OpenAPI viewer (Swagger UI, including browser-accessible `specUrl` configuration for `kubectl port-forward`), see the [Infrastructure Helm Installation Guide (`deploy/helm/vuhive-cloud-infra/README.md`)](./deploy/helm/vuhive-cloud-infra/README.md).
 
 ### 2. Deploy vuhive-cloud Control Plane
 Deploy the control plane connected to the local infrastructure:

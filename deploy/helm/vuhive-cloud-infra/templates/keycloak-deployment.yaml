@@ -47,7 +47,7 @@ spec:
             - name: KC_METRICS_ENABLED
               value: "true"
             - name: KC_HTTP_RELATIVE_PATH
-              value: "/"
+              value: {{ .Values.keycloak.httpRelativePath | default "/auth" | quote }}
             - name: KC_PROXY_HEADERS
               value: "xforwarded"
           ports:

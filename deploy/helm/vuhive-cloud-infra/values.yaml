@@ -51,6 +51,12 @@ minio:
       purge: false
   persistence:
     size: 2Gi
+  # Dedicated context root and subpath configuration for MinIO Console and S3 API:
+  # - CONSOLE_SUBPATH: Configures MinIO Console to serve static assets and APIs under /minio
+  # - MINIO_BROWSER_REDIRECT_URL: Redirects browser requests arriving at the MinIO API or root to the console subpath
+  environment:
+    CONSOLE_SUBPATH: "/minio"
+    MINIO_BROWSER_REDIRECT_URL: "/minio"
 
 # ── OpenAPI Viewer (interactive Swagger UI for local API exploration) ─────
 openapiViewer:
@@ -59,11 +65,15 @@ openapiViewer:
     repository: swaggerapi/swagger-ui
     tag: v5.18.2
     pullPolicy: IfNotPresent
+  # contextPath specifies the dedicated URL context root / subpath where Swagger UI is hosted.
+  # Configures the BASE_URL environment variable in the swagger-ui container, and aligns
+  # container liveness/readiness probes. Must start with a leading slash (defaults to "/docs").
+  contextPath: "/docs"
   # specUrl specifies the target OpenAPI 3.1 specification URL loaded by Swagger UI.
   # IMPORTANT: Swagger UI is a client-side Single Page Application (SPA) running directly inside
   # the operator's desktop browser (not a server-side proxy inside the cluster). The browser itself
   # must be able to resolve and reach this URL:
-  #   - Default ("http://vuhive-vuhive-cloud:8080/openapi.json"): Cluster-internal Service DNS name.
+  #   - In-Cluster Default ("http://vuhive-vuhive-cloud:8080/openapi.json"): Cluster-internal Service DNS name.
   #     Resolves only within the Kubernetes pod network (e.g. from an in-cluster browser or proxy).
   #   - Local Port-Forwarding (kubectl port-forward): Host desktop browsers cannot resolve cluster-internal
   #     DNS names ("vuhive-vuhive-cloud"). When port-forwarding Swagger UI to localhost, configure:
@@ -84,16 +94,6 @@ openapiViewer:
     type: ClusterIP
     port: 8080
     annotations: {}
-  ingress:
-    enabled: false
-    className: ""
-    annotations: {}
-    hosts:
-      - host: openapi.local
-        paths:
-          - path: /
-            pathType: ImplementationSpecific
-    tls: []
 
 # ── Keycloak (OIDC Identity Provider & Authorization Server) ─────────────
 keycloak:
@@ -105,6 +105,9 @@ keycloak:
     pullPolicy: IfNotPresent
   adminUser: "admin"
   adminPassword: "admin"
+  # httpRelativePath specifies the dedicated URL context root / subpath where Keycloak is served.
+  # Injected as KC_HTTP_RELATIVE_PATH in Keycloak. Defaults to "/auth" for path-based ingress routing.
+  httpRelativePath: "/auth"
   database:
     # Defaults to PostgreSQL service deployed by this infra chart when left empty
     host: ""
