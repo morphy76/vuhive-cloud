@@ -113,59 +113,84 @@ Keycloak provides OIDC authentication and token issuance for the control plane a
 
 ## Dedicated Context Roots & Path-Based Ingress
 
-Every backing service in `vuhive-cloud-infra` is configured with its own dedicated context root rather than binding to root `/`. This architectural pattern enables operators to expose the entire stack behind a unified domain (or local Ingress controller such as Traefik or Ingress NGINX) using path-based routing rules without requiring URL rewrites, strip-prefix plugins, or facing broken asset links:
+Every backing service in `vuhive-cloud-infra` is configured with its own dedicated context root rather than binding to root `/`.
 
-| Component | Default Context Root | Service Port | Ingress Path (Prefix) | Example Ingress URL |
-|---|---|---|---|---|
-| **Control Plane API** (app chart) | `/api/v1` | `8080` | `/api/v1` | `http://vuhive.local/api/v1` |
-| **Web UI & BFF** (app chart) | `/` & `/api/v1/bff` | `8081` | `/` | `http://vuhive.local/` |
-| **OpenAPI Viewer** | `/docs` | `8080` | `/docs` | `http://vuhive.local/docs` |
-| **Keycloak IAM** | `/auth` | `8080` | `/auth` | `http://vuhive.local/auth` |
-| **MinIO Console** | `/minio` | `9001` | `/minio` | `http://vuhive.local/minio` |
-| **MinIO S3 API** | `/s3` | `9000` | `/s3` | `http://vuhive.local/s3` |
+> [!NOTE]
+> **No Ingress Manifests Bundled in Infra Chart**:
+> The `vuhive-cloud-infra` chart intentionally does not bundle Kubernetes Ingress resources. Ingress controllers (e.g. Ingress NGINX, Traefik), hostnames, path rules, and TLS certificates are managed per environment. Thanks to dedicated context roots, all services can be cleanly mapped under a single unified domain without URL rewrites, strip-prefix annotations, or asset collisions:
 
-### Unified Path-Based Ingress Example
+| Component | Default Context Root | Target Service Name (Namespace: `vuhive-system`) | Target Service Port | Ingress Path (Prefix) | Example URL |
+|---|---|---|---|---|---|
+| **Control Plane API** (app chart) | `/api/v1` | `vuhive-vuhive-cloud` | `8080` | `/api/v1` | `http://vuhive.local/api/v1` |
+| **Web UI & BFF** (app chart) | `/` & `/api/v1/bff` | `vuhive-vuhive-cloud-bff` | `8081` | `/` | `http://vuhive.local/` |
+| **OpenAPI Viewer** | `/docs` | `vuhive-infra-vuhive-cloud-infra-openapi-viewer` | `8080` | `/docs` | `http://vuhive.local/docs` |
+| **Keycloak IAM** | `/auth` | `vuhive-infra-vuhive-cloud-infra-keycloak` | `8080` | `/auth` | `http://vuhive.local/auth` |
+| **MinIO Console** | `/minio` | `vuhive-infra-minio-console` | `9001` | `/minio` | `http://vuhive.local/minio` |
+| **MinIO S3 API** | `/s3` | `vuhive-infra-minio` | `9000` | `/s3` | `http://vuhive.local/s3` |
 
-To expose all infrastructure services under a single hostname (e.g. `vuhive.local`), enable ingress on each component:
+### Environment Ingress Configuration Example
+
+Below is a complete example of a Kubernetes Ingress manifest configured for an environment using a unified hostname (e.g., `vuhive.local`):
 
 ```yaml
-# deploy/helm/vuhive-cloud-infra values snippet
-openapiViewer:
-  enabled: true
-  contextPath: "/docs"
-  specUrl: "/openapi.json"
-  ingress:
-    enabled: true
-    hosts:
-      - host: vuhive.local
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vuhive-unified-ingress
+  namespace: vuhive-system
+spec:
+  rules:
+    - host: vuhive.local
+      http:
         paths:
+          # 1. Control Plane REST API
+          - path: /api/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: vuhive-vuhive-cloud
+                port:
+                  number: 8080
+          # 2. OpenAPI Swagger UI Viewer
           - path: /docs
             pathType: Prefix
-
-keycloak:
-  httpRelativePath: "/auth"
-  ingress:
-    enabled: true
-    hosts:
-      - host: vuhive.local
-        paths:
+            backend:
+              service:
+                name: vuhive-infra-vuhive-cloud-infra-openapi-viewer
+                port:
+                  number: 8080
+          # 3. Keycloak IAM (OIDC Discovery & Admin Console)
           - path: /auth
             pathType: Prefix
-
-minio:
-  environment:
-    CONSOLE_SUBPATH: "/minio"
-    MINIO_BROWSER_REDIRECT_URL: "http://vuhive.local/minio"
-  consoleIngress:
-    enabled: true
-    hosts:
-      - vuhive.local
-    path: /minio
-  ingress:
-    enabled: true
-    hosts:
-      - vuhive.local
-    path: /s3
+            backend:
+              service:
+                name: vuhive-infra-vuhive-cloud-infra-keycloak
+                port:
+                  number: 8080
+          # 4. MinIO Web Console
+          - path: /minio
+            pathType: Prefix
+            backend:
+              service:
+                name: vuhive-infra-minio-console
+                port:
+                  number: 9001
+          # 5. MinIO S3 API
+          - path: /s3
+            pathType: Prefix
+            backend:
+              service:
+                name: vuhive-infra-minio
+                port:
+                  number: 9000
+          # 6. Web UI & BFF Dashboard (Root Catch-All)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vuhive-vuhive-cloud-bff
+                port:
+                  number: 8081
 ```
 
 ## Configuration Parameters
@@ -183,10 +208,6 @@ minio:
 | `minio.buckets[0].policy` | Default artifact bucket policy | `none` |
 | `minio.environment.CONSOLE_SUBPATH` | MinIO Console UI context subpath | `"/minio"` |
 | `minio.environment.MINIO_BROWSER_REDIRECT_URL` | MinIO Console browser redirect URL | `"/minio"` |
-| `minio.consoleIngress.enabled` | Enable Ingress for MinIO Console | `false` |
-| `minio.consoleIngress.path` | Ingress path for MinIO Console | `/minio` |
-| `minio.ingress.enabled` | Enable Ingress for MinIO S3 API | `false` |
-| `minio.ingress.path` | Ingress path for MinIO S3 API | `/s3` |
 | `keycloak.enabled` | Deploy Keycloak OIDC identity provider | `true` |
 | `keycloak.image.repository` | Container image repository for Keycloak | `quay.io/keycloak/keycloak` |
 | `keycloak.image.tag` | Container image tag | `26.1.0` |
@@ -200,10 +221,6 @@ minio:
 | `keycloak.database.password` | Keycloak database password | `vuhive-dev` |
 | `keycloak.database.schema` | Optional Keycloak database schema (`KC_DB_SCHEMA`) | `""` |
 | `keycloak.service.port` | Keycloak service port | `8080` |
-| `keycloak.ingress.enabled` | Enable Kubernetes Ingress for Keycloak | `false` |
-| `keycloak.ingress.className` | Ingress class name for Keycloak | `""` |
-| `keycloak.ingress.hosts[0].host` | Ingress host for Keycloak | `keycloak.local` |
-| `keycloak.ingress.hosts[0].paths[0].path` | Ingress path for Keycloak | `/auth` |
 | `openapiViewer.enabled` | Deploy optional third-party OpenAPI viewer (Swagger UI) | `false` |
 | `openapiViewer.image.repository` | Container image repository for OpenAPI viewer | `swaggerapi/swagger-ui` |
 | `openapiViewer.image.tag` | Container image tag | `v5.18.2` |
@@ -212,10 +229,6 @@ minio:
 | `openapiViewer.specUrl` | Target URL to OpenAPI spec (fetched client-side by browser). Use `http://localhost:8080/openapi.json` for `kubectl port-forward` or `/openapi.json` for shared Ingress | `http://vuhive-vuhive-cloud:8080/openapi.json` |
 | `openapiViewer.service.type` | Kubernetes service type | `ClusterIP` |
 | `openapiViewer.service.port` | Kubernetes service port | `8080` |
-| `openapiViewer.ingress.enabled` | Enable Kubernetes Ingress for OpenAPI viewer | `false` |
-| `openapiViewer.ingress.className` | Ingress class name | `""` |
-| `openapiViewer.ingress.hosts[0].host` | Ingress host | `openapi.local` |
-| `openapiViewer.ingress.hosts[0].paths[0].path` | Ingress path | `/docs` |
 
 > **Note:** Default credentials are intended for local development only.
 > Always override secrets in production using `existingSecret` references.

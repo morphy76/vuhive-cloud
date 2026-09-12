@@ -57,24 +57,6 @@ minio:
   environment:
     CONSOLE_SUBPATH: "/minio"
     MINIO_BROWSER_REDIRECT_URL: "/minio"
-  # MinIO Browser Console Ingress (routes to console port 9001 under dedicated context root /minio)
-  consoleIngress:
-    enabled: false
-    ingressClassName: ""
-    annotations: {}
-    path: /minio
-    hosts:
-      - minio-console.local
-    tls: []
-  # MinIO S3 API Ingress (routes to S3 API port 9000 under dedicated context root /s3)
-  ingress:
-    enabled: false
-    ingressClassName: ""
-    annotations: {}
-    path: /s3
-    hosts:
-      - minio.local
-    tls: []
 
 # ── OpenAPI Viewer (interactive Swagger UI for local API exploration) ─────
 openapiViewer:
@@ -85,8 +67,7 @@ openapiViewer:
     pullPolicy: IfNotPresent
   # contextPath specifies the dedicated URL context root / subpath where Swagger UI is hosted.
   # Configures the BASE_URL environment variable in the swagger-ui container, and aligns
-  # container liveness/readiness probes and default ingress routing rules.
-  # Must start with a leading slash (defaults to "/docs").
+  # container liveness/readiness probes. Must start with a leading slash (defaults to "/docs").
   contextPath: "/docs"
   # specUrl specifies the target OpenAPI 3.1 specification URL loaded by Swagger UI.
   # IMPORTANT: Swagger UI is a client-side Single Page Application (SPA) running directly inside
@@ -113,16 +94,6 @@ openapiViewer:
     type: ClusterIP
     port: 8080
     annotations: {}
-  ingress:
-    enabled: false
-    className: ""
-    annotations: {}
-    hosts:
-      - host: openapi.local
-        paths:
-          - path: /docs
-            pathType: Prefix
-    tls: []
 
 # ── Keycloak (OIDC Identity Provider & Authorization Server) ─────────────
 keycloak:
@@ -152,16 +123,6 @@ keycloak:
     type: ClusterIP
     port: 8080
     annotations: {}
-  ingress:
-    enabled: false
-    className: ""
-    annotations: {}
-    hosts:
-      - host: keycloak.local
-        paths:
-          - path: /auth
-            pathType: Prefix
-    tls: []
   resources:
     requests:
       cpu: 100m
