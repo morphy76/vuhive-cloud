@@ -45,7 +45,8 @@ describe('ConfigEditorDialog', () => {
     id: 'cfg-1',
     suiteId: 's-1',
     name: 'existing.yaml',
-    contentYaml: 'version: "1.0"\nexecution:\n  vus: 50\n',
+    contentYaml:
+      'version: "1.0"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 50\n    run_period: 60s\n',
     isDefault: false,
     createdAt: new Date().toISOString(),
   }

@@ -3461,8 +3461,13 @@ components:
         content_yaml:
           type: string
           example: |
-            vus: 50
-            duration: 5m
+            version: "1.0"
+            default_scenario: standard_load
+            scenarios:
+              standard_load:
+                type: constant_vus
+                vus: 50
+                run_period: 5m
         is_default:
           type: boolean
           example: true
@@ -3479,8 +3484,13 @@ components:
         content_yaml:
           type: string
           example: |
-            vus: 100
-            duration: 10m
+            version: "1.0"
+            default_scenario: standard_load
+            scenarios:
+              standard_load:
+                type: constant_vus
+                vus: 100
+                run_period: 10m
         is_default:
           type: boolean
           example: true
@@ -3510,8 +3520,13 @@ components:
         content_yaml:
           type: string
           example: |
-            vus: 50
-            duration: 5m
+            version: "1.0"
+            default_scenario: standard_load
+            scenarios:
+              standard_load:
+                type: constant_vus
+                vus: 50
+                run_period: 5m
         s3_config_key:
           type: string
           example: suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs/7fa1205c-d38e-4f51-b924-11883395bcf8.yaml

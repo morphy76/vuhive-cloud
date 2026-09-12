@@ -15,7 +15,7 @@ import { YamlEditor } from '@/components/editor/YamlEditor'
 import { YamlDiffViewer } from '@/components/editor/YamlDiffViewer'
 import { useCreateSuiteConfig, useUpdateSuiteConfig } from '@/hooks/use-suites'
 import type { SuiteConfiguration } from '@/types/suite'
-import type { YamlValidationResult } from '@/lib/yaml-validator'
+import type { YamlValidationResult, SchemaValidationResult } from '@/lib/yaml-validator'
 import { FileCode, Split, CopyPlus } from 'lucide-react'
 
 export interface ConfigEditorDialogProps {
@@ -26,14 +26,27 @@ export interface ConfigEditorDialogProps {
   existingConfigs?: SuiteConfiguration[]
 }
 
-const DEFAULT_STARTER_YAML = `version: "1.0"
-execution:
-  vus: 50
-  duration: 60s
-  ramp_up: 10s
-thresholds:
-  p95_latency_ms: 250
-  error_rate_pct: 1.0
+const DEFAULT_STARTER_YAML = `# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/vuhive/main/schemas/vuhive.schema.json
+version: "1.0"
+default_scenario: standard_load
+
+scenarios:
+  standard_load:
+    type: constant_vus
+    vus: 50
+    ramp_up: 10s
+    run_period: 60s
+    ramp_down: 5s
+    vu_timeout: 5s
+    thresholds:
+      - metric: vuhive.http.req_duration
+        stat: p95
+        operator: "<"
+        target: "250ms"
+      - metric: vuhive.http.req_failed
+        stat: rate
+        operator: "<="
+        target: "0.01"
 `
 
 export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
@@ -81,9 +94,12 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
     return found ? found.contentYaml : ''
   }, [diffBaseId, initialConfig, existingConfigs])
 
-  const handleValidationChange = React.useCallback((result: YamlValidationResult) => {
-    setIsValidYaml(result.isValid)
-  }, [])
+  const handleValidationChange = React.useCallback(
+    (result: YamlValidationResult, schemaResult: SchemaValidationResult) => {
+      setIsValidYaml(result.isValid && schemaResult.isValid)
+    },
+    []
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -148,8 +164,8 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
             </DialogTitle>
             <DialogDescription>
               {isEditMode
-                ? 'Tune scenario virtual users, durations, stage plateaus, and latency thresholds with real-time YAML validation and side-by-side diffing.'
-                : 'Upload or declare scenario parameters, duration, ramp-up curves, and concurrency limits in YAML format.'}
+                ? 'Tune scenario virtual users, pacing models, stage plateaus, and SLA quality gates with real-time YAML validation and side-by-side diffing.'
+                : 'Upload or declare scenario parameters, pacing engines (constant_vus, arrival_rate, ramping_vus), and SLA thresholds conforming to the vuhive SDK v1.1.5 specification.'}
             </DialogDescription>
           </DialogHeader>
 

@@ -4,9 +4,12 @@ import { YamlEditor } from '@/components/editor/YamlEditor'
 
 describe('YamlEditor', () => {
   const initialYaml = `version: "1.0"
-execution:
-  vus: 50
-  duration: 60s
+default_scenario: standard_load
+scenarios:
+  standard_load:
+    type: constant_vus
+    vus: 50
+    run_period: 60s
 `
 
   it('renders editor with validation status and template selector', () => {

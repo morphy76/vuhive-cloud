@@ -133,17 +133,30 @@ tar -cjvf test-suite.tar.bz2 scenario.go go.mod
 
 ### C. Scenario Configuration (`vuhive.yaml`)
 
-You can supply an optional `vuhive.yaml` configuration file within the package or upload it to configure runtime parameters (iterations, ramp-up rate, threshold SLAs):
+You can supply an optional `vuhive.yaml` configuration file within the package or upload it to configure runtime parameters (pacing model, iterations, ramp-up rate, threshold SLAs):
 
 ```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/morphy76/vuhive/main/schemas/vuhive.schema.json
 version: "1.0"
-execution:
-  vus: 50
-  duration: 60s
-  ramp_up: 10s
-thresholds:
-  p95_latency_ms: 250
-  error_rate_pct: 1.0
+default_scenario: standard_load
+
+scenarios:
+  standard_load:
+    type: constant_vus
+    vus: 50
+    ramp_up: 10s
+    run_period: 60s
+    ramp_down: 5s
+    vu_timeout: 5s
+    thresholds:
+      - metric: vuhive.http.req_duration
+        stat: p95
+        operator: "<"
+        target: "250ms"
+      - metric: vuhive.http.req_failed
+        stat: rate
+        operator: "<="
+        target: "0.01"
 ```
 
 ---
@@ -189,14 +202,14 @@ curl -i -X POST http://localhost:8080/api/v1/suites \
 
 #### Step 2: Attach Scenario Configurations (`vuhive.yaml`)
 
-Upload an execution profile specifying virtual users (VUs), duration, ramp-up stages, and SLA latency thresholds:
+Upload an execution profile specifying virtual users (VUs), duration, ramp-up stages, and SLA latency thresholds conforming to the `vuhive` SDK v1.1.5 specification:
 
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs \
   -H "Content-Type: application/json" \
   -d '{
     "name": "staging-load",
-    "content_yaml": "version: \"1.0\"\nexecution:\n  vus: 50\n  duration: 60s\n  ramp_up: 10s\nthresholds:\n  p95_latency_ms: 250\n  error_rate_pct: 1.0\n",
+    "content_yaml": "version: \"1.0\"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 50\n    ramp_up: 10s\n    run_period: 60s\n    ramp_down: 5s\n    vu_timeout: 5s\n    thresholds:\n      - metric: vuhive.http.req_duration\n        stat: p95\n        operator: \"<\"\n        target: \"250ms\"\n      - metric: vuhive.http.req_failed\n        stat: rate\n        operator: \"<=\"\n        target: \"0.01\"\n",
     "is_default": true
   }'
 ```
@@ -208,7 +221,7 @@ curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389
   "id": "7fa1205c-d38e-4f51-b924-11883395bcf8",
   "suite_id": "3e04a02e-bf34-4398-8b40-6389bca12c97",
   "name": "staging-load",
-  "content_yaml": "version: \"1.0\"\nexecution:\n  vus: 50\n  duration: 60s\n  ramp_up: 10s\nthresholds:\n  p95_latency_ms: 250\n  error_rate_pct: 1.0\n",
+  "content_yaml": "version: \"1.0\"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 50\n    ramp_up: 10s\n    run_period: 60s\n    ramp_down: 5s\n    vu_timeout: 5s\n    thresholds:\n      - metric: vuhive.http.req_duration\n        stat: p95\n        operator: \"<\"\n        target: \"250ms\"\n      - metric: vuhive.http.req_failed\n        stat: rate\n        operator: \"<=\"\n        target: \"0.01\"\n",
   "s3_config_key": "suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs/7fa1205c-d38e-4f51-b924-11883395bcf8.yaml",
   "is_default": true,
   "created_at": "2026-09-07T12:05:00Z"
@@ -222,7 +235,7 @@ curl -i -X PUT http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389b
   -H "Content-Type: application/json" \
   -d '{
     "name": "staging-load-updated",
-    "content_yaml": "version: \"1.0\"\nexecution:\n  vus: 100\n  duration: 120s\n  ramp_up: 20s\nthresholds:\n  p95_latency_ms: 200\n  error_rate_pct: 0.5\n",
+    "content_yaml": "version: \"1.0\"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 100\n    ramp_up: 20s\n    run_period: 120s\n    ramp_down: 10s\n    vu_timeout: 5s\n    thresholds:\n      - metric: vuhive.http.req_duration\n        stat: p95\n        operator: \"<\"\n        target: \"200ms\"\n      - metric: vuhive.http.req_failed\n        stat: rate\n        operator: \"<=\"\n        target: \"0.005\"\n",
     "is_default": true
   }'
 ```
