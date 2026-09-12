@@ -51,12 +51,6 @@ minio:
       purge: false
   persistence:
     size: 2Gi
-  # Dedicated context root and subpath configuration for MinIO Console:
-  # - CONSOLE_SUBPATH: Configures MinIO Console to serve static assets and APIs under /minio.
-  #   Note: MINIO_BROWSER_REDIRECT_URL requires a fully qualified URL with scheme (e.g. "http://vuhive.local/minio"
-  #   or "http://localhost:9001/minio") and can be set when configuring Ingress or external access.
-  environment:
-    CONSOLE_SUBPATH: "/minio"
 
 # ── OpenAPI Viewer (interactive Swagger UI for local API exploration) ─────
 openapiViewer:

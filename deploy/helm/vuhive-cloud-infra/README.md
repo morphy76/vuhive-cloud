@@ -89,13 +89,13 @@ Because modern web browsers enforce the Same-Origin Policy when fetching resourc
 ### MinIO (S3-Compatible Object Storage)
 
 MinIO provides local S3-compatible object storage for test scenario archives, compiled binaries, and execution logs:
-- **Dedicated Context Root**: MinIO Console is pre-configured with context root `/minio` via `CONSOLE_SUBPATH: "/minio"`. This guarantees that console web assets and API calls are scoped cleanly under `/minio`, avoiding collisions with root-level applications or other path-based routes. If automatic browser redirection from the S3 API port (9000) to the Console is desired, `MINIO_BROWSER_REDIRECT_URL` can be configured with a fully qualified URL including scheme (e.g. `http://vuhive.local/minio` or `http://localhost:9001/minio`).
-- **S3 API Endpoint (Port `9000`)**: `http://vuhive-infra-minio:9000` — configured as `s3.endpoint` in `vuhive-cloud`. When exposed via Ingress, routes under path `/s3`.
+- **Root Context**: MinIO Console (port `9001`) and MinIO S3 API (port `9000`) operate natively at root context (`/`) without subpaths. This avoids asset loading, trailing-slash redirect, and Content-Security-Policy (CSP) issues associated with subpath rewriting.
+- **S3 API Endpoint (Port `9000`)**: `http://vuhive-infra-minio:9000` — configured as `s3.endpoint` in `vuhive-cloud`.
 - **MinIO Console / WebUI (Port `9001`)**:
   ```bash
   kubectl port-forward -n vuhive-system svc/vuhive-infra-minio 9001:9001
   ```
-  Navigate to `http://localhost:9001/minio` (or `http://localhost:9001` which redirects automatically) and sign in with root credentials (`vuhive-dev` / `vuhive-dev-secret`).
+  Navigate to `http://localhost:9001` and sign in with root credentials (`vuhive-dev` / `vuhive-dev-secret`).
 
 ### Keycloak (OIDC Identity Provider & Authorization Server)
 
@@ -113,11 +113,11 @@ Keycloak provides OIDC authentication and token issuance for the control plane a
 
 ## Dedicated Context Roots & Path-Based Ingress
 
-Every backing service in `vuhive-cloud-infra` is configured with its own dedicated context root rather than binding to root `/`.
+Backing services in `vuhive-cloud-infra` providing web dashboards and APIs are configured with dedicated context roots rather than binding to root `/`.
 
 > [!NOTE]
 > **No Ingress Manifests Bundled in Infra Chart**:
-> The `vuhive-cloud-infra` chart intentionally does not bundle Kubernetes Ingress resources. Ingress controllers (e.g. Ingress NGINX, Traefik), hostnames, path rules, and TLS certificates are managed per environment. Thanks to dedicated context roots, all services can be cleanly mapped under a single unified domain without URL rewrites, strip-prefix annotations, or asset collisions:
+> The `vuhive-cloud-infra` chart intentionally does not bundle Kubernetes Ingress resources. Ingress controllers (e.g. Ingress NGINX, Traefik), hostnames, path rules, and TLS certificates are managed per environment. Thanks to dedicated context roots, services can be cleanly mapped under a single unified domain without URL rewrites, strip-prefix annotations, or asset collisions:
 
 | Component | Default Context Root | Target Service Name (Namespace: `vuhive-system`) | Target Service Port | Ingress Path (Prefix) | Example URL |
 |---|---|---|---|---|---|
@@ -125,8 +125,10 @@ Every backing service in `vuhive-cloud-infra` is configured with its own dedicat
 | **Web UI & BFF** (app chart) | `/` & `/api/v1/bff` | `vuhive-vuhive-cloud-bff` | `8081` | `/` | `http://vuhive.local/` |
 | **OpenAPI Viewer** | `/docs` | `vuhive-infra-vuhive-cloud-infra-openapi-viewer` | `8080` | `/docs` | `http://vuhive.local/docs` |
 | **Keycloak IAM** | `/auth` | `vuhive-infra-vuhive-cloud-infra-keycloak` | `8080` | `/auth` | `http://vuhive.local/auth` |
-| **MinIO Console** | `/minio` | `vuhive-infra-minio-console` | `9001` | `/minio` | `http://vuhive.local/minio` |
-| **MinIO S3 API** | `/s3` | `vuhive-infra-minio` | `9000` | `/s3` | `http://vuhive.local/s3` |
+
+> [!TIP]
+> **MinIO Ingress Routing**:
+> MinIO Console (port `9001`) and MinIO S3 API (port `9000`) operate natively at root context (`/`). When exposing MinIO through an Ingress controller, route them via dedicated hostnames/subdomains (e.g., `http://minio.vuhive.local` and `http://s3.vuhive.local`) or custom reverse proxy rules to avoid route collisions with the root Web UI (`/`).
 
 ### Environment Ingress Configuration Example
 
@@ -167,23 +169,7 @@ spec:
                 name: vuhive-infra-vuhive-cloud-infra-keycloak
                 port:
                   number: 8080
-          # 4. MinIO Web Console
-          - path: /minio
-            pathType: Prefix
-            backend:
-              service:
-                name: vuhive-infra-minio-console
-                port:
-                  number: 9001
-          # 5. MinIO S3 API
-          - path: /s3
-            pathType: Prefix
-            backend:
-              service:
-                name: vuhive-infra-minio
-                port:
-                  number: 9000
-          # 6. Web UI & BFF Dashboard (Root Catch-All)
+          # 4. Web UI & BFF Dashboard (Root Catch-All)
           - path: /
             pathType: Prefix
             backend:
@@ -206,7 +192,6 @@ spec:
 | `minio.rootPassword` | MinIO root password | `vuhive-dev-secret` |
 | `minio.buckets[0].name` | Default artifact bucket name | `vuhive-artifacts` |
 | `minio.buckets[0].policy` | Default artifact bucket policy | `none` |
-| `minio.environment.CONSOLE_SUBPATH` | MinIO Console UI context subpath | `"/minio"` |
 | `keycloak.enabled` | Deploy Keycloak OIDC identity provider | `true` |
 | `keycloak.image.repository` | Container image repository for Keycloak | `quay.io/keycloak/keycloak` |
 | `keycloak.image.tag` | Container image tag | `26.1.0` |
