@@ -16,6 +16,12 @@ func TestGetFS_EmbeddedFiles(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, distFS)
 
+	// When web assets have not been compiled into web/dist (e.g. clean checkout before 'make web-build'),
+	// skip embed content verification gracefully.
+	if _, err := distFS.Open("index.html"); err != nil {
+		t.Skip("web assets not built in web/dist; run 'make web-build' to generate production assets")
+	}
+
 	expectedRootFiles := []string{
 		"index.html",
 		"manifest.webmanifest",

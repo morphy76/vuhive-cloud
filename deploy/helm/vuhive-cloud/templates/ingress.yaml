@@ -1,0 +1,102 @@
+{{- if and .Values.ingress .Values.ingress.enabled -}}
+{{- $fullName := include "vuhive-cloud.fullname" . -}}
+{{- $svcPort := .Values.service.port -}}
+{{- $bffFullName := include "vuhive-cloud.bff.fullname" . -}}
+{{- $bffPort := (default (dict) (default (dict) .Values.bff).service).port | default 8081 -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- if (default (dict) $.Values.bff).enabled }}
+          - path: /api/v1/bff/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $bffFullName }}
+                port:
+                  number: {{ $bffPort }}
+          - path: /api/bff/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $bffFullName }}
+                port:
+                  number: {{ $bffPort }}
+          - path: /api/v1/bff
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $bffFullName }}
+                port:
+                  number: {{ $bffPort }}
+          - path: /api/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $svcPort }}
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $svcPort }}
+          {{- range .paths }}
+          {{- if ne .path "/" }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ default $fullName .serviceName }}
+                port:
+                  number: {{ default $svcPort .servicePort }}
+          {{- end }}
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $bffFullName }}
+                port:
+                  number: {{ $bffPort }}
+          {{- else }}
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $svcPort }}
+          {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

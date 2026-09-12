@@ -53,6 +53,17 @@ service:
   targetPort: 8080
   annotations: {}
 
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: vuhive-cloud.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
 resources:
   requests:
     cpu: 100m
