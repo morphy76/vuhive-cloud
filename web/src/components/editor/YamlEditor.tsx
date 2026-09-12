@@ -44,7 +44,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
   height = '280px',
   minHeight = '180px',
   maxHeight = '500px',
-  placeholder = '# Enter scenario configuration YAML here...',
+  placeholder = '# version: "1.0"\n# default_scenario: standard_load\n# scenarios:\n#   standard_load:\n#     type: constant_vus\n#     vus: 50\n#     run_period: 60s',
   ariaLabel = 'YAML Configuration Editor',
   id = 'yaml-editor',
   showTemplates = false,
@@ -167,15 +167,20 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
           )}
 
           {/* Validation Status Badge in Toolbar */}
-          {validation.isValid ? (
-            <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Valid YAML</span>
-            </span>
-          ) : (
+          {!validation.isValid ? (
             <span className="flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400">
               <AlertCircle className="w-3.5 h-3.5" />
               <span>Syntax Error</span>
+            </span>
+          ) : !schema.isValid ? (
+            <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Schema Error</span>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Valid YAML</span>
             </span>
           )}
         </div>
@@ -187,7 +192,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
         role="textbox"
         aria-label={ariaLabel}
         aria-multiline="true"
-        aria-invalid={!validation.isValid}
+        aria-invalid={!validation.isValid || !schema.isValid}
         className="font-mono text-xs overflow-auto"
       >
         <CodeMirror
@@ -211,7 +216,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
         />
       </div>
 
-      {/* Validation Diagnostic Footer Bar */}
+      {/* YAML Syntax Error Footer Bar */}
       {!validation.isValid && validation.errors.length > 0 && (
         <div
           role="alert"
@@ -231,7 +236,27 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
         </div>
       )}
 
-      {/* Schema Warnings Footer (if YAML syntax is valid but schema has suggestions) */}
+      {/* Schema Specification Error Footer Bar */}
+      {validation.isValid && !schema.isValid && schema.errors.length > 0 && (
+        <div
+          role="alert"
+          className="p-3 bg-red-50 dark:bg-red-950/50 border-t border-red-200 dark:border-red-900/60 text-xs text-red-700 dark:text-red-300 flex items-start gap-2"
+        >
+          <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <span className="font-semibold">vuhive Schema Error:</span>
+            <ul className="list-disc list-inside space-y-0.5">
+              {schema.errors.map((err, i) => (
+                <li key={i} className="font-mono text-[11px]">
+                  {err}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* Schema Warnings Footer (if YAML syntax and schema are valid but there are suggestions) */}
       {validation.isValid && schema.warnings.length > 0 && (
         <div className="px-3.5 py-2 bg-amber-50 dark:bg-amber-950/40 border-t border-amber-200 dark:border-amber-900/40 text-[11px] text-amber-800 dark:text-amber-200 flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />

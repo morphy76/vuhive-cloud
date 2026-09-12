@@ -415,7 +415,7 @@
       "ConfigResponse": {
         "properties": {
           "content_yaml": {
-            "example": "vus: 50\nduration: 5m\n",
+            "example": "version: \"1.0\"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 50\n    run_period: 5m\n",
             "type": "string"
           },
           "created_at": {
@@ -460,7 +460,7 @@
       "CreateConfigRequest": {
         "properties": {
           "content_yaml": {
-            "example": "vus: 50\nduration: 5m\n",
+            "example": "version: \"1.0\"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 50\n    run_period: 5m\n",
             "type": "string"
           },
           "is_default": {
@@ -1817,7 +1817,7 @@
       "UpdateConfigRequest": {
         "properties": {
           "content_yaml": {
-            "example": "vus: 100\nduration: 10m\n",
+            "example": "version: \"1.0\"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 100\n    run_period: 10m\n",
             "type": "string"
           },
           "is_default": {

@@ -111,7 +111,7 @@ export const RECIPES: RecipeDefinition[] = [
         endpoint: '/api/v1/suites/{id}/configs',
         method: 'POST',
         generateCurl: (p) =>
-          `curl -i -X POST ${p.baseUrl || 'http://localhost:8080'}/api/v1/suites/${p.suiteId || '3e04a02e-bf34-4398-8b40-6389bca12c97'}/configs \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "name": "staging-load",\n    "content_yaml": "version: \\"1.0\\"\\nexecution:\\n  vus: 50\\n  duration: 60s\\n  ramp_up: 10s\\nthresholds:\\n  p95_latency_ms: 250\\n  error_rate_pct: 1.0\\n",\n    "is_default": true\n  }'`,
+          `curl -i -X POST ${p.baseUrl || 'http://localhost:8080'}/api/v1/suites/${p.suiteId || '3e04a02e-bf34-4398-8b40-6389bca12c97'}/configs \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "name": "staging-load",\n    "content_yaml": "version: \\"1.0\\"\\ndefault_scenario: standard_load\\nscenarios:\\n  standard_load:\\n    type: constant_vus\\n    vus: 50\\n    ramp_up: 10s\\n    run_period: 60s\\n    ramp_down: 5s\\n    vu_timeout: 5s\\n    thresholds:\\n      - metric: vuhive.http.req_duration\\n        stat: p95\\n        operator: \\"<\\"\\n        target: \\"250ms\\"\\n      - metric: vuhive.http.req_failed\\n        stat: rate\\n        operator: \\"<=\\"\\n        target: \\"0.01\\"\\n",\n    "is_default": true\n  }'`,
       },
       {
         id: 'step-upload-source',
