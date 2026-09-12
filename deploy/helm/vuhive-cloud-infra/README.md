@@ -89,7 +89,7 @@ Because modern web browsers enforce the Same-Origin Policy when fetching resourc
 ### MinIO (S3-Compatible Object Storage)
 
 MinIO provides local S3-compatible object storage for test scenario archives, compiled binaries, and execution logs:
-- **Dedicated Context Root**: MinIO Console is pre-configured with context root `/minio` via `CONSOLE_SUBPATH: "/minio"` and `MINIO_BROWSER_REDIRECT_URL: "/minio"`. This guarantees that console web assets and API calls are scoped cleanly under `/minio`, avoiding collisions with root-level applications or other path-based routes.
+- **Dedicated Context Root**: MinIO Console is pre-configured with context root `/minio` via `CONSOLE_SUBPATH: "/minio"`. This guarantees that console web assets and API calls are scoped cleanly under `/minio`, avoiding collisions with root-level applications or other path-based routes. If automatic browser redirection from the S3 API port (9000) to the Console is desired, `MINIO_BROWSER_REDIRECT_URL` can be configured with a fully qualified URL including scheme (e.g. `http://vuhive.local/minio` or `http://localhost:9001/minio`).
 - **S3 API Endpoint (Port `9000`)**: `http://vuhive-infra-minio:9000` — configured as `s3.endpoint` in `vuhive-cloud`. When exposed via Ingress, routes under path `/s3`.
 - **MinIO Console / WebUI (Port `9001`)**:
   ```bash
@@ -207,7 +207,6 @@ spec:
 | `minio.buckets[0].name` | Default artifact bucket name | `vuhive-artifacts` |
 | `minio.buckets[0].policy` | Default artifact bucket policy | `none` |
 | `minio.environment.CONSOLE_SUBPATH` | MinIO Console UI context subpath | `"/minio"` |
-| `minio.environment.MINIO_BROWSER_REDIRECT_URL` | MinIO Console browser redirect URL | `"/minio"` |
 | `keycloak.enabled` | Deploy Keycloak OIDC identity provider | `true` |
 | `keycloak.image.repository` | Container image repository for Keycloak | `quay.io/keycloak/keycloak` |
 | `keycloak.image.tag` | Container image tag | `26.1.0` |
