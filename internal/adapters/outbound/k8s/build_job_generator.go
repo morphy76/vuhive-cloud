@@ -76,7 +76,7 @@ mkdir -p /workspace/src /workspace/bin /workspace/.cache /workspace/go
 echo "Downloading source archive..."
 wget -qO /workspace/source.tar.gz "${SOURCE_URL}"
 echo "Extracting source archive..."
-tar -xzf /workspace/source.tar.gz -C /workspace/src
+tar -xf /workspace/source.tar.gz -C /workspace/src
 cd /workspace/src
 echo "Tidying module dependencies..."
 go mod tidy

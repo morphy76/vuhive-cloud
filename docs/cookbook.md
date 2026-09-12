@@ -116,10 +116,14 @@ require github.com/morphy76/vuhive v1.1.5
 
 ### B. Packaging Source Archives
 
-Compress your test scenario files into a standard `.tar.gz` archive before uploading:
+Compress your test scenario files into a standard archive (`.tar.gz`, `.tar.bz2`, or `.zip`) before uploading:
 
 ```bash
+# Gzip compressed archive
 tar -czvf test-suite.tar.gz scenario.go go.mod
+
+# Or Bzip2 compressed archive
+tar -cjvf test-suite.tar.bz2 scenario.go go.mod
 ```
 
 > [!TIP]

@@ -27,7 +27,7 @@ export interface UploadBuildDialogProps {
 }
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
-const ALLOWED_EXTENSIONS = ['.tar.gz', '.tgz', '.zip', '.tar']
+const ALLOWED_EXTENSIONS = ['.tar.gz', '.tgz', '.tar.bz2', '.tbz2', '.zip', '.tar']
 
 export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
   suiteId,
@@ -101,7 +101,9 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
     const isValidExtension = ALLOWED_EXTENSIONS.some((ext) => lowerName.endsWith(ext))
 
     if (!isValidExtension) {
-      setValidationError('Unsupported archive format. Please upload a .tar.gz or .zip archive.')
+      setValidationError(
+        'Unsupported archive format. Please upload a .tar.gz, .tar.bz2, or .zip archive.'
+      )
       return false
     }
 
@@ -259,7 +261,7 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
             <span>Upload Source &amp; Trigger Build</span>
           </DialogTitle>
           <DialogDescription>
-            Upload a Go load scenario archive (.tar.gz or .zip) for ephemeral compilation in a Kubernetes builder container.
+            Upload a Go load scenario archive (.tar.gz, .tar.bz2, or .zip) for ephemeral compilation in a Kubernetes builder container.
           </DialogDescription>
         </DialogHeader>
 
@@ -393,7 +395,7 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
                     htmlFor="source-file"
                     className="text-xs font-semibold text-slate-700 dark:text-slate-300"
                   >
-                    Source Package Archive (.tar.gz, .zip)
+                    Source Package Archive (.tar.gz, .tar.bz2, .zip)
                   </label>
                   <HelpTooltip
                     text="Must contain go.mod and scenario.go with func NewScenario()."
@@ -428,7 +430,7 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
                       id="source-file"
                       data-testid="source-file-input"
                       type="file"
-                      accept=".tar.gz,.tgz,.zip,.tar"
+                      accept=".tar.gz,.tgz,.tar.bz2,.tbz2,.zip,.tar"
                       onChange={(e) => handleFileSelection(e.target.files?.[0] || null)}
                       className="sr-only"
                     />
@@ -442,7 +444,8 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
                           Drag &amp; drop your Go scenario archive
                         </p>
                         <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Supports <span className="font-mono font-medium">.tar.gz</span> and{' '}
+                          Supports <span className="font-mono font-medium">.tar.gz</span>,{' '}
+                          <span className="font-mono font-medium">.tar.bz2</span>, and{' '}
                           <span className="font-mono font-medium">.zip</span> archives up to 50MB
                         </p>
                       </div>

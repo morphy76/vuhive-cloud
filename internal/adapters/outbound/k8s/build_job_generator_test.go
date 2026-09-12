@@ -79,6 +79,7 @@ func TestBuildJobGenerator_GenerateBuildJob_Amd64(t *testing.T) {
 	// Verify Compilation Commands in script
 	assert.NotEmpty(t, container.Command)
 	script := container.Command[len(container.Command)-1]
+	assert.Contains(t, script, "tar -xf")
 	assert.Contains(t, script, "go mod tidy")
 	assert.Contains(t, script, "CGO_ENABLED=0")
 	assert.Contains(t, script, "go build -trimpath -ldflags=\"-s -w\"")

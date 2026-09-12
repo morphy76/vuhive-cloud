@@ -420,7 +420,7 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                   No Compiled Artifacts Found
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-                  Upload a Go load-test scenario package (.tar.gz) to compile executable binaries.
+                  Upload a Go load-test scenario package (.tar.gz, .tar.bz2, or .zip) to compile executable binaries.
                 </p>
                 <Button
                   variant="outline"
