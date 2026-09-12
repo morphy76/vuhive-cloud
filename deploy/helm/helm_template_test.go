@@ -537,5 +537,73 @@ func TestHelmChart_Infra_KeycloakDatabaseIsolation_CustomDatabase(t *testing.T) 
 	assert.Equal(t, "jdbc:postgresql://vuhive-infra-postgresql:5432/custom_keycloak", dbURLVal)
 }
 
+func TestHelmChart_Infra_KeycloakHealthProbes(t *testing.T) {
+	tests := []struct {
+		name                  string
+		args                  []string
+		expectedLivenessPath  string
+		expectedReadinessPath string
+	}{
+		{
+			name:                  "default context path /auth",
+			args:                  nil,
+			expectedLivenessPath:  "/auth/health/live",
+			expectedReadinessPath: "/auth/health/ready",
+		},
+		{
+			name:                  "root context path /",
+			args:                  []string{"--set", "keycloak.httpRelativePath=/"},
+			expectedLivenessPath:  "/health/live",
+			expectedReadinessPath: "/health/ready",
+		},
+		{
+			name:                  "custom context path /idp",
+			args:                  []string{"--set", "keycloak.httpRelativePath=/idp"},
+			expectedLivenessPath:  "/idp/health/live",
+			expectedReadinessPath: "/idp/health/ready",
+		},
+		{
+			name:                  "custom context path with trailing slash /custom/",
+			args:                  []string{"--set", "keycloak.httpRelativePath=/custom/"},
+			expectedLivenessPath:  "/custom/health/live",
+			expectedReadinessPath: "/custom/health/ready",
+		},
+		{
+			name:                  "custom context path without leading slash auth",
+			args:                  []string{"--set", "keycloak.httpRelativePath=auth"},
+			expectedLivenessPath:  "/auth/health/live",
+			expectedReadinessPath: "/auth/health/ready",
+		},
+	}
 
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rendered := runHelmTemplateInfra(t, tc.args...)
+			docs := splitManifests(rendered)
 
+			keycloakDep := findResource(docs, "Deployment", "vuhive-infra-vuhive-cloud-infra-keycloak")
+			require.NotNil(t, keycloakDep, "Keycloak Deployment must exist")
+
+			spec := keycloakDep["spec"].(map[string]interface{})
+			tmpl := spec["template"].(map[string]interface{})
+			podSpec := tmpl["spec"].(map[string]interface{})
+			containers := podSpec["containers"].([]interface{})
+			require.NotEmpty(t, containers)
+			kcContainer := containers[0].(map[string]interface{})
+
+			livenessProbe, ok := kcContainer["livenessProbe"].(map[string]interface{})
+			require.True(t, ok, "livenessProbe must be defined")
+			liveHTTPGet, ok := livenessProbe["httpGet"].(map[string]interface{})
+			require.True(t, ok, "livenessProbe.httpGet must be defined")
+			assert.Equal(t, tc.expectedLivenessPath, liveHTTPGet["path"])
+			assert.Equal(t, "management", liveHTTPGet["port"])
+
+			readinessProbe, ok := kcContainer["readinessProbe"].(map[string]interface{})
+			require.True(t, ok, "readinessProbe must be defined")
+			readyHTTPGet, ok := readinessProbe["httpGet"].(map[string]interface{})
+			require.True(t, ok, "readinessProbe.httpGet must be defined")
+			assert.Equal(t, tc.expectedReadinessPath, readyHTTPGet["path"])
+			assert.Equal(t, "management", readyHTTPGet["port"])
+		})
+	}
+}
