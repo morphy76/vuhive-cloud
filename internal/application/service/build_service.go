@@ -620,17 +620,20 @@ func (s *BuildService) RetryBuild(ctx context.Context, suiteID, artifactID strin
 		return nil, err
 	}
 
+	currentStatus := string(artifact.Status())
+	platformStr := string(artifact.Platform())
+
 	// Trigger asynchronous compilation
 	go func() {
 		bgCtx := context.Background()
 		bgLog := zerolog.Nop().With().
 			Str("op", "BuildService.AsyncRetryBuild").
 			Str("suite_id", trimmedSuiteID).
-			Str("artifact_id", artifact.ID()).
-			Str("platform", string(artifact.Platform())).
+			Str("artifact_id", trimmedArtifactID).
+			Str("platform", platformStr).
 			Logger()
 		bgCtx = bgLog.WithContext(bgCtx)
-		if _, err := s.BuildArtifact(bgCtx, trimmedSuiteID, artifact.ID()); err != nil {
+		if _, err := s.BuildArtifact(bgCtx, trimmedSuiteID, trimmedArtifactID); err != nil {
 			bgLog.Error().Err(err).Msg("asynchronous artifact retry build failed")
 		} else {
 			bgLog.Info().Msg("asynchronous artifact retry build completed successfully")
@@ -638,7 +641,7 @@ func (s *BuildService) RetryBuild(ctx context.Context, suiteID, artifactID strin
 	}()
 
 	log.Info().
-		Str("status", string(artifact.Status())).
+		Str("status", currentStatus).
 		Dur("duration_ms", time.Since(start)).
 		Msg("successfully initiated artifact build retry")
 
