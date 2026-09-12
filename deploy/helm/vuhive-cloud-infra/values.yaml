@@ -107,6 +107,7 @@ keycloak:
   adminPassword: "admin"
   # httpRelativePath specifies the dedicated URL context root / subpath where Keycloak is served.
   # Injected as KC_HTTP_RELATIVE_PATH in Keycloak. Defaults to "/auth" for path-based ingress routing.
+  # SmallRye health probes on management port 9000 automatically adapt to this prefix.
   httpRelativePath: "/auth"
   database:
     # Defaults to PostgreSQL service deployed by this infra chart when left empty
