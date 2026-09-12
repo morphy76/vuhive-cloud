@@ -144,6 +144,8 @@ helm install vuhive deploy/helm/vuhive-cloud \
 
 > **MinIO & Local Development Note**: Setting `s3.endpoint` automatically enables path-style S3 addressing (`port 9000`). When deploying locally built images (`make docker-build` with `--load`), pass `-f deploy/helm/vuhive-cloud/values-dev.yaml`. See the [Control Plane Helm Installation Guide (`deploy/helm/vuhive-cloud/README.md`)](./deploy/helm/vuhive-cloud/README.md) for full configuration reference and production deployment options.
 
+> **Network & Proxy Requirements (Restricted / Air-Gapped Clusters)**: Builder pods need outbound access to `proxy.golang.org` (port 443) and DNS (port 53) to download Go module dependencies during `go mod tidy`. In corporate or air-gapped environments, configure `builder.proxy.httpsProxy`, `builder.goProxy` (internal Athens mirror), and optionally `builder.networkPolicy.enabled=true`. See the [Builder Pod Network & Proxy Configuration](./deploy/helm/vuhive-cloud/README.md#builder-pod-network--proxy-configuration) section in the Helm README for troubleshooting and full configuration reference.
+
 ### 3. Verify Health, Version & OpenAPI Endpoints
  
 Port-forward the control plane service:

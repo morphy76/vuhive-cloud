@@ -175,3 +175,151 @@ func TestBuildJobGenerator_ValidationErrors(t *testing.T) {
 		assert.ErrorIs(t, err, model.ErrValidation)
 	})
 }
+
+// ── Proxy & Go Module Network Configuration (Issue #187) ─────────────────────
+
+func TestBuildJobGenerator_WithProxyConfig_InjectsEnvVars(t *testing.T) {
+	cfg := k8s.DefaultConfig()
+	cfg.BuilderProxy = k8s.BuilderProxyConfig{
+		HTTPProxy:  "http://proxy.corp.internal:3128",
+		HTTPSProxy: "http://proxy.corp.internal:3128",
+		NoProxy:    "localhost,127.0.0.1,.corp.internal",
+	}
+	generator := k8s.NewBuildJobGenerator(cfg)
+
+	opts := outbound.BuildJobOptions{
+		SuiteID:         "11111111-1111-1111-1111-111111111111",
+		ArtifactID:      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+		Platform:        model.PlatformLinuxAmd64,
+		SourceURL:       "https://s3.example.com/source.tar.gz",
+		BinaryUploadURL: "https://s3.example.com/binary",
+	}
+
+	job, err := generator.GenerateBuildJob(opts)
+	require.NoError(t, err)
+	require.NotNil(t, job)
+
+	container := job.Spec.Template.Spec.Containers[0]
+	envMap := make(map[string]string)
+	for _, env := range container.Env {
+		envMap[env.Name] = env.Value
+	}
+
+	assert.Equal(t, "http://proxy.corp.internal:3128", envMap["HTTP_PROXY"])
+	assert.Equal(t, "http://proxy.corp.internal:3128", envMap["HTTPS_PROXY"])
+	assert.Equal(t, "localhost,127.0.0.1,.corp.internal", envMap["NO_PROXY"])
+}
+
+func TestBuildJobGenerator_WithGoModuleConfig_InjectsEnvVars(t *testing.T) {
+	cfg := k8s.DefaultConfig()
+	cfg.BuilderProxy = k8s.BuilderProxyConfig{
+		GoProxy:      "https://goproxy.corp.internal,direct",
+		GoPrivate:    "github.com/corp/*",
+		GoNosumcheck: "github.com/corp/*",
+	}
+	generator := k8s.NewBuildJobGenerator(cfg)
+
+	opts := outbound.BuildJobOptions{
+		SuiteID:         "11111111-1111-1111-1111-111111111111",
+		ArtifactID:      "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+		Platform:        model.PlatformLinuxArm64,
+		SourceURL:       "https://s3.example.com/source.tar.gz",
+		BinaryUploadURL: "https://s3.example.com/binary",
+	}
+
+	job, err := generator.GenerateBuildJob(opts)
+	require.NoError(t, err)
+	require.NotNil(t, job)
+
+	container := job.Spec.Template.Spec.Containers[0]
+	envMap := make(map[string]string)
+	for _, env := range container.Env {
+		envMap[env.Name] = env.Value
+	}
+
+	assert.Equal(t, "https://goproxy.corp.internal,direct", envMap["GOPROXY"])
+	assert.Equal(t, "github.com/corp/*", envMap["GOPRIVATE"])
+	assert.Equal(t, "github.com/corp/*", envMap["GONOSUMCHECK"])
+}
+
+func TestBuildJobGenerator_NoProxyVarsInjectedWhenConfigEmpty(t *testing.T) {
+	cfg := k8s.DefaultConfig()
+	// BuilderProxy is zero value — no proxy vars should appear
+	generator := k8s.NewBuildJobGenerator(cfg)
+
+	opts := outbound.BuildJobOptions{
+		SuiteID:         "11111111-1111-1111-1111-111111111111",
+		ArtifactID:      "cccccccc-cccc-cccc-cccc-cccccccccccc",
+		Platform:        model.PlatformLinuxAmd64,
+		SourceURL:       "https://s3.example.com/source.tar.gz",
+		BinaryUploadURL: "https://s3.example.com/binary",
+	}
+
+	job, err := generator.GenerateBuildJob(opts)
+	require.NoError(t, err)
+	require.NotNil(t, job)
+
+	container := job.Spec.Template.Spec.Containers[0]
+	envNames := make([]string, 0, len(container.Env))
+	for _, env := range container.Env {
+		envNames = append(envNames, env.Name)
+	}
+
+	assert.NotContains(t, envNames, "HTTP_PROXY")
+	assert.NotContains(t, envNames, "HTTPS_PROXY")
+	assert.NotContains(t, envNames, "NO_PROXY")
+	assert.NotContains(t, envNames, "GOPROXY")
+	assert.NotContains(t, envNames, "GOPRIVATE")
+	assert.NotContains(t, envNames, "GONOSUMCHECK")
+}
+
+func TestBuildJobGenerator_WithDNSPolicy_AppliedToPodSpec(t *testing.T) {
+	cfg := k8s.DefaultConfig()
+	cfg.BuilderDNSPolicy = "None"
+	cfg.BuilderDNSConfig = &k8s.BuilderDNSConfig{
+		Nameservers: []string{"8.8.8.8", "1.1.1.1"},
+		Searches:    []string{"corp.internal"},
+	}
+	generator := k8s.NewBuildJobGenerator(cfg)
+
+	opts := outbound.BuildJobOptions{
+		SuiteID:         "11111111-1111-1111-1111-111111111111",
+		ArtifactID:      "dddddddd-dddd-dddd-dddd-dddddddddddd",
+		Platform:        model.PlatformLinuxAmd64,
+		SourceURL:       "https://s3.example.com/source.tar.gz",
+		BinaryUploadURL: "https://s3.example.com/binary",
+	}
+
+	job, err := generator.GenerateBuildJob(opts)
+	require.NoError(t, err)
+	require.NotNil(t, job)
+
+	podSpec := job.Spec.Template.Spec
+	assert.Equal(t, corev1.DNSNone, podSpec.DNSPolicy)
+	require.NotNil(t, podSpec.DNSConfig)
+	assert.Equal(t, []string{"8.8.8.8", "1.1.1.1"}, podSpec.DNSConfig.Nameservers)
+	assert.Equal(t, []string{"corp.internal"}, podSpec.DNSConfig.Searches)
+}
+
+func TestBuildJobGenerator_DefaultDNSPolicy_WhenNotConfigured(t *testing.T) {
+	cfg := k8s.DefaultConfig()
+	// No DNS policy set — pod spec should use Kubernetes default (empty string / ClusterFirst)
+	generator := k8s.NewBuildJobGenerator(cfg)
+
+	opts := outbound.BuildJobOptions{
+		SuiteID:         "11111111-1111-1111-1111-111111111111",
+		ArtifactID:      "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+		Platform:        model.PlatformLinuxAmd64,
+		SourceURL:       "https://s3.example.com/source.tar.gz",
+		BinaryUploadURL: "https://s3.example.com/binary",
+	}
+
+	job, err := generator.GenerateBuildJob(opts)
+	require.NoError(t, err)
+	require.NotNil(t, job)
+
+	podSpec := job.Spec.Template.Spec
+	// When not configured, DNSPolicy should be empty (Kubernetes defaults to ClusterFirst)
+	assert.Empty(t, string(podSpec.DNSPolicy))
+	assert.Nil(t, podSpec.DNSConfig)
+}
