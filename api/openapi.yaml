@@ -1579,6 +1579,14 @@ paths:
                   type: boolean
                   description: Optional override to allow suspicious packages (e.g., syscall, unsafe) if permitted by cluster deployment policy
                   default: false
+                go_version:
+                  type: string
+                  description: Optional target Go toolchain version (e.g., 1.26, 1.27). Must be >= 1.26. If omitted, auto-detected from go.mod or falls back to cluster default.
+                  example: "1.26"
+                go_image:
+                  type: string
+                  description: Optional explicit container compiler image override (e.g., golang:1.26-alpine). Takes precedence over go_version.
+                  example: "golang:1.26-alpine"
       responses:
         '202':
           description: Compilation build job accepted

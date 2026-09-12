@@ -14,6 +14,8 @@ type BuildJobOptions struct {
 	Platform        model.Platform
 	SourceURL       string
 	BinaryUploadURL string
+	GoVersion       string
+	GoImage         string
 }
 
 // BuildJobExecution encapsulates the result of a finished build Job execution.

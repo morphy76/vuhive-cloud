@@ -73,11 +73,14 @@ type Config struct {
 	RunnerTokenURL                string
 }
 
+// DefaultGoImage is the cluster-wide fallback container image for ephemeral compilation jobs.
+const DefaultGoImage = "golang:1.26-alpine"
+
 // DefaultConfig returns a Config initialized with production-grade defaults.
 func DefaultConfig() Config {
 	return Config{
 		Namespace:               "vuhive-system",
-		BuilderImage:            "golang:1.26-alpine",
+		BuilderImage:            DefaultGoImage,
 		CPURequest:              "1000m",
 		CPULimit:                "2000m",
 		MemoryRequest:           "1Gi",

@@ -22,6 +22,7 @@ func HandleError(c *gin.Context, err error) {
 		c.JSON(http.StatusNotFound, ErrorResponse{Error: err.Error()})
 	case errors.Is(err, model.ErrValidation),
 		errors.Is(err, model.ErrInvalidPlatform),
+		errors.Is(err, model.ErrUnsupportedGoVersion),
 		errors.Is(err, model.ErrEmptyName),
 		errors.Is(err, model.ErrInvalidResourceQuantity),
 		errors.Is(err, model.ErrInvalidAffinity),

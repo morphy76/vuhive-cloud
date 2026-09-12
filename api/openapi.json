@@ -4394,6 +4394,16 @@
                     "description": "Target architecture (linux/amd64, linux/arm64, or all)",
                     "type": "string"
                   },
+                  "go_version": {
+                    "description": "Optional target Go toolchain version (e.g., 1.26, 1.27). Must be >= 1.26. If omitted, auto-detected from go.mod or falls back to cluster default.",
+                    "example": "1.26",
+                    "type": "string"
+                  },
+                  "go_image": {
+                    "description": "Optional explicit container compiler image override (e.g., golang:1.26-alpine). Takes precedence over go_version.",
+                    "example": "golang:1.26-alpine",
+                    "type": "string"
+                  },
                   "source": {
                     "description": "Test scenario archive (.tar.gz, .tar.bz2, or .zip)",
                     "format": "binary",

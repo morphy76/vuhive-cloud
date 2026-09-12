@@ -617,3 +617,70 @@ func TestStaticAnalyzer_PrepareSourceArchive(t *testing.T) {
 		assert.Contains(t, entries["main.go"], "scenario.NewScenario()")
 	})
 }
+
+func TestStaticAnalyzer_GoVersionDetection(t *testing.T) {
+	analyzer := service.NewStaticAnalyzer(service.StaticAnalyzerConfig{})
+
+	t.Run("detects go 1.26 from go.mod", func(t *testing.T) {
+		archive := createTestTarGz(t, map[string]string{
+			"go.mod": `module mytest
+
+go 1.26
+
+require github.com/morphy76/vuhive v1.1.5
+`,
+			"scenario.go": validScenarioCode(),
+		})
+
+		res, err := analyzer.AnalyzeArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, "1.26", res.GoVersion)
+	})
+
+	t.Run("detects go 1.27 from go.mod", func(t *testing.T) {
+		archive := createTestTarGz(t, map[string]string{
+			"go.mod": `module mytest
+
+go 1.27
+
+require github.com/morphy76/vuhive v1.1.5
+`,
+			"scenario.go": validScenarioCode(),
+		})
+
+		res, err := analyzer.AnalyzeArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, "1.27", res.GoVersion)
+	})
+
+	t.Run("rejects go.mod with go version older than 1.26", func(t *testing.T) {
+		archive := createTestTarGz(t, map[string]string{
+			"go.mod": `module mytest
+
+go 1.24
+
+require github.com/morphy76/vuhive v1.1.5
+`,
+			"scenario.go": validScenarioCode(),
+		})
+
+		_, err := analyzer.AnalyzeArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, model.ErrUnsupportedGoVersion)
+	})
+
+	t.Run("DetectGoVersionFromArchive returns detected version", func(t *testing.T) {
+		archive := createTestTarGz(t, map[string]string{
+			"go.mod": `module mytest
+
+go 1.27
+
+require github.com/morphy76/vuhive v1.1.5
+`,
+			"scenario.go": validScenarioCode(),
+		})
+
+		detected := service.DetectGoVersionFromArchive(bytes.NewReader(archive))
+		assert.Equal(t, "1.27", detected)
+	})
+}
