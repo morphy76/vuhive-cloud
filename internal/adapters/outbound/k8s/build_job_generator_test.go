@@ -323,3 +323,82 @@ func TestBuildJobGenerator_DefaultDNSPolicy_WhenNotConfigured(t *testing.T) {
 	assert.Empty(t, string(podSpec.DNSPolicy))
 	assert.Nil(t, podSpec.DNSConfig)
 }
+
+func TestBuildJobGenerator_GoImageResolution(t *testing.T) {
+	baseOpts := outbound.BuildJobOptions{
+		SuiteID:         "11111111-1111-1111-1111-111111111111",
+		ArtifactID:      "22222222-2222-2222-2222-222222222222",
+		Platform:        model.PlatformLinuxAmd64,
+		SourceURL:       "https://s3.example.com/source.tar.gz",
+		BinaryUploadURL: "https://s3.example.com/binary",
+	}
+
+	t.Run("uses explicit GoImage when provided", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		generator := k8s.NewBuildJobGenerator(cfg)
+
+		opts := baseOpts
+		opts.GoImage = "custom-registry.io/golang:1.27-alpine"
+
+		job, err := generator.GenerateBuildJob(opts)
+		require.NoError(t, err)
+		assert.Equal(t, "custom-registry.io/golang:1.27-alpine", job.Spec.Template.Spec.Containers[0].Image)
+	})
+
+	t.Run("formats GoVersion into golang:<version>-alpine", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		generator := k8s.NewBuildJobGenerator(cfg)
+
+		opts := baseOpts
+		opts.GoVersion = "1.27"
+
+		job, err := generator.GenerateBuildJob(opts)
+		require.NoError(t, err)
+		assert.Equal(t, "golang:1.27-alpine", job.Spec.Template.Spec.Containers[0].Image)
+	})
+
+	t.Run("strips go prefix from GoVersion", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		generator := k8s.NewBuildJobGenerator(cfg)
+
+		opts := baseOpts
+		opts.GoVersion = "go1.27.1"
+
+		job, err := generator.GenerateBuildJob(opts)
+		require.NoError(t, err)
+		assert.Equal(t, "golang:1.27.1-alpine", job.Spec.Template.Spec.Containers[0].Image)
+	})
+
+	t.Run("GoImage takes precedence over GoVersion", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		generator := k8s.NewBuildJobGenerator(cfg)
+
+		opts := baseOpts
+		opts.GoImage = "golang:1.28-alpine"
+		opts.GoVersion = "1.27"
+
+		job, err := generator.GenerateBuildJob(opts)
+		require.NoError(t, err)
+		assert.Equal(t, "golang:1.28-alpine", job.Spec.Template.Spec.Containers[0].Image)
+	})
+
+	t.Run("falls back to cfg.BuilderImage when neither is provided", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.BuilderImage = "golang:1.26-alpine-custom"
+		generator := k8s.NewBuildJobGenerator(cfg)
+
+		job, err := generator.GenerateBuildJob(baseOpts)
+		require.NoError(t, err)
+		assert.Equal(t, "golang:1.26-alpine-custom", job.Spec.Template.Spec.Containers[0].Image)
+	})
+
+	t.Run("falls back to DefaultGoImage when cfg.BuilderImage is empty", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.BuilderImage = ""
+		generator := k8s.NewBuildJobGenerator(cfg)
+
+		job, err := generator.GenerateBuildJob(baseOpts)
+		require.NoError(t, err)
+		assert.Equal(t, k8s.DefaultGoImage, job.Spec.Template.Spec.Containers[0].Image)
+	})
+}

@@ -79,8 +79,23 @@ func (h *ArtifactHandler) UploadAndBuild(c *gin.Context) {
 		allowInsecure = insecureVal == "true" || insecureVal == "1"
 	}
 
+	goVersion := strings.TrimSpace(c.Request.FormValue("go_version"))
+	if goVersion != "" {
+		normalized, err := model.ValidateGoVersion(goVersion)
+		if err != nil {
+			log.Warn().Str("go_version", goVersion).Err(err).Msg("invalid or unsupported go_version requested")
+			HandleError(c, err)
+			return
+		}
+		goVersion = normalized
+	}
+
+	goImage := strings.TrimSpace(c.Request.FormValue("go_image"))
+
 	artifacts, err := h.buildsUC.TriggerBuildWithOptions(ctx, suiteID, targetPlatform, file, header.Size, inbound.BuildOptions{
 		AllowInsecureImports: allowInsecure,
+		GoVersion:            goVersion,
+		GoImage:              goImage,
 	})
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed triggering build")

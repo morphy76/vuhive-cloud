@@ -116,5 +116,8 @@ var (
 
 	// ErrInvalidToken indicates the token format or signature is invalid.
 	ErrInvalidToken = errors.New("invalid token")
+
+	// ErrUnsupportedGoVersion indicates a Go version older than 1.26 or invalid.
+	ErrUnsupportedGoVersion = errors.New("unsupported go version: vuhive requires Go >= 1.26")
 )
 

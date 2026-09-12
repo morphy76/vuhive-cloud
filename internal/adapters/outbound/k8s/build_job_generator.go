@@ -70,6 +70,7 @@ func (g *BuildJobGenerator) GenerateBuildJob(opts outbound.BuildJobOptions) (*ba
 	backoffLimit := g.cfg.BackoffLimit
 	activeDeadlineSeconds := g.cfg.ActiveDeadlineSeconds
 	ttlSecondsAfterFinished := g.cfg.TTLSecondsAfterFinished
+	compilerImage := g.resolveCompilerImage(opts)
 
 	buildScript := fmt.Sprintf(`set -e
 mkdir -p /workspace/src /workspace/bin /workspace/.cache /workspace/go
@@ -177,7 +178,7 @@ echo "Build completed successfully"
 		Containers: []corev1.Container{
 			{
 				Name:            "builder",
-				Image:           g.cfg.BuilderImage,
+				Image:           compilerImage,
 				ImagePullPolicy: corev1.PullIfNotPresent,
 				SecurityContext: &corev1.SecurityContext{
 					AllowPrivilegeEscalation: &allowPrivilegeEscalation,
@@ -279,4 +280,21 @@ func formatBuildJobName(artifactID string) string {
 		name = name[:63]
 	}
 	return strings.TrimRight(name, "-")
+}
+
+func (g *BuildJobGenerator) resolveCompilerImage(opts outbound.BuildJobOptions) string {
+	if trimmed := strings.TrimSpace(opts.GoImage); trimmed != "" {
+		return trimmed
+	}
+	if trimmed := strings.TrimSpace(opts.GoVersion); trimmed != "" {
+		if strings.Contains(trimmed, ":") || strings.Contains(trimmed, "/") {
+			return trimmed
+		}
+		clean := strings.TrimPrefix(trimmed, "go")
+		return fmt.Sprintf("golang:%s-alpine", clean)
+	}
+	if trimmed := strings.TrimSpace(g.cfg.BuilderImage); trimmed != "" {
+		return trimmed
+	}
+	return DefaultGoImage
 }

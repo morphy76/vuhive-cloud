@@ -13,7 +13,7 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
 - 🧹 **Automated Retention & Housekeeping Engine**: Background maintenance enforcing system-wide or per-suite TTL policies across raw execution logs, deterministic summary reports, compiled binaries, and historical database records—including safe KPI-preserving archiving and native S3 lifecycle synchronization.
 
 ### 2. Ephemeral Compilation & Pre-Build AST Security
-- 🛠 **Isolated Kubernetes Build Subsystem**: Ingests Go source archives (`go.mod` + scenario code) and dynamically spins up isolated, ephemeral Kubernetes compilation jobs (`golang:1.26-alpine`) to produce static, cross-compiled binaries targeting `linux/amd64` or `linux/arm64`.
+- 🛠 **Isolated Kubernetes Build Subsystem**: Ingests Go source archives (`go.mod` + scenario code) and dynamically spins up isolated, ephemeral Kubernetes compilation jobs (supporting Go 1.26, Go 1.27, or custom images, with automatic version detection from `go.mod`) to produce static, cross-compiled binaries targeting `linux/amd64` or `linux/arm64`.
 - 🛡️ **Pre-Build AST Static Analysis & Contract Enforcement**: Uploaded archives undergo automated Go AST inspection (`go/parser` and `go/ast`) to verify direct `github.com/morphy76/vuhive` dependencies, enforce inverted control (`package scenario` implementing `vuhive.Scenario`), and block unauthorized system libraries (`os/exec`, `syscall`, `unsafe`, `runtime/cgo`).
 - 🔒 **Platform-Managed Driver Injection**: Dynamically injects an immutable, platform-managed `main.go` execution driver, guaranteeing that runtime CLI flags (`--summary-export`, `--config`) and OS signal traps (`SIGINT`, `SIGTERM`) cannot be bypassed.
 

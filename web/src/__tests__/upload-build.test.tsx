@@ -47,8 +47,54 @@ describe('UploadBuildDialog & Drag-and-Drop Build Workflow', () => {
     expect(screen.getByText(/Drag & drop your Go scenario archive/i)).toBeInTheDocument()
     expect(screen.getByText(/linux\/amd64/i)).toBeInTheDocument()
     expect(screen.getByText(/linux\/arm64/i)).toBeInTheDocument()
+    expect(screen.getByText(/Go Compiler Version/i)).toBeInTheDocument()
+    expect(screen.getByText(/Auto-detect \(go\.mod\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/Go 1\.26/i)).toBeInTheDocument()
+    expect(screen.getByText(/Go 1\.27/i)).toBeInTheDocument()
     expect(screen.getByText(/Allow Insecure Imports/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Upload & Build/i })).toBeDisabled()
+  })
+
+  it('allows selecting Go version and passes go_version in formData', async () => {
+    const uploadSpy = vi.spyOn(api, 'uploadSuiteBuild').mockResolvedValueOnce({
+      message: 'build triggered successfully',
+      artifacts: [
+        {
+          id: 'art-go-127',
+          suite_id: 'suite-test-123',
+          platform: 'linux/amd64',
+          status: 'PENDING',
+          created_at: new Date().toISOString(),
+        },
+      ],
+    })
+
+    render(
+      <UploadBuildDialog
+        suiteId="suite-test-123"
+        open={true}
+        onOpenChange={mockOnOpenChange}
+      />,
+      { wrapper: createTestWrapper() }
+    )
+
+    const file = new File(['scenario content'], 'scenario.tar.gz', { type: 'application/gzip' })
+    const input = screen.getByTestId('source-file-input')
+    fireEvent.change(input, { target: { files: [file] } })
+
+    const go127Btn = screen.getByRole('button', { name: /Go 1\.27/i })
+    fireEvent.click(go127Btn)
+
+    const submitBtn = screen.getByRole('button', { name: /Upload & Build/i })
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => {
+      expect(uploadSpy).toHaveBeenCalled()
+    })
+
+    const submittedFormData = uploadSpy.mock.calls[0][1] as FormData
+    expect(submittedFormData.get('go_version')).toBe('1.27')
+    uploadSpy.mockRestore()
   })
 
   it('accepts valid .tar.gz file via file input and enables submit button', () => {

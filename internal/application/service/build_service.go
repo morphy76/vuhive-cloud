@@ -101,6 +101,17 @@ func (s *BuildService) TriggerBuildWithOptions(
 		Logger()
 	log.Debug().Msg("starting source upload and async build trigger")
 
+	resolvedGoVersion := strings.TrimSpace(opts.GoVersion)
+	if resolvedGoVersion != "" {
+		normalized, err := model.ValidateGoVersion(resolvedGoVersion)
+		if err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("unsupported Go version requested")
+			return nil, err
+		}
+		resolvedGoVersion = normalized
+	}
+	resolvedGoImage := strings.TrimSpace(opts.GoImage)
+
 	if s.suiteRepo != nil {
 		if _, err := s.suiteRepo.FindByID(ctx, trimmedSuiteID); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed verifying test suite")
@@ -112,12 +123,15 @@ func (s *BuildService) TriggerBuildWithOptions(
 	uploadSize := size
 
 	if s.staticAnalyzer != nil {
-		preparedBytes, _, err := s.staticAnalyzer.PrepareSourceArchive(source, domainservice.StaticAnalysisOptions{
+		preparedBytes, analysisResult, err := s.staticAnalyzer.PrepareSourceArchive(source, domainservice.StaticAnalysisOptions{
 			AllowInsecureImports: opts.AllowInsecureImports,
 		})
 		if err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("pre-build static analysis failed")
 			return nil, err
+		}
+		if resolvedGoVersion == "" && resolvedGoImage == "" && analysisResult != nil && analysisResult.GoVersion != "" {
+			resolvedGoVersion = analysisResult.GoVersion
 		}
 		uploadReader = bytes.NewReader(preparedBytes)
 		uploadSize = int64(len(preparedBytes))
@@ -172,6 +186,12 @@ func (s *BuildService) TriggerBuildWithOptions(
 		}
 	}
 
+	buildJobOpts := inbound.BuildOptions{
+		AllowInsecureImports: opts.AllowInsecureImports,
+		GoVersion:            resolvedGoVersion,
+		GoImage:              resolvedGoImage,
+	}
+
 	// Trigger build jobs asynchronously
 	for _, art := range artifacts {
 		artToBuild := art
@@ -184,7 +204,7 @@ func (s *BuildService) TriggerBuildWithOptions(
 				Str("platform", string(artToBuild.Platform())).
 				Logger()
 			bgCtx = bgLog.WithContext(bgCtx)
-			if _, err := s.BuildArtifact(bgCtx, trimmedSuiteID, artToBuild.ID()); err != nil {
+			if _, err := s.BuildArtifactWithOptions(bgCtx, trimmedSuiteID, artToBuild.ID(), buildJobOpts); err != nil {
 				bgLog.Error().Err(err).Msg("asynchronous artifact build failed")
 			} else {
 				bgLog.Info().Msg("asynchronous artifact build completed successfully")
@@ -203,6 +223,11 @@ func (s *BuildService) TriggerBuildWithOptions(
 
 // BuildArtifact triggers compilation for a specific artifact, streams logs, and updates the artifact status.
 func (s *BuildService) BuildArtifact(ctx context.Context, suiteID, artifactID string) (*model.Artifact, error) {
+	return s.BuildArtifactWithOptions(ctx, suiteID, artifactID, inbound.BuildOptions{})
+}
+
+// BuildArtifactWithOptions triggers compilation for a specific artifact with options, streams logs, and updates the artifact status.
+func (s *BuildService) BuildArtifactWithOptions(ctx context.Context, suiteID, artifactID string, opts inbound.BuildOptions) (*model.Artifact, error) {
 	start := time.Now()
 	trimmedSuiteID := strings.TrimSpace(suiteID)
 	trimmedArtifactID := strings.TrimSpace(artifactID)
@@ -242,6 +267,14 @@ func (s *BuildService) BuildArtifact(ctx context.Context, suiteID, artifactID st
 		return nil, err
 	}
 
+	goVersion := strings.TrimSpace(opts.GoVersion)
+	if goVersion != "" {
+		if normalized, err := model.ValidateGoVersion(goVersion); err == nil {
+			goVersion = normalized
+		}
+	}
+	goImage := strings.TrimSpace(opts.GoImage)
+
 	if err := artifact.MarkBuilding(); err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed marking artifact as building")
 		return nil, err
@@ -275,6 +308,8 @@ func (s *BuildService) BuildArtifact(ctx context.Context, suiteID, artifactID st
 		Platform:        artifact.Platform(),
 		SourceURL:       sourceURL,
 		BinaryUploadURL: binaryUploadURL,
+		GoVersion:       goVersion,
+		GoImage:         goImage,
 	}
 
 	jobName, err := s.orchestrator.DispatchBuildJob(ctx, buildOpts)

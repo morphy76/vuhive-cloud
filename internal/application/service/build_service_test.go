@@ -965,3 +965,127 @@ func TestBuildService_DeleteArtifact(t *testing.T) {
 	})
 }
 
+func TestBuildService_GoVersionSupport(t *testing.T) {
+	ctx := context.Background()
+	suiteID := "suite-go-version"
+
+	t.Run("rejects unsupported Go version < 1.26 in TriggerBuildWithOptions", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		suite, _ := model.NewTestSuite("test", "test")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		svc := service.NewBuildService(suiteRepo, nil, nil, nil)
+		platform := model.PlatformLinuxAmd64
+
+		_, err := svc.TriggerBuildWithOptions(ctx, suiteID, &platform, strings.NewReader("dummy"), 5, inbound.BuildOptions{
+			GoVersion: "1.24",
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, model.ErrUnsupportedGoVersion)
+	})
+
+	t.Run("BuildArtifactWithOptions dispatches job with specified GoVersion and GoImage", func(t *testing.T) {
+		artifactRepo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		artifactRepo.On("FindByID", ctx, art.ID()).Return(art, nil)
+		artifactRepo.On("Save", ctx, mock.Anything).Return(nil)
+
+		storage.On("Exists", ctx, mock.Anything).Return(true, nil)
+		storage.On("PresignDownload", ctx, mock.Anything, mock.Anything).Return("http://download", nil)
+		storage.On("PresignUpload", ctx, mock.Anything, mock.Anything).Return("http://upload", nil)
+
+		orchestrator.On("DispatchBuildJob", ctx, mock.MatchedBy(func(opts outbound.BuildJobOptions) bool {
+			return opts.GoVersion == "1.27" && opts.GoImage == "golang:1.27-alpine"
+		})).Return("job-123", nil)
+
+		execResult := &outbound.BuildJobExecution{
+			JobName:        "job-123",
+			ExitCode:       0,
+			SHA256Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		}
+		orchestrator.On("WaitForJob", ctx, "job-123").Return(execResult, nil)
+
+		svc := service.NewBuildService(nil, artifactRepo, storage, orchestrator)
+		result, err := svc.BuildArtifactWithOptions(ctx, suiteID, art.ID(), inbound.BuildOptions{
+			GoVersion: "1.27",
+			GoImage:   "golang:1.27-alpine",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, model.ArtifactStatusReady, result.Status())
+		orchestrator.AssertExpectations(t)
+	})
+
+	t.Run("TriggerBuildWithOptions auto-detects GoVersion from source go.mod and dispatches to orchestrator", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		artifactRepo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		suite, _ := model.NewTestSuite("test", "test")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		storage.On("Upload", ctx, mock.Anything, mock.Anything, mock.Anything, "application/gzip").Return(nil)
+		artifactRepo.On("ListBySuiteID", ctx, suiteID).Return([]*model.Artifact{}, nil)
+		artifactRepo.On("Save", mock.Anything, mock.Anything).Return(nil)
+		artifactRepo.On("FindByID", mock.Anything, mock.Anything).Return(func(_ context.Context, id string) *model.Artifact {
+			a, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+			return a
+		}, nil)
+
+		storage.On("Exists", ctx, mock.Anything).Return(true, nil)
+		storage.On("PresignDownload", ctx, mock.Anything, mock.Anything).Return("http://download", nil)
+		storage.On("PresignUpload", ctx, mock.Anything, mock.Anything).Return("http://upload", nil)
+
+		dispatched := make(chan outbound.BuildJobOptions, 1)
+		orchestrator.On("DispatchBuildJob", mock.Anything, mock.MatchedBy(func(opts outbound.BuildJobOptions) bool {
+			dispatched <- opts
+			return true
+		})).Return("job-auto", nil)
+
+		execResult := &outbound.BuildJobExecution{
+			JobName:        "job-auto",
+			ExitCode:       0,
+			SHA256Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		}
+		orchestrator.On("WaitForJob", mock.Anything, "job-auto").Return(execResult, nil)
+
+		analyzer := domainservice.NewStaticAnalyzer(domainservice.StaticAnalyzerConfig{})
+		svc := service.NewBuildService(suiteRepo, artifactRepo, storage, orchestrator, analyzer)
+
+		archive := createBuildServiceTestArchive(t, map[string]string{
+			"go.mod": `module mytest
+
+go 1.27
+
+require github.com/morphy76/vuhive v1.1.5
+`,
+			"scenario.go": `package scenario
+
+import (
+	"github.com/morphy76/vuhive/pkg/vuhive"
+)
+
+func NewScenario() *vuhive.Scenario {
+	return vuhive.NewScenario("Auto Test")
+}
+`,
+		})
+
+		platform := model.PlatformLinuxAmd64
+		artifacts, err := svc.TriggerBuildWithOptions(ctx, suiteID, &platform, bytes.NewReader(archive), int64(len(archive)), inbound.BuildOptions{})
+		require.NoError(t, err)
+		require.Len(t, artifacts, 1)
+
+		select {
+		case opts := <-dispatched:
+			assert.Equal(t, "1.27", opts.GoVersion)
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for async dispatch")
+		}
+	})
+}
+

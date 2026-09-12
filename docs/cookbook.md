@@ -251,15 +251,22 @@ Upload the Go source archive to trigger synchronous static analysis and schedule
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/builds \
   -F "source=@test-suite.tar.gz" \
-  -F "platform=linux/amd64"
+  -F "platform=linux/amd64" \
+  -F "go_version=1.27"
 ```
 
 > [!TIP]
-> You can target `linux/amd64` or `linux/arm64`. If `platform` is omitted or set to `all`, artifacts for both architectures will be scheduled for compilation.
+> **Platform & Go Compiler Options**:
+> - **Platform**: Target `linux/amd64` or `linux/arm64`. If `platform` is omitted or set to `all`, artifacts for both architectures will be scheduled for compilation.
+> - **Go Compiler Version (`go_version`)**: Specify `1.26` or `1.27` (e.g. `go_version=1.27`). If omitted, the Go version is automatically parsed and detected from the `go <version>` directive in `go.mod`.
+> - **Custom Compiler Image (`go_image`)**: Override the compiler image directly (e.g. `go_image=custom-registry.io/golang:1.27-alpine`).
+> - **Resolution Precedence**: `go_image` $\to$ `go_version` (`golang:<version>-alpine`) $\to$ `go.mod` auto-detection $\to$ cluster default (`golang:1.26-alpine`).
+> - **Version Minimum**: Vuhive requires Go 1.26+. Any version older than 1.26 is rejected with `400 Bad Request` (`code: "UNSUPPORTED_GO_VERSION"`).
 
 #### Pre-Build Static Validation & Fast Rejection:
 The control plane executes static analysis **before** accepting the package:
 - If `go.mod` is missing or does not require `github.com/morphy76/vuhive` directly, returns `400 Bad Request` with `code: "MISSING_VUHIVE_DEPENDENCY"`.
+- If `go.mod` specifies or request passes a Go version < 1.26, returns `400 Bad Request` with `code: "UNSUPPORTED_GO_VERSION"`.
 - If user declares `package main` or `func main()`, returns `400 Bad Request` with `code: "FORBIDDEN_PACKAGE_MAIN"`.
 - If user imports a blocked package (e.g. `os/exec`, `syscall`), returns `400 Bad Request` with `code: "FORBIDDEN_IMPORT"`.
 - If no scenario contract is found, returns `400 Bad Request` with `code: "MISSING_SCENARIO_CONTRACT"`.
@@ -294,7 +301,7 @@ curl -i -X POST http://localhost:8080/api/v1/suites/suite-auth-checkout/builds \
 }
 ```
 
-The control plane creates an ephemeral Kubernetes `batch/v1` `Job` running `golang:1.26-alpine` in the builder namespace (`vuhive-system`). The job compiles the Go source into a statically linked binary and uploads it to the configured S3 bucket.
+The control plane creates an ephemeral Kubernetes `batch/v1` `Job` running the resolved compiler image (`golang:<version>-alpine`) in the builder namespace (`vuhive-system`). The job compiles the Go source into a statically linked binary and uploads it to the configured S3 bucket.
 
 > [!TIP]
 > **In-Cluster & CI/CD Probe File Staging (Avoiding `kubectl cp` Tar Dependency)**:

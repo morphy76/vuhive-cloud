@@ -52,6 +52,7 @@ type StaticAnalysisOptions struct {
 // AnalysisResult contains metadata extracted and validated from the uploaded Go package.
 type AnalysisResult struct {
 	ModuleName        string
+	GoVersion         string
 	PackageName       string
 	EntrypointName    string
 	EntrypointKind    EntrypointKind
@@ -88,9 +89,17 @@ func (a *StaticAnalyzer) AnalyzeArchive(r io.Reader, opts StaticAnalysisOptions)
 		return nil, model.ErrMissingGoMod
 	}
 
-	moduleName, hasDirectVuhive, hasIndirectVuhive, err := parseGoMod(goModData)
+	moduleName, goVersion, hasDirectVuhive, hasIndirectVuhive, err := parseGoMod(goModData)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", model.ErrValidation, err)
+	}
+
+	if goVersion != "" {
+		normalizedVersion, vErr := model.ValidateGoVersion(goVersion)
+		if vErr != nil {
+			return nil, vErr
+		}
+		goVersion = normalizedVersion
 	}
 
 	if hasIndirectVuhive && !hasDirectVuhive {
@@ -184,6 +193,7 @@ func (a *StaticAnalyzer) AnalyzeArchive(r io.Reader, opts StaticAnalysisOptions)
 
 	return &AnalysisResult{
 		ModuleName:        moduleName,
+		GoVersion:         goVersion,
 		PackageName:       detectedPackageName,
 		EntrypointName:    detectedEntrypoint,
 		EntrypointKind:    detectedKind,
@@ -585,7 +595,7 @@ func containsString(slice []string, s string) bool {
 	return false
 }
 
-func parseGoMod(data []byte) (moduleName string, hasDirectVuhive bool, hasIndirectVuhive bool, err error) {
+func parseGoMod(data []byte) (moduleName string, goVersion string, hasDirectVuhive bool, hasIndirectVuhive bool, err error) {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	inRequireBlock := false
 
@@ -599,6 +609,14 @@ func parseGoMod(data []byte) (moduleName string, hasDirectVuhive bool, hasIndire
 			parts := strings.Fields(line)
 			if len(parts) >= 2 {
 				moduleName = parts[1]
+			}
+			continue
+		}
+
+		if strings.HasPrefix(line, "go ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				goVersion = parts[1]
 			}
 			continue
 		}
@@ -625,12 +643,12 @@ func parseGoMod(data []byte) (moduleName string, hasDirectVuhive bool, hasIndire
 	}
 
 	if err := scanner.Err(); err != nil {
-		return "", false, false, err
+		return "", "", false, false, err
 	}
 	if moduleName == "" {
-		return "", false, false, fmt.Errorf("go.mod missing module declaration")
+		return "", "", false, false, fmt.Errorf("go.mod missing module declaration")
 	}
-	return moduleName, hasDirectVuhive, hasIndirectVuhive, nil
+	return moduleName, goVersion, hasDirectVuhive, hasIndirectVuhive, nil
 }
 
 func checkVuhive(line string, direct, indirect *bool) {
@@ -642,5 +660,27 @@ func checkVuhive(line string, direct, indirect *bool) {
 			*direct = true
 		}
 	}
+}
+
+// DetectGoVersionFromArchive extracts and parses go.mod from the source archive to return the declared Go version.
+// Returns empty string if go.mod is not present or does not declare a valid go version.
+func DetectGoVersionFromArchive(r io.Reader) string {
+	files, err := extractArchive(r)
+	if err != nil {
+		return ""
+	}
+	goModData, ok := files["go.mod"]
+	if !ok {
+		return ""
+	}
+	_, goVersion, _, _, err := parseGoMod(goModData)
+	if err != nil {
+		return ""
+	}
+	normalized, err := model.ValidateGoVersion(goVersion)
+	if err != nil {
+		return ""
+	}
+	return normalized
 }
 

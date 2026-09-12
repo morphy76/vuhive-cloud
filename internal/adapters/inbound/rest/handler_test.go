@@ -48,6 +48,14 @@ func (m *MockBuildsUseCase) BuildArtifact(ctx context.Context, suiteID, artifact
 	return nil, args.Error(1)
 }
 
+func (m *MockBuildsUseCase) BuildArtifactWithOptions(ctx context.Context, suiteID, artifactID string, opts inbound.BuildOptions) (*model.Artifact, error) {
+	args := m.Called(ctx, suiteID, artifactID, opts)
+	if a := args.Get(0); a != nil {
+		return a.(*model.Artifact), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
 func (m *MockBuildsUseCase) BuildSuite(ctx context.Context, suiteID string) ([]*model.Artifact, error) {
 	args := m.Called(ctx, suiteID)
 	if a := args.Get(0); a != nil {
@@ -341,6 +349,68 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 		router.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusAccepted, rec.Code)
+	})
+
+	t.Run("success with go_version specified", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		art, err := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{
+			GoVersion: "1.27",
+		}).Return([]*model.Artifact{art}, nil)
+
+		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("content"), map[string]string{
+			"go_version": "1.27",
+		})
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusAccepted, rec.Code)
+		mockUC.AssertExpectations(t)
+	})
+
+	t.Run("success with go_image specified", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		art, err := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, (*model.Platform)(nil), mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{
+			GoImage: "custom.registry/golang:1.27-alpine",
+		}).Return([]*model.Artifact{art}, nil)
+
+		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("content"), map[string]string{
+			"go_image": "custom.registry/golang:1.27-alpine",
+		})
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusAccepted, rec.Code)
+		mockUC.AssertExpectations(t)
+	})
+
+	t.Run("fails with HTTP 400 when go_version is older than 1.26", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("content"), map[string]string{
+			"go_version": "1.24",
+		})
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		var errResp rest.ErrorResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &errResp)
+		require.NoError(t, err)
+		assert.Contains(t, errResp.Error, "unsupported go version")
 	})
 }
 

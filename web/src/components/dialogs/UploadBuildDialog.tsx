@@ -36,6 +36,7 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
 }) => {
   const [file, setFile] = React.useState<File | null>(null)
   const [platform, setPlatform] = React.useState<string>('linux/amd64')
+  const [goVersion, setGoVersion] = React.useState<string>('')
   const [allowInsecure, setAllowInsecure] = React.useState(false)
   const [isDragging, setIsDragging] = React.useState(false)
   const [validationError, setValidationError] = React.useState<string | null>(null)
@@ -81,6 +82,7 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       setFile(null)
+      setGoVersion('')
       setValidationError(null)
       setAstError(null)
       setIsUploading(false)
@@ -171,6 +173,9 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
     formData.append('file', file)
     formData.append('source', file)
     formData.append('platform', platform)
+    if (goVersion) {
+      formData.append('go_version', goVersion)
+    }
     if (allowInsecure) {
       formData.append('allow_insecure_imports', 'true')
     }
@@ -524,6 +529,44 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
                         )}
                       >
                         {p.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Go Compiler Version Selector */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Go Compiler Version
+                  </span>
+                  <HelpTooltip
+                    text="Select Go version for compilation. Auto-detect parses the go directive from go.mod."
+                    label="Help for Go version"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: 'Auto-detect (go.mod)', val: '' },
+                    { label: 'Go 1.26', val: '1.26' },
+                    { label: 'Go 1.27', val: '1.27' },
+                  ].map((v) => {
+                    const isSelected = goVersion === v.val
+                    return (
+                      <button
+                        key={v.val || 'auto'}
+                        type="button"
+                        onClick={() => setGoVersion(v.val)}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          'px-3 py-2 rounded-xl text-xs font-mono font-medium transition-all duration-200 border cursor-pointer min-h-[40px]',
+                          isSelected
+                            ? 'bg-brand-50 border-brand-400 text-brand-700 dark:bg-brand-950 dark:border-brand-700 dark:text-brand-300 shadow-xs'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        )}
+                      >
+                        {v.label}
                       </button>
                     )
                   })}
