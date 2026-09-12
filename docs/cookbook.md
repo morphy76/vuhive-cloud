@@ -288,6 +288,32 @@ The control plane creates an ephemeral Kubernetes `batch/v1` `Job` running `gola
 > ```
 > Alternatively, deploy an Alpine probe image with `tar` pre-installed (`alpine:3.20` with `apk add --no-cache curl tar`) to enable native `kubectl cp`.
 
+#### Step 4: Deleting a Test Suite
+
+When a test suite is no longer needed, you can delete it either via the Web Console or the REST API:
+
+##### REST API Deletion:
+
+```bash
+curl -i -X DELETE http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97
+```
+
+##### Response (`204 No Content`):
+```text
+HTTP/1.1 204 No Content
+```
+
+##### Web Console Deletion & State Guards:
+In the web interface (`web/`), operators can delete test suites from two locations:
+1. **Suite Detail View**: The **Delete Suite** button in the header toolbar opens the confirmation dialog.
+2. **Catalog View (`SuitesView`)**: The trash action button in the catalog table or mobile card triggers the confirmation dialog.
+
+The Web Console enforces strict **state guards** and warnings before proceeding:
+- **Active Builds & Runs Guard**: If ephemeral compilation builds (`BUILDING`) or test runs (`RUNNING` / `QUEUED`) are currently executing, deletion is disabled with a blocking alert until jobs complete or are aborted.
+- **Active State Accidental Deletion Guard**: For suites in `ACTIVE` state, the confirmation dialog requires operators to type the exact suite name to prevent accidental deletion of live suites.
+- **Cascading Database Deletion**: Deleting a suite permanently cascades in PostgreSQL (`ON DELETE CASCADE`), removing all attached configurations (`vuhive.yaml`), build artifact records, scheduled CronJobs, and historical execution results.
+- **Object Storage Retention**: Uploaded source `.tar.gz` archives, compiled runner binaries, and execution report payloads stored in S3/MinIO are preserved according to bucket lifecycle or retention policies (see [Recipe 14](#recipe-14-execution-artifact-housekeeping-storage-retention-policies--automated-pruning)) and are not immediately purged.
+
 ---
 
 ### Recipe 2: Monitoring Build Status & Inspecting Artifacts
@@ -1819,6 +1845,7 @@ The UI introduces two core guidance primitives adhering strictly to **WCAG 2.1 A
 | **CRON Expression Syntax** | New Schedule Dialog (`CreateScheduleDialog`) | 5-field standard syntax (`minute hour day-of-month month day-of-week`) with quick presets (Hourly `0 * * * *`, Nightly `0 2 * * *`, Weekly `0 4 * * 6`). Emphasizes cluster UTC clock evaluation. |
 | **KPI Latency Percentiles** | Runs View & Dashboard Metrics | Explains $p_{50}$ (median duration), $p_{90}$ (90% threshold), $p_{95}$ (SLA benchmark threshold), and $p_{99}$ (worst 1% tail latency identifying lock contention and GC pauses). |
 | **Throughput & Error Rate** | Runs View & Dashboard Metrics | Explains Transactions Per Second (TPS) as the average rate of successfully completed requests, and error rate percentage as the proportion of HTTP 5xx responses or connection timeouts. |
+| **Suite Deletion & Cascading Cleanup** | Suite Detail View & Catalog (`DeleteSuiteDialog`) | Irreversible deletion of scenario aggregates. Cascades in PostgreSQL (`ON DELETE CASCADE`) to remove configurations, artifacts, schedules, and runs. Blocks deletion during active builds/runs, and requires typed name confirmation for `ACTIVE` suites. S3/MinIO binaries and reports are retained per retention policy. |
 
 #### 3. Contextual Recipe Guidance Slide-Over Drawer & Dynamic cURL Generator
 

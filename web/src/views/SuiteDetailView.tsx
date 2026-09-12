@@ -27,7 +27,10 @@ import {
   useDeleteSuiteConfig,
   useSuiteArtifacts,
   useSuiteRuns,
+  useDeleteSuite,
 } from '@/hooks/use-suites'
+import { useToast } from '@/hooks/use-toast'
+import { DeleteSuiteDialog } from '@/components/dialogs/DeleteSuiteDialog'
 import { useBuildEvents } from '@/hooks/use-events'
 import type { TestSuite, SuiteConfiguration, HistoricalRun } from '@/types/suite'
 
@@ -48,6 +51,7 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   const [expandedArtifactLogs, setExpandedArtifactLogs] = useState<Record<string, boolean>>({})
   const [selectedRunForSummary, setSelectedRunForSummary] = useState<HistoricalRun | null>(null)
   const [isRunSummaryOpen, setIsRunSummaryOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   // Subscribe to live SSE build status changes for reactive artifact updates
   useBuildEvents(suite.id)
@@ -57,6 +61,30 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
 
   const { data: artifacts = [], isLoading: isLoadingArtifacts } = useSuiteArtifacts(suite.id)
   const { data: runs = [], isLoading: isLoadingRuns } = useSuiteRuns(suite.id)
+  const deleteSuiteMutation = useDeleteSuite()
+  const { toast } = useToast()
+
+  const hasActiveBuilds =
+    suite.buildStatus === 'BUILDING' || artifacts.some((a) => a.status === 'BUILDING')
+  const hasActiveRuns = runs.some((r) => r.status === 'RUNNING' || r.status === 'QUEUED')
+
+  const handleDeleteSuite = async () => {
+    try {
+      await deleteSuiteMutation.mutateAsync(suite.id)
+      toast({
+        title: 'Test Suite Deleted',
+        description: `Suite "${suite.name}" was permanently deleted.`,
+      })
+      setIsDeleteDialogOpen(false)
+      onBack()
+    } catch (err: any) {
+      toast({
+        title: 'Failed to delete test suite',
+        description: err.message || 'An unexpected error occurred while deleting the suite.',
+        variant: 'destructive',
+      })
+    }
+  }
 
   const handleDeleteConfig = async (configId: string) => {
     if (confirm('Are you sure you want to delete this configuration?')) {
@@ -134,6 +162,15 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
             >
               <Play className="w-4 h-4 fill-current" />
               <span>Trigger Run</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(true)}
+              className="min-h-[44px] gap-2 border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300"
+              aria-label={`Delete suite ${suite.name}`}
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Delete Suite</span>
             </Button>
           </div>
         </div>
@@ -562,6 +599,15 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
         configs={configs}
         initialBaseId={diffBaseId}
         initialComparisonId={diffComparisonId}
+      />
+      <DeleteSuiteDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        suite={suite}
+        onConfirm={handleDeleteSuite}
+        isDeleting={deleteSuiteMutation.isPending}
+        hasActiveBuilds={hasActiveBuilds}
+        hasActiveRuns={hasActiveRuns}
       />
     </div>
   )
