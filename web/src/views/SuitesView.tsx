@@ -7,15 +7,18 @@ import {
   X,
   ChevronRight,
   ChevronLeft,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { CreateSuiteDialog } from '@/components/dialogs/CreateSuiteDialog'
+import { DeleteSuiteDialog } from '@/components/dialogs/DeleteSuiteDialog'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 import { useRecipe } from '@/context/RecipeContext'
-import { useSuites } from '@/hooks/use-suites'
+import { useSuites, useDeleteSuite } from '@/hooks/use-suites'
+import { useToast } from '@/hooks/use-toast'
 import { SuiteDetailView } from '@/views/SuiteDetailView'
 import type { TestSuite } from '@/types/suite'
 
@@ -36,6 +39,27 @@ export const SuitesView: React.FC<SuitesViewProps> = ({ initialSuites }) => {
 
   const { openRecipe } = useRecipe()
   const { data: suites = [], isLoading } = useSuites(initialSuites)
+  const [suiteToDelete, setSuiteToDelete] = useState<TestSuite | null>(null)
+  const deleteSuiteMutation = useDeleteSuite()
+  const { toast } = useToast()
+
+  const handleDeleteSuiteConfirm = async () => {
+    if (!suiteToDelete) return
+    try {
+      await deleteSuiteMutation.mutateAsync(suiteToDelete.id)
+      toast({
+        title: 'Test Suite Deleted',
+        description: `Suite "${suiteToDelete.name}" was permanently deleted.`,
+      })
+      setSuiteToDelete(null)
+    } catch (err: any) {
+      toast({
+        title: 'Failed to delete test suite',
+        description: err.message || 'An unexpected error occurred while deleting the suite.',
+        variant: 'destructive',
+      })
+    }
+  }
 
   // Filtered and sorted suites
   const filteredSuites = useMemo(() => {
@@ -326,19 +350,33 @@ export const SuitesView: React.FC<SuitesViewProps> = ({ initialSuites }) => {
                         {new Date(s.updatedAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedSuiteId(s.id)
-                          }}
-                          className="min-h-[36px] text-brand-600 dark:text-brand-400"
-                          aria-label={`View details for ${s.name}`}
-                        >
-                          <span>Inspect</span>
-                          <ChevronRight className="w-4 h-4 ml-1" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedSuiteId(s.id)
+                            }}
+                            className="min-h-[36px] text-brand-600 dark:text-brand-400"
+                            aria-label={`View details for ${s.name}`}
+                          >
+                            <span>Inspect</span>
+                            <ChevronRight className="w-4 h-4 ml-1" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSuiteToDelete(s)
+                            }}
+                            className="min-h-[36px] text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
+                            aria-label={`Delete suite ${s.name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -391,9 +429,23 @@ export const SuitesView: React.FC<SuitesViewProps> = ({ initialSuites }) => {
                     ))}
                   </div>
 
-                  <div className="flex items-center text-brand-600 dark:text-brand-400 font-medium min-h-[44px]">
-                    <span>View details</span>
-                    <ChevronRight className="w-4 h-4 ml-0.5" />
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSuiteToDelete(s)
+                      }}
+                      className="min-h-[44px] text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 px-2"
+                      aria-label={`Delete suite ${s.name}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                    <div className="flex items-center text-brand-600 dark:text-brand-400 font-medium min-h-[44px]">
+                      <span>View details</span>
+                      <ChevronRight className="w-4 h-4 ml-0.5" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -462,6 +514,16 @@ export const SuitesView: React.FC<SuitesViewProps> = ({ initialSuites }) => {
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
         existingSuites={suites}
+      />
+      <DeleteSuiteDialog
+        open={Boolean(suiteToDelete)}
+        onOpenChange={(open) => {
+          if (!open) setSuiteToDelete(null)
+        }}
+        suite={suiteToDelete}
+        onConfirm={handleDeleteSuiteConfirm}
+        isDeleting={deleteSuiteMutation.isPending}
+        hasActiveBuilds={suiteToDelete?.buildStatus === 'BUILDING'}
       />
     </div>
   )

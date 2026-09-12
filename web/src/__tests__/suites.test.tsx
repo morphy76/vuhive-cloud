@@ -187,6 +187,7 @@ describe('SuiteDetailView & Tab Navigation', () => {
     expect(screen.getByRole('button', { name: /trigger run/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /upload build/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /attach config/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /delete suite/i })).toBeInTheDocument()
 
     // Back button
     const backBtn = screen.getByRole('button', { name: /back to suites/i })
@@ -206,6 +207,22 @@ describe('SuiteDetailView & Tab Navigation', () => {
     expect(configTab).toHaveAttribute('data-state', 'active')
   })
 
+  it('opens delete confirmation dialog when Delete Suite is clicked in detail view', async () => {
+    const Wrapper = createTestWrapper()
+    render(
+      <SuiteDetailView
+        suite={mockSuites[0]}
+        onBack={() => {}}
+      />,
+      { wrapper: Wrapper }
+    )
+
+    const deleteBtn = screen.getByRole('button', { name: /delete suite/i })
+    fireEvent.click(deleteBtn)
+
+    expect(await screen.findByRole('heading', { name: /delete test suite/i })).toBeInTheDocument()
+  })
+
   it('has no accessibility violations in SuiteDetailView', async () => {
     const Wrapper = createTestWrapper()
     const { container } = render(
@@ -218,5 +235,18 @@ describe('SuiteDetailView & Tab Navigation', () => {
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()
+  })
+})
+
+describe('SuitesView Delete Action', () => {
+  it('opens delete confirmation dialog when clicking row delete action', async () => {
+    const Wrapper = createTestWrapper()
+    render(<SuitesView initialSuites={mockSuites} />, { wrapper: Wrapper })
+
+    const deleteButtons = screen.getAllByRole('button', { name: /delete suite/i })
+    expect(deleteButtons.length).toBeGreaterThanOrEqual(1)
+
+    fireEvent.click(deleteButtons[0])
+    expect(await screen.findByRole('heading', { name: /delete test suite/i })).toBeInTheDocument()
   })
 })
