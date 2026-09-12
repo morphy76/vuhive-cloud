@@ -2,6 +2,34 @@ package k8s
 
 import "time"
 
+// BuilderProxyConfig encapsulates optional proxy and Go module network settings
+// injected into ephemeral builder container environments. All fields are optional;
+// empty strings are omitted from the generated Job env vars.
+type BuilderProxyConfig struct {
+	// HTTP_PROXY — HTTP proxy URL for the builder container (e.g. "http://proxy.corp:3128").
+	HTTPProxy string
+	// HTTPS_PROXY — HTTPS proxy URL for the builder container.
+	HTTPSProxy string
+	// NO_PROXY — comma-separated list of hosts/CIDRs that bypass the proxy.
+	NoProxy string
+	// GOPROXY — Go module proxy chain (e.g. "https://goproxy.corp,direct").
+	// When empty, Go's built-in default ("https://proxy.golang.org,direct") applies.
+	GoProxy string
+	// GOPRIVATE — comma-separated module path prefixes fetched directly (bypassing GOPROXY and GONOSUMCHECK).
+	GoPrivate string
+	// GONOSUMCHECK — comma-separated module path patterns whose checksums are not verified.
+	GoNosumcheck string
+}
+
+// BuilderDNSConfig mirrors the fields of corev1.PodDNSConfig relevant for
+// builder pod DNS customization without introducing a hard k8s import at the config layer.
+type BuilderDNSConfig struct {
+	// Nameservers is a list of DNS server IP addresses.
+	Nameservers []string
+	// Searches is a list of DNS search domains.
+	Searches []string
+}
+
 // Config encapsulates configuration parameters for Kubernetes job management and orchestration.
 type Config struct {
 	Namespace               string
@@ -14,6 +42,16 @@ type Config struct {
 	TTLSecondsAfterFinished int32
 	BackoffLimit            int32
 	PollInterval            time.Duration
+
+	// Builder proxy & network configuration (Issue #187).
+	// All proxy settings are optional; when zero-valued no extra env vars are injected.
+	BuilderProxy BuilderProxyConfig
+	// BuilderDNSPolicy optionally overrides the builder pod's dnsPolicy
+	// (e.g. "None", "ClusterFirstWithHostNet"). Empty string preserves the cluster default.
+	BuilderDNSPolicy string
+	// BuilderDNSConfig provides custom DNS nameservers and search domains when
+	// BuilderDNSPolicy is "None" or requires custom resolution.
+	BuilderDNSConfig *BuilderDNSConfig
 
 	// Runner specific configurations
 	RunnerNamespace               string

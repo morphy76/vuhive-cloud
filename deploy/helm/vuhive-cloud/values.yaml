@@ -156,6 +156,56 @@ builder:
   createNamespace: true
   image: "golang:1.26-alpine"
 
+  # ── Network & Proxy Settings (Issue #187) ───────────────────────────────
+  # Configure these when builder pods run in corporate, air-gapped, or otherwise
+  # network-restricted Kubernetes clusters where Go module downloads fail.
+  #
+  # Troubleshooting: if you see "dial tcp 127.0.0.1:443: connect: connection refused"
+  # during go mod tidy, either DNS is failing or an incorrect proxy is routing traffic
+  # to localhost. Set httpsProxy to your corporate HTTP/CONNECT proxy URL and/or
+  # configure goProxy to point to an internal Athens/GOPROXY mirror.
+  proxy:
+    # HTTP_PROXY injected into builder container env (e.g. "http://proxy.corp:3128").
+    httpProxy: ""
+    # HTTPS_PROXY injected into builder container env.
+    httpsProxy: ""
+    # NO_PROXY — comma-separated list of hosts/CIDRs that bypass the proxy.
+    noProxy: ""
+
+  # GOPROXY — Go module proxy chain injected as the GOPROXY env var.
+  # Leave empty to use Go's built-in default ("https://proxy.golang.org,direct").
+  # Use an internal Athens mirror URL for air-gapped environments:
+  #   e.g. "https://goproxy.corp.internal,direct"
+  goProxy: ""
+
+  # GOPRIVATE — comma-separated module path prefixes fetched directly,
+  # bypassing GOPROXY and checksum verification (e.g. "github.com/corp/*").
+  goPrivate: ""
+
+  # GONOSUMCHECK — comma-separated module path patterns whose checksums are not
+  # verified against sum.golang.org (e.g. "github.com/corp/*").
+  goNosumcheck: ""
+
+  # DNS policy for builder pods. Leave empty to use the cluster default (ClusterFirst).
+  # Set to "None" when providing custom nameservers via dnsConfig below.
+  # Valid values: ClusterFirst, ClusterFirstWithHostNet, Default, None.
+  dnsPolicy: ""
+
+  # Custom DNS configuration applied to builder pods when dnsPolicy is "None"
+  # or when custom nameservers/search domains are needed.
+  # Mirrors the Kubernetes PodDNSConfig spec.
+  dnsConfig: {}
+  #   nameservers:
+  #     - 8.8.8.8
+  #     - 1.1.1.1
+  #   searches:
+  #     - corp.internal
+
+  # NetworkPolicy for builder pods — allows egress to DNS, HTTPS (proxy.golang.org,
+  # external Git), and internal S3/MinIO. Enable in namespaces with default-deny egress.
+  networkPolicy:
+    enabled: false
+
 # API Callback URL used by runner jobs to report completion/status to control plane.
 # If empty, automatically configured as:
 #   - http://<fullname>:<port>/api/v1/runs/complete (when runner and control plane share the same namespace)

@@ -739,6 +739,87 @@ To guard against hanging processes or runaway load tests, the control plane inje
 #### 4. Container Sandboxing with RuntimeClass
 For sensitive or untrusted load test workloads requiring hypervisor or gVisor kernel isolation, specify `runtime_class_name` on a `RunnerProfile` (e.g. `gvisor`, `runsc`, `kata`). The control plane automatically propagates `spec.template.spec.runtimeClassName` to runner Jobs.
 
+### Builder Pod Network & Proxy Configuration
+
+By default, builder pods run without any proxy configuration and rely on direct access to `proxy.golang.org` and upstream Git repositories. In **corporate**, **air-gapped**, or **network-restricted** Kubernetes environments, this causes `go mod tidy` to fail.
+
+#### Symptoms
+
+If you see errors like the following in builder pod logs, network configuration is required:
+
+```
+go: downloading github.com/morphy76/vuhive v1.1.5
+go: github.com/morphy76/my-load-test imports
+    github.com/morphy76/vuhive/pkg/vuhive: github.com/morphy76/vuhive@v1.1.5:
+    Get "https://proxy.golang.org/...": dial tcp 127.0.0.1:443: connect: connection refused
+```
+
+The root cause is one of:
+- **DNS failure** — `proxy.golang.org` resolves to `127.0.0.1` when cluster DNS cannot reach external resolvers.
+- **HTTP/HTTPS proxy misconfiguration** — an ambient proxy setting in the cluster is routing HTTPS traffic to a local port.
+- **Default-deny egress NetworkPolicy** — a namespace-level policy blocks outbound connections from builder pods.
+
+#### HTTP/HTTPS Proxy
+
+Configure a corporate or CONNECT proxy:
+
+```yaml
+builder:
+  proxy:
+    httpProxy: "http://proxy.corp.internal:3128"
+    httpsProxy: "http://proxy.corp.internal:3128"
+    noProxy: "localhost,127.0.0.1,10.0.0.0/8,.corp.internal,vuhive-infra-minio"
+```
+
+These are injected as `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables into the builder container.
+
+#### GOPROXY — Internal Go Module Mirror (Athens / Artifactory / Nexus)
+
+For air-gapped environments or teams running an internal Go module proxy:
+
+```yaml
+builder:
+  goProxy: "https://goproxy.corp.internal,direct"
+  goPrivate: "github.com/corp/*"       # fetched directly, bypassing proxy
+  goNosumcheck: "github.com/corp/*"    # skip checksum verification for private modules
+```
+
+| Setting | Environment Variable | Description |
+|---|---|---|
+| `builder.goProxy` | `GOPROXY` | Module proxy chain. Defaults to Go built-in (`https://proxy.golang.org,direct`) when empty. |
+| `builder.goPrivate` | `GOPRIVATE` | Comma-separated module path prefixes fetched directly (bypasses `GOPROXY` and `GONOSUMCHECK`). |
+| `builder.goNosumcheck` | `GONOSUMCHECK` | Module patterns whose checksums are not verified against `sum.golang.org`. |
+
+#### Custom DNS — Resolving External Hosts in Air-Gapped Clusters
+
+When cluster DNS cannot resolve `proxy.golang.org` or other external hostnames, configure custom nameservers:
+
+```yaml
+builder:
+  dnsPolicy: "None"
+  dnsConfig:
+    nameservers:
+      - 8.8.8.8
+      - 1.1.1.1
+    searches:
+      - corp.internal
+```
+
+#### Builder Egress NetworkPolicy
+
+If the builder namespace has a **default-deny egress** NetworkPolicy (common in hardened clusters), enable the built-in builder NetworkPolicy that allows the minimum required outbound traffic:
+
+```yaml
+builder:
+  networkPolicy:
+    enabled: true
+```
+
+This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.io/name: vuhive-builder` pods that permits:
+1. **DNS** — UDP/TCP port 53 for hostname resolution.
+2. **HTTPS** — port 443 for `proxy.golang.org`, `sum.golang.org`, and upstream Git repositories.
+3. **S3/MinIO** — port 9000 to the control plane namespace for source download and binary upload.
+
 ## Configuration Parameters
 
 | Parameter | Description | Default |
@@ -785,6 +866,15 @@ For sensitive or untrusted load test workloads requiring hypervisor or gVisor ke
 | `builder.namespace` | Namespace where test builder jobs run | `vuhive-system` |
 | `builder.createNamespace` | Automatically create `builder.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release/runner namespace) | `true` |
 | `builder.image` | Builder container image | `golang:1.26-alpine` |
+| `builder.proxy.httpProxy` | `HTTP_PROXY` injected into builder container (corporate HTTP proxy URL) | `""` |
+| `builder.proxy.httpsProxy` | `HTTPS_PROXY` injected into builder container (corporate HTTPS proxy URL) | `""` |
+| `builder.proxy.noProxy` | `NO_PROXY` — comma-separated hosts/CIDRs that bypass the proxy | `""` |
+| `builder.goProxy` | `GOPROXY` — Go module proxy chain. When empty, Go's built-in default (`https://proxy.golang.org,direct`) is used | `""` |
+| `builder.goPrivate` | `GOPRIVATE` — comma-separated module path prefixes fetched directly, bypassing `GOPROXY` and sum verification | `""` |
+| `builder.goNosumcheck` | `GONOSUMCHECK` — module path patterns whose checksums are not verified against `sum.golang.org` | `""` |
+| `builder.dnsPolicy` | DNS policy applied to builder pods (`ClusterFirst`, `None`, etc.). Empty preserves cluster default. | `""` |
+| `builder.dnsConfig` | Custom DNS nameservers and search domains (applied when `dnsPolicy` is `None`) | `{}` |
+| `builder.networkPolicy.enabled` | Enable egress NetworkPolicy for builder pods allowing DNS (53), HTTPS (443), and S3 (9000) | `false` |
 | `apiCallbackUrl` | Callback URL for runner jobs. Auto-computed with path `/api/v1/runs/complete`: unqualified service name in same namespace, or trailing-dot FQDN in cross-namespace mode to prevent `ndots:5` search leaks. | Auto-computed |
 | `cors.allowedOrigins` | Allowed cross-origin domains for browser clients and Swagger UI (comma-separated origins or `*`) | `*` |
 | `housekeeping.enabled` | Enable background housekeeping worker and retention lifecycle engine | `true` |

@@ -1,0 +1,43 @@
+{{- if and .Values.builder.networkPolicy .Values.builder.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vuhive-cloud.fullname" . }}-builder-egress
+  namespace: {{ .Values.builder.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "vuhive-cloud.labels" . | nindent 4 }}
+    app.kubernetes.io/component: builder-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vuhive-builder
+  policyTypes:
+    - Egress
+  egress:
+    # 1. DNS Resolution (UDP & TCP 53) — required for go mod tidy and wget
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # 2. HTTPS (port 443) — proxy.golang.org, sum.golang.org, and external Git repositories
+    - ports:
+        - port: 443
+          protocol: TCP
+    # 3. Internal S3/MinIO — source archive download and binary artifact upload
+    {{- if and .Values.builder.namespace (ne .Values.builder.namespace .Release.Namespace) }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+      ports:
+        - port: {{ .Values.s3.port | default 9000 }}
+          protocol: TCP
+    {{- else }}
+    - to:
+        - podSelector: {}
+      ports:
+        - port: {{ .Values.s3.port | default 9000 }}
+          protocol: TCP
+    {{- end }}
+{{- end }}

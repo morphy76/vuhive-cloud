@@ -17,6 +17,14 @@ data:
   RUNNER_DEFAULT_IMAGE: {{ .Values.runner.defaultImage | quote }}
   BUILDER_NAMESPACE: {{ .Values.builder.namespace | quote }}
   BUILDER_IMAGE: {{ .Values.builder.image | quote }}
+  # Builder proxy & Go module network configuration (Issue #187)
+  BUILDER_HTTP_PROXY: {{ (default (dict) .Values.builder.proxy).httpProxy | default "" | quote }}
+  BUILDER_HTTPS_PROXY: {{ (default (dict) .Values.builder.proxy).httpsProxy | default "" | quote }}
+  BUILDER_NO_PROXY: {{ (default (dict) .Values.builder.proxy).noProxy | default "" | quote }}
+  BUILDER_GOPROXY: {{ .Values.builder.goProxy | default "" | quote }}
+  BUILDER_GOPRIVATE: {{ .Values.builder.goPrivate | default "" | quote }}
+  BUILDER_GONOSUMCHECK: {{ .Values.builder.goNosumcheck | default "" | quote }}
+  BUILDER_DNS_POLICY: {{ .Values.builder.dnsPolicy | default "" | quote }}
   API_CALLBACK_URL: {{ include "vuhive-cloud.apiCallbackUrl" . | quote }}
   HOUSEKEEPING_ENABLED: {{ (default (dict) .Values.housekeeping).enabled | default true | toString | quote }}
   HOUSEKEEPING_INTERVAL: {{ (default (dict) .Values.housekeeping).interval | default "6h" | quote }}
@@ -33,4 +41,5 @@ data:
   OIDC_JWKS_URL: {{ (default (dict) .Values.auth).jwksUrl | default "" | quote }}
   RUNNER_CLIENT_ID: {{ (default (dict) (default (dict) .Values.auth).runner).clientId | default "" | quote }}
   RUNNER_TOKEN_URL: {{ (default (dict) (default (dict) .Values.auth).runner).tokenUrl | default "" | quote }}
+
 

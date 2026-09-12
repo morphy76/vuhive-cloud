@@ -253,6 +253,19 @@ func main() {
 				k8sCfg.RunnerTokenURL = strings.TrimRight(os.Getenv("OIDC_ISSUER_URL"), "/") + "/protocol/openid-connect/token"
 			}
 
+			// Builder proxy & Go module network configuration (Issue #187).
+			k8sCfg.BuilderProxy = k8sadapter.BuilderProxyConfig{
+				HTTPProxy:    os.Getenv("BUILDER_HTTP_PROXY"),
+				HTTPSProxy:   os.Getenv("BUILDER_HTTPS_PROXY"),
+				NoProxy:      os.Getenv("BUILDER_NO_PROXY"),
+				GoProxy:      os.Getenv("BUILDER_GOPROXY"),
+				GoPrivate:    os.Getenv("BUILDER_GOPRIVATE"),
+				GoNosumcheck: os.Getenv("BUILDER_GONOSUMCHECK"),
+			}
+			if dnsPolicy := os.Getenv("BUILDER_DNS_POLICY"); dnsPolicy != "" {
+				k8sCfg.BuilderDNSPolicy = dnsPolicy
+			}
+
 			buildOrchestrator = k8sadapter.NewBuildOrchestrator(k8sClientset, k8sCfg)
 			runnerOrchestrator = k8sadapter.NewRunnerOrchestrator(k8sClientset, k8sCfg)
 			scheduleOrchestrator = k8sadapter.NewScheduleOrchestrator(k8sClientset, k8sCfg)

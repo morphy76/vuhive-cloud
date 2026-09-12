@@ -133,6 +133,90 @@ go run /workspace/upload.go /workspace/bin/runner "${BINARY_UPLOAD_URL}"
 echo "Build completed successfully"
 `, goarch, goarch)
 
+	// Base environment variables always injected into the builder container.
+	envVars := []corev1.EnvVar{
+		{Name: "CGO_ENABLED", Value: "0"},
+		{Name: "GOOS", Value: "linux"},
+		{Name: "GOARCH", Value: goarch},
+		{Name: "GOCACHE", Value: "/workspace/.cache"},
+		{Name: "GOPATH", Value: "/workspace/go"},
+		{Name: "SOURCE_URL", Value: trimmedSourceURL},
+		{Name: "BINARY_UPLOAD_URL", Value: trimmedBinaryUploadURL},
+	}
+
+	// Optional proxy environment variables — only injected when non-empty.
+	envVars = appendOptionalEnvVar(envVars, "HTTP_PROXY", g.cfg.BuilderProxy.HTTPProxy)
+	envVars = appendOptionalEnvVar(envVars, "HTTPS_PROXY", g.cfg.BuilderProxy.HTTPSProxy)
+	envVars = appendOptionalEnvVar(envVars, "NO_PROXY", g.cfg.BuilderProxy.NoProxy)
+
+	// Optional Go module proxy/private settings — only injected when non-empty.
+	envVars = appendOptionalEnvVar(envVars, "GOPROXY", g.cfg.BuilderProxy.GoProxy)
+	envVars = appendOptionalEnvVar(envVars, "GOPRIVATE", g.cfg.BuilderProxy.GoPrivate)
+	envVars = appendOptionalEnvVar(envVars, "GONOSUMCHECK", g.cfg.BuilderProxy.GoNosumcheck)
+
+	// Build the pod spec, applying optional DNS policy and config.
+	podSpec := corev1.PodSpec{
+		RestartPolicy: corev1.RestartPolicyNever,
+		SecurityContext: &corev1.PodSecurityContext{
+			RunAsNonRoot: &runAsNonRoot,
+			RunAsUser:    &runAsUser,
+			RunAsGroup:   &runAsGroup,
+			FSGroup:      &runAsGroup,
+			SeccompProfile: &corev1.SeccompProfile{
+				Type: corev1.SeccompProfileTypeRuntimeDefault,
+			},
+		},
+		Volumes: []corev1.Volume{
+			{
+				Name: "workspace",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				},
+			},
+		},
+		Containers: []corev1.Container{
+			{
+				Name:            "builder",
+				Image:           g.cfg.BuilderImage,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				SecurityContext: &corev1.SecurityContext{
+					AllowPrivilegeEscalation: &allowPrivilegeEscalation,
+					Capabilities: &corev1.Capabilities{
+						Drop: []corev1.Capability{"ALL"},
+					},
+				},
+				Command: []string{"/bin/sh", "-c", buildScript},
+				Env:     envVars,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse(g.cfg.CPURequest),
+						corev1.ResourceMemory: resource.MustParse(g.cfg.MemoryRequest),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse(g.cfg.CPULimit),
+						corev1.ResourceMemory: resource.MustParse(g.cfg.MemoryLimit),
+					},
+				},
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "workspace",
+						MountPath: "/workspace",
+					},
+				},
+			},
+		},
+	}
+
+	// Apply optional DNS policy override.
+	if g.cfg.BuilderDNSPolicy != "" {
+		podSpec.DNSPolicy = corev1.DNSPolicy(g.cfg.BuilderDNSPolicy)
+	}
+
+	// Apply optional custom DNS config when provided.
+	if g.cfg.BuilderDNSConfig != nil {
+		podSpec.DNSConfig = builderDNSConfigToCore(g.cfg.BuilderDNSConfig)
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -157,70 +241,35 @@ echo "Build completed successfully"
 						"vuhive.io/platform":     platformLabel,
 					},
 				},
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: &runAsNonRoot,
-						RunAsUser:    &runAsUser,
-						RunAsGroup:   &runAsGroup,
-						FSGroup:      &runAsGroup,
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "workspace",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-					},
-					Containers: []corev1.Container{
-						{
-							Name:            "builder",
-							Image:           g.cfg.BuilderImage,
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							SecurityContext: &corev1.SecurityContext{
-								AllowPrivilegeEscalation: &allowPrivilegeEscalation,
-								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"ALL"},
-								},
-							},
-							Command: []string{"/bin/sh", "-c", buildScript},
-							Env: []corev1.EnvVar{
-								{Name: "CGO_ENABLED", Value: "0"},
-								{Name: "GOOS", Value: "linux"},
-								{Name: "GOARCH", Value: goarch},
-								{Name: "GOCACHE", Value: "/workspace/.cache"},
-								{Name: "GOPATH", Value: "/workspace/go"},
-								{Name: "SOURCE_URL", Value: trimmedSourceURL},
-								{Name: "BINARY_UPLOAD_URL", Value: trimmedBinaryUploadURL},
-							},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse(g.cfg.CPURequest),
-									corev1.ResourceMemory: resource.MustParse(g.cfg.MemoryRequest),
-								},
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse(g.cfg.CPULimit),
-									corev1.ResourceMemory: resource.MustParse(g.cfg.MemoryLimit),
-								},
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "workspace",
-									MountPath: "/workspace",
-								},
-							},
-						},
-					},
-				},
+				Spec: podSpec,
 			},
 		},
 	}
 
 	return job, nil
+}
+
+// appendOptionalEnvVar appends an env var to vars only when value is non-empty.
+func appendOptionalEnvVar(vars []corev1.EnvVar, name, value string) []corev1.EnvVar {
+	if strings.TrimSpace(value) == "" {
+		return vars
+	}
+	return append(vars, corev1.EnvVar{Name: name, Value: value})
+}
+
+// builderDNSConfigToCore converts a BuilderDNSConfig to a corev1.PodDNSConfig.
+func builderDNSConfigToCore(cfg *BuilderDNSConfig) *corev1.PodDNSConfig {
+	if cfg == nil {
+		return nil
+	}
+	podDNS := &corev1.PodDNSConfig{}
+	if len(cfg.Nameservers) > 0 {
+		podDNS.Nameservers = cfg.Nameservers
+	}
+	if len(cfg.Searches) > 0 {
+		podDNS.Searches = cfg.Searches
+	}
+	return podDNS
 }
 
 func formatBuildJobName(artifactID string) string {
