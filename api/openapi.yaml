@@ -1251,7 +1251,9 @@ paths:
 
     delete:
       summary: Delete test suite
-      description: Deletes a TestSuite and cascading records by ID.
+      description: >-
+        Deletes a TestSuite and cascading records by ID (configurations, artifacts, schedules, runs).
+        Stored scenario packages and binaries in S3/MinIO are preserved per retention policy.
       operationId: deleteSuite
       tags:
         - Suites
