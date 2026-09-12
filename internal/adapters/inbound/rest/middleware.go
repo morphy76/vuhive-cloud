@@ -12,8 +12,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// DefaultHealthProbePaths identifies default endpoints treated as health probes for stateful logging.
+var DefaultHealthProbePaths = map[string]bool{
+	"/healthz":       true,
+	"/api/v1/health": true,
+}
+
+var defaultHealthProbeTracker = NewHealthProbeTracker()
+
 // LoggingMiddleware injects a request-scoped zerolog.Logger into context.Context and logs incoming HTTP requests.
+// For health probe endpoints, logging is stateful and emits only upon status change (Info on good, Warn on bad).
 func LoggingMiddleware() gin.HandlerFunc {
+	return LoggingMiddlewareWithTracker(defaultHealthProbeTracker)
+}
+
+// LoggingMiddlewareWithTracker creates a LoggingMiddleware with an explicit HealthProbeTracker.
+func LoggingMiddlewareWithTracker(tracker *HealthProbeTracker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		reqID := c.GetHeader("X-Request-ID")
@@ -22,15 +36,43 @@ func LoggingMiddleware() gin.HandlerFunc {
 		}
 		c.Header("X-Request-ID", reqID)
 
+		path := c.Request.URL.Path
+		isProbe := DefaultHealthProbePaths[path]
+
 		reqLogger := log.Logger.With().
 			Str("request_id", reqID).
 			Str("method", c.Request.Method).
-			Str("path", c.Request.URL.Path).
+			Str("path", path).
 			Str("remote_ip", c.ClientIP()).
 			Logger()
 
 		ctx := reqLogger.WithContext(c.Request.Context())
 		c.Request = c.Request.WithContext(ctx)
+
+		if isProbe {
+			c.Next()
+
+			status := c.Writer.Status()
+			duration := time.Since(start)
+
+			changed, isHealthy := tracker.RecordAndCheckChange(path, status)
+			if !changed {
+				return
+			}
+
+			if isHealthy {
+				reqLogger.Info().
+					Int("status", status).
+					Dur("duration_ms", duration).
+					Msg("health probe status changed to healthy")
+			} else {
+				reqLogger.Warn().
+					Int("status", status).
+					Dur("duration_ms", duration).
+					Msg("health probe status changed to unhealthy")
+			}
+			return
+		}
 
 		reqLogger.Debug().Msg("incoming HTTP request")
 

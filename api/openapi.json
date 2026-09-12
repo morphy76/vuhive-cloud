@@ -35,7 +35,7 @@
     "/healthz": {
       "get": {
         "summary": "Liveness / Readiness probe",
-        "description": "Returns service health status for Kubernetes probes.",
+        "description": "Returns service health status for Kubernetes probes. Logs only on status transitions (info for good status, warn for bad status) to suppress redundant steady-state logs.",
         "operationId": "healthz",
         "security": [],
         "responses": {

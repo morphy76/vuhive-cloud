@@ -10,6 +10,7 @@ import (
 
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/controlplane"
 	"github.com/morphy76/vuhive-cloud/internal/bff/domain/model"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -75,6 +76,75 @@ func TestClient_CheckHealth(t *testing.T) {
 		_, err := client.CheckHealth(ctx)
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, model.ErrControlPlaneUnavailable)
+	})
+
+	t.Run("stateful logging on status change only", func(t *testing.T) {
+		var logBuf bytes.Buffer
+		testLogger := zerolog.New(&logBuf)
+		testCtx := testLogger.WithContext(context.Background())
+
+		isHealthy := true
+		mockTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			if isHealthy {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewBufferString(`{"status":"ok"}`)),
+					Header:     make(http.Header),
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Body:       io.NopCloser(bytes.NewBufferString(`unavailable`)),
+				Header:     make(http.Header),
+			}, nil
+		})
+
+		client := controlplane.NewClient(controlplane.Config{
+			BaseURL:    "http://controlplane",
+			HTTPClient: &http.Client{Transport: mockTransport},
+		})
+
+		// 1. Initial healthy check logs Info
+		logBuf.Reset()
+		health, err := client.CheckHealth(testCtx)
+		require.NoError(t, err)
+		assert.Equal(t, "UP", health.Status)
+		require.NotEmpty(t, logBuf.String(), "initial healthy check should emit log")
+		assert.Contains(t, logBuf.String(), `"level":"info"`, "good final status should log at info level")
+
+		// 2. Subsequent healthy checks produce ZERO logs
+		for i := 0; i < 3; i++ {
+			logBuf.Reset()
+			health, err = client.CheckHealth(testCtx)
+			require.NoError(t, err)
+			assert.Equal(t, "UP", health.Status)
+			assert.Empty(t, logBuf.String(), "consecutive healthy checks must produce zero logs")
+		}
+
+		// 3. Transition to unhealthy logs Warn
+		isHealthy = false
+		logBuf.Reset()
+		_, err = client.CheckHealth(testCtx)
+		assert.Error(t, err)
+		require.NotEmpty(t, logBuf.String(), "transition to unhealthy should emit log")
+		assert.Contains(t, logBuf.String(), `"level":"warn"`, "bad final status should log at warn level")
+
+		// 4. Subsequent unhealthy checks produce ZERO logs
+		for i := 0; i < 3; i++ {
+			logBuf.Reset()
+			_, err = client.CheckHealth(testCtx)
+			assert.Error(t, err)
+			assert.Empty(t, logBuf.String(), "consecutive unhealthy checks must produce zero logs")
+		}
+
+		// 5. Recovery to healthy logs Info
+		isHealthy = true
+		logBuf.Reset()
+		health, err = client.CheckHealth(testCtx)
+		require.NoError(t, err)
+		assert.Equal(t, "UP", health.Status)
+		require.NotEmpty(t, logBuf.String(), "recovery to healthy should emit log")
+		assert.Contains(t, logBuf.String(), `"level":"info"`, "recovery good final status should log at info level")
 	})
 }
 

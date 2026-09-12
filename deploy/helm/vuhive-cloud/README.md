@@ -111,6 +111,10 @@ curl -i http://localhost:8080/healthz
 curl -i http://localhost:8080/version
 ```
 
+> [!NOTE]
+> **Stateful Health Probe Logging**:
+> Health probe endpoints (`/healthz`, `/api/v1/health`) use stateful logging to prevent log pollution from periodic Kubernetes liveness and readiness probes. Probes emit log entries only upon status change (`Info` on good status, `Warn` on bad status). Consecutive evaluations with unchanged status remain silent.
+
 Example `/version` response:
 ```json
 {
