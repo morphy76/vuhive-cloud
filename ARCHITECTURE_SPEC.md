@@ -595,6 +595,9 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
 - [**Issue 1.5.4: CI/CD Automation for BFF & Web Client**](https://github.com/morphy76/vuhive-cloud/issues/78)
   - Implement `.github/workflows/ci.yaml` with frontend linter (`pnpm lint`), Vitest unit tests (`pnpm test`), production asset build (`pnpm build`), and Go BFF verification (`golangci-lint`, `go test -v -race ./cmd/bff/... ./internal/bff/...`).
   - Implement `.github/workflows/docker.yaml` for multi-arch Docker image compilation (`linux/amd64`, `linux/arm64`) and GHCR publishing (`ghcr.io/morphy76/vuhive-cloud/bff`) with Cosign keyless signing on SemVer release tags.
+- [**Issue 1.5.5: Stateful Health Probe Logging on Status Change**](https://github.com/morphy76/vuhive-cloud/issues/171)
+  - Implement stateful logging across health probe endpoints (`/healthz`, `/api/v1/health`) and upstream control plane health checks in Control Plane Server and Go BFF.
+  - Suppress redundant steady-state logs, emitting `Info` level logs upon transition to healthy status and `Warn` level logs upon transition to unhealthy status.
 
 ---
 

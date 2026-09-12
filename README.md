@@ -159,7 +159,7 @@ kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud-bff 8081:8081
 Verify service liveness, version, and OpenAPI specifications:
 
 ```bash
-# Check service health
+# Check service health (stateful logging: logs only on status change)
 curl -i http://localhost:8080/healthz
 
 # Inspect runtime version & compile-time metadata (injected via ldflags)
