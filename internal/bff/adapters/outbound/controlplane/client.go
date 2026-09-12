@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/morphy76/vuhive-cloud/internal/bff/application/ports/outbound"
@@ -35,6 +36,9 @@ type Client struct {
 	authToken  string
 	maxRetries int
 	httpClient *http.Client
+
+	healthMu         sync.Mutex
+	lastHealthStatus int // 0 = unknown, 1 = healthy, 2 = unhealthy
 }
 
 // NewClient constructs an initialized Client.
@@ -134,24 +138,38 @@ func (c *Client) executeRequest(ctx context.Context, method, targetURL string, b
 }
 
 // CheckHealth queries the control plane /healthz endpoint.
+// Logging is stateful and emits only upon status change (Info on good, Warn on bad).
 func (c *Client) CheckHealth(ctx context.Context) (*outbound.ControlPlaneHealth, error) {
 	start := time.Now()
 	log := zerolog.Ctx(ctx).With().
 		Str("op", "ControlPlaneClient.CheckHealth").
 		Str("base_url", c.baseURL).
 		Logger()
-	log.Debug().Msg("checking upstream control plane health")
 
 	resp, err := c.executeRequest(ctx, http.MethodGet, c.baseURL+"/healthz", nil)
 	if err != nil {
-		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed executing health request")
+		c.healthMu.Lock()
+		changed := c.lastHealthStatus != 2
+		c.lastHealthStatus = 2
+		c.healthMu.Unlock()
+
+		if changed {
+			log.Warn().Err(err).Dur("duration_ms", time.Since(start)).Msg("control plane health check failed")
+		}
 		return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		statusErr := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-		log.Error().Err(statusErr).Dur("duration_ms", time.Since(start)).Msg("control plane returned non-2xx status")
+		c.healthMu.Lock()
+		changed := c.lastHealthStatus != 2
+		c.lastHealthStatus = 2
+		c.healthMu.Unlock()
+
+		if changed {
+			log.Warn().Err(statusErr).Dur("duration_ms", time.Since(start)).Msg("control plane returned non-2xx status")
+		}
 		return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, statusErr)
 	}
 
@@ -160,10 +178,17 @@ func (c *Client) CheckHealth(ctx context.Context) (*outbound.ControlPlaneHealth,
 		Timestamp: time.Now().UTC(),
 	}
 
-	log.Info().
-		Str("status", health.Status).
-		Dur("duration_ms", time.Since(start)).
-		Msg("completed control plane health check")
+	c.healthMu.Lock()
+	changed := c.lastHealthStatus != 1
+	c.lastHealthStatus = 1
+	c.healthMu.Unlock()
+
+	if changed {
+		log.Info().
+			Str("status", health.Status).
+			Dur("duration_ms", time.Since(start)).
+			Msg("completed control plane health check")
+	}
 
 	return health, nil
 }
