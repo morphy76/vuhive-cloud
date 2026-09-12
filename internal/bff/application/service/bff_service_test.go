@@ -43,6 +43,11 @@ func (m *MockControlPlaneClient) GetActiveRunsCount(ctx context.Context) (int64,
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockControlPlaneClient) GetTotalSuitesCount(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
 func (m *MockControlPlaneClient) ListRecentSuites(ctx context.Context, limit int) ([]outbound.SuiteSummary, error) {
 	args := m.Called(ctx, limit)
 	if args.Get(0) == nil {
@@ -57,6 +62,19 @@ func (m *MockControlPlaneClient) ListProfiles(ctx context.Context) ([]outbound.P
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]outbound.ProfileSummary), args.Error(1)
+}
+
+func (m *MockControlPlaneClient) GetActiveSchedulesCount(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockControlPlaneClient) ListSchedules(ctx context.Context) ([]outbound.ScheduleSummary, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]outbound.ScheduleSummary), args.Error(1)
 }
 
 func (m *MockControlPlaneClient) GetRun(ctx context.Context, id string) (*outbound.RunDetail, error) {
@@ -272,6 +290,7 @@ func TestBFFService_GetDashboard(t *testing.T) {
 			Version: "1.0.0",
 		}, nil)
 		mockCP.On("GetActiveRunsCount", mock.Anything).Return(int64(7), nil)
+		mockCP.On("GetTotalSuitesCount", mock.Anything).Return(8, nil)
 		mockCP.On("ListRecentSuites", mock.Anything, 5).Return([]outbound.SuiteSummary{
 			{ID: "suite-1", Name: "Stress Test", State: "ACTIVE"},
 		}, nil)
@@ -279,6 +298,17 @@ func TestBFFService_GetDashboard(t *testing.T) {
 			{ID: "prof-1", Name: "Default Profile"},
 			{ID: "prof-2", Name: "High Memory"},
 		}, nil)
+		mockCP.On("GetActiveSchedulesCount", mock.Anything).Return(4, nil)
+
+		slaTrue := true
+		slaFalse := false
+		recentRuns := []outbound.RunDetail{
+			{ID: "run-1", Status: "COMPLETED", SLAPassed: &slaTrue},
+			{ID: "run-2", Status: "COMPLETED", SLAPassed: &slaTrue},
+			{ID: "run-3", Status: "COMPLETED", SLAPassed: &slaFalse},
+			{ID: "run-4", Status: "RUNNING"},
+		}
+		mockCP.On("ListRuns", mock.Anything, "", 10).Return(recentRuns, nil)
 
 		svc := service.NewBFFService(mockCP, mockCache, "0.2.0")
 
@@ -293,9 +323,14 @@ func TestBFFService_GetDashboard(t *testing.T) {
 		assert.Equal(t, "UP", dashboard.ControlPlaneStatus)
 		assert.Equal(t, "1.0.0", dashboard.ControlPlaneVersion)
 		assert.Equal(t, int64(7), dashboard.ActiveRunsCount)
+		assert.Equal(t, 8, dashboard.SuitesCount)
 		assert.Len(t, dashboard.RecentSuites, 1)
 		assert.Equal(t, 2, dashboard.ProfilesCount)
 		assert.Len(t, dashboard.ProfilesSummary, 2)
+		assert.Equal(t, 4, dashboard.ActiveSchedulesCount)
+		assert.Len(t, dashboard.RecentRuns, 4)
+		// 2 passed out of 3 completed = 66.666...%
+		assert.InDelta(t, 66.67, dashboard.SLAPassRate, 0.1)
 		assert.Less(t, duration, 50*time.Millisecond, "dashboard aggregation must respond under 50ms")
 		mockCP.AssertExpectations(t)
 	})
@@ -309,8 +344,11 @@ func TestBFFService_GetDashboard(t *testing.T) {
 		}, nil)
 		mockCP.On("GetVersion", mock.Anything).Return(nil, errors.New("version timeout"))
 		mockCP.On("GetActiveRunsCount", mock.Anything).Return(int64(0), errors.New("runs unreachable"))
+		mockCP.On("GetTotalSuitesCount", mock.Anything).Return(0, errors.New("suites count unreachable"))
 		mockCP.On("ListRecentSuites", mock.Anything, 5).Return(nil, errors.New("suites unreachable"))
 		mockCP.On("ListProfiles", mock.Anything).Return(nil, errors.New("profiles unreachable"))
+		mockCP.On("GetActiveSchedulesCount", mock.Anything).Return(0, errors.New("schedules unreachable"))
+		mockCP.On("ListRuns", mock.Anything, "", 10).Return(nil, errors.New("runs unreachable"))
 
 		svc := service.NewBFFService(mockCP, mockCache, "0.2.0")
 
@@ -319,8 +357,12 @@ func TestBFFService_GetDashboard(t *testing.T) {
 		assert.Equal(t, "UP", dashboard.BFFStatus)
 		assert.Equal(t, "UP", dashboard.ControlPlaneStatus)
 		assert.Equal(t, int64(0), dashboard.ActiveRunsCount)
+		assert.Equal(t, 0, dashboard.SuitesCount)
 		assert.Empty(t, dashboard.RecentSuites)
 		assert.Equal(t, 0, dashboard.ProfilesCount)
+		assert.Equal(t, 0, dashboard.ActiveSchedulesCount)
+		assert.Empty(t, dashboard.RecentRuns)
+		assert.Equal(t, 100.0, dashboard.SLAPassRate, "default SLA pass rate should be 100.0 when no runs exist")
 	})
 }
 

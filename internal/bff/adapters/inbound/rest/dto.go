@@ -96,17 +96,42 @@ type ProfileSummaryDTO struct {
 	CreatedAt   string `json:"created_at"`
 }
 
+// RunSummaryDTO models test run overview in dashboard responses.
+type RunSummaryDTO struct {
+	ID              string        `json:"id"`
+	SuiteID         string        `json:"suite_id"`
+	ArtifactID      string        `json:"artifact_id"`
+	ConfigurationID *string       `json:"configuration_id,omitempty"`
+	RunnerProfileID string        `json:"runner_profile_id"`
+	ScheduleID      *string       `json:"schedule_id,omitempty"`
+	Status          string        `json:"status"`
+	K8sJobName      string        `json:"k8s_job_name,omitempty"`
+	K8sNamespace    string        `json:"k8s_namespace,omitempty"`
+	StartedAt       *string       `json:"started_at,omitempty"`
+	FinishedAt      *string       `json:"finished_at,omitempty"`
+	DurationMs      *int64        `json:"duration_ms,omitempty"`
+	ExitCode        *int          `json:"exit_code,omitempty"`
+	SLAPassed       *bool         `json:"sla_passed,omitempty"`
+	Metrics         RunMetricsDTO `json:"metrics"`
+	CreatedAt       string        `json:"created_at"`
+}
+
 // DashboardResponse models the composite dashboard overview payload.
 type DashboardResponse struct {
-	BFFStatus           string              `json:"bff_status"`
-	BFFVersion          string              `json:"bff_version"`
-	ControlPlaneStatus  string              `json:"control_plane_status"`
-	ControlPlaneVersion string              `json:"control_plane_version,omitempty"`
-	ActiveRunsCount     int64               `json:"active_runs_count"`
-	RecentSuites        []SuiteSummaryDTO   `json:"recent_suites"`
-	ProfilesCount       int                 `json:"profiles_count"`
-	ProfilesSummary     []ProfileSummaryDTO `json:"profiles_summary"`
-	Timestamp           time.Time           `json:"timestamp"`
+	BFFStatus            string              `json:"bff_status"`
+	BFFVersion           string              `json:"bff_version"`
+	ControlPlaneStatus   string              `json:"control_plane_status"`
+	ControlPlaneVersion  string              `json:"control_plane_version,omitempty"`
+	ActiveRunsCount      int64               `json:"active_runs_count"`
+	SuitesCount          int                 `json:"suites_count"`
+	RecentSuites         []SuiteSummaryDTO   `json:"recent_suites"`
+	ProfilesCount        int                 `json:"profiles_count"`
+	ProfilesSummary      []ProfileSummaryDTO `json:"profiles_summary"`
+	ActiveSchedulesCount int                 `json:"active_schedules_count"`
+	RecentRuns           []RunSummaryDTO     `json:"recent_runs"`
+	SLAPassRate          float64             `json:"sla_pass_rate"`
+	TotalRunsCount       int64               `json:"total_runs_count"`
+	Timestamp            time.Time           `json:"timestamp"`
 }
 
 // ArtifactLinksDTO models direct download links to test run artifacts.
@@ -179,16 +204,52 @@ func ToDashboardResponse(d *inbound.DashboardOverview) DashboardResponse {
 		})
 	}
 
+	recentRuns := make([]RunSummaryDTO, 0, len(d.RecentRuns))
+	for _, r := range d.RecentRuns {
+		recentRuns = append(recentRuns, RunSummaryDTO{
+			ID:              r.ID,
+			SuiteID:         r.SuiteID,
+			ArtifactID:      r.ArtifactID,
+			ConfigurationID: r.ConfigurationID,
+			RunnerProfileID: r.RunnerProfileID,
+			ScheduleID:      r.ScheduleID,
+			Status:          r.Status,
+			K8sJobName:      r.K8sJobName,
+			K8sNamespace:    r.K8sNamespace,
+			StartedAt:       r.StartedAt,
+			FinishedAt:      r.FinishedAt,
+			DurationMs:      r.DurationMs,
+			ExitCode:        r.ExitCode,
+			SLAPassed:       r.SLAPassed,
+			Metrics: RunMetricsDTO{
+				TotalIterations: r.Metrics.TotalIterations,
+				TotalRequests:   r.Metrics.TotalRequests,
+				AvgTPS:          r.Metrics.AvgTPS,
+				P50DurationMs:   r.Metrics.P50DurationMs,
+				P90DurationMs:   r.Metrics.P90DurationMs,
+				P95DurationMs:   r.Metrics.P95DurationMs,
+				P99DurationMs:   r.Metrics.P99DurationMs,
+				ErrorRatePct:    r.Metrics.ErrorRatePct,
+			},
+			CreatedAt: r.CreatedAt,
+		})
+	}
+
 	return DashboardResponse{
-		BFFStatus:           d.BFFStatus,
-		BFFVersion:          d.BFFVersion,
-		ControlPlaneStatus:  d.ControlPlaneStatus,
-		ControlPlaneVersion: d.ControlPlaneVersion,
-		ActiveRunsCount:     d.ActiveRunsCount,
-		RecentSuites:        suites,
-		ProfilesCount:       d.ProfilesCount,
-		ProfilesSummary:     profiles,
-		Timestamp:           d.Timestamp,
+		BFFStatus:            d.BFFStatus,
+		BFFVersion:           d.BFFVersion,
+		ControlPlaneStatus:   d.ControlPlaneStatus,
+		ControlPlaneVersion:  d.ControlPlaneVersion,
+		ActiveRunsCount:      d.ActiveRunsCount,
+		SuitesCount:          d.SuitesCount,
+		RecentSuites:         suites,
+		ProfilesCount:        d.ProfilesCount,
+		ProfilesSummary:      profiles,
+		ActiveSchedulesCount: d.ActiveSchedulesCount,
+		RecentRuns:           recentRuns,
+		SLAPassRate:          d.SLAPassRate,
+		TotalRunsCount:       d.TotalRunsCount,
+		Timestamp:            d.Timestamp,
 	}
 }
 

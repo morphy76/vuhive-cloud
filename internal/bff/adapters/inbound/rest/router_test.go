@@ -213,11 +213,12 @@ func TestRouter_Endpoints(t *testing.T) {
 
 	t.Run("GET /api/bff/v1/dashboard returns 200 with aggregated dashboard", func(t *testing.T) {
 		mockSvc.On("GetDashboard", mock.Anything).Return(&inbound.DashboardOverview{
-			BFFStatus:           "UP",
-			BFFVersion:          "0.1.0",
-			ControlPlaneStatus:  "UP",
-			ControlPlaneVersion: "0.0.1",
-			ActiveRunsCount:     3,
+			BFFStatus:            "UP",
+			BFFVersion:           "0.1.0",
+			ControlPlaneStatus:   "UP",
+			ControlPlaneVersion:  "0.0.1",
+			ActiveRunsCount:      3,
+			SuitesCount:          5,
 			RecentSuites: []outbound.SuiteSummary{
 				{ID: "suite-1", Name: "Perf Suite", State: "ACTIVE"},
 			},
@@ -225,7 +226,13 @@ func TestRouter_Endpoints(t *testing.T) {
 			ProfilesSummary: []outbound.ProfileSummary{
 				{ID: "prof-1", Name: "Small Runner"},
 			},
-			Timestamp: time.Now().UTC(),
+			ActiveSchedulesCount: 2,
+			RecentRuns: []outbound.RunDetail{
+				{ID: "run-101", Status: "COMPLETED"},
+			},
+			SLAPassRate:    98.5,
+			TotalRunsCount: 1,
+			Timestamp:      time.Now().UTC(),
 		}, nil).Once()
 
 		req, _ := http.NewRequest(http.MethodGet, "/api/bff/v1/dashboard", nil)
@@ -238,8 +245,14 @@ func TestRouter_Endpoints(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "UP", resp.BFFStatus)
 		assert.Equal(t, int64(3), resp.ActiveRunsCount)
+		assert.Equal(t, 5, resp.SuitesCount)
 		assert.Len(t, resp.RecentSuites, 1)
 		assert.Equal(t, "Perf Suite", resp.RecentSuites[0].Name)
+		assert.Equal(t, 2, resp.ActiveSchedulesCount)
+		assert.Len(t, resp.RecentRuns, 1)
+		assert.Equal(t, "run-101", resp.RecentRuns[0].ID)
+		assert.Equal(t, 98.5, resp.SLAPassRate)
+		assert.Equal(t, int64(1), resp.TotalRunsCount)
 		mockSvc.AssertExpectations(t)
 	})
 

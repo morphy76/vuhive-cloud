@@ -3886,9 +3886,14 @@
           "bff_version",
           "control_plane_status",
           "active_runs_count",
+          "suites_count",
           "recent_suites",
           "profiles_count",
           "profiles_summary",
+          "active_schedules_count",
+          "recent_runs",
+          "sla_pass_rate",
+          "total_runs_count",
           "timestamp"
         ],
         "properties": {
@@ -3913,6 +3918,10 @@
             "format": "int64",
             "example": 2
           },
+          "suites_count": {
+            "type": "integer",
+            "example": 8
+          },
           "recent_suites": {
             "type": "array",
             "items": {
@@ -3928,6 +3937,26 @@
             "items": {
               "$ref": "#/components/schemas/ProfileSummary"
             }
+          },
+          "active_schedules_count": {
+            "type": "integer",
+            "example": 4
+          },
+          "recent_runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RunResponse"
+            }
+          },
+          "sla_pass_rate": {
+            "type": "number",
+            "format": "double",
+            "example": 99.4
+          },
+          "total_runs_count": {
+            "type": "integer",
+            "format": "int64",
+            "example": 128
           },
           "timestamp": {
             "type": "string",

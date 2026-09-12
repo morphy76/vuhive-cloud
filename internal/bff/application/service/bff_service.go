@@ -193,14 +193,20 @@ func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOvervi
 	log.Debug().Msg("starting dashboard composite aggregation")
 
 	overview := &inbound.DashboardOverview{
-		BFFStatus:           "UP",
-		BFFVersion:          s.version,
-		ControlPlaneStatus:  "UNKNOWN",
-		ControlPlaneVersion: "",
-		ActiveRunsCount:     0,
-		RecentSuites:        []outbound.SuiteSummary{},
-		ProfilesSummary:     []outbound.ProfileSummary{},
-		Timestamp:           time.Now().UTC(),
+		BFFStatus:            "UP",
+		BFFVersion:           s.version,
+		ControlPlaneStatus:   "UNKNOWN",
+		ControlPlaneVersion:  "",
+		ActiveRunsCount:      0,
+		SuitesCount:          0,
+		RecentSuites:         []outbound.SuiteSummary{},
+		ProfilesCount:        0,
+		ProfilesSummary:      []outbound.ProfileSummary{},
+		ActiveSchedulesCount: 0,
+		RecentRuns:           []outbound.RunDetail{},
+		SLAPassRate:          100.0,
+		TotalRunsCount:       0,
+		Timestamp:            time.Now().UTC(),
 	}
 
 	if s.controlPlane == nil {
@@ -210,13 +216,16 @@ func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOvervi
 	}
 
 	var (
-		wg              sync.WaitGroup
-		mu              sync.Mutex
-		cpStatus        = "UP"
-		cpVersion       = ""
-		activeRunsCount int64
-		recentSuites    []outbound.SuiteSummary
-		profilesSummary []outbound.ProfileSummary
+		wg                   sync.WaitGroup
+		mu                   sync.Mutex
+		cpStatus             = "UP"
+		cpVersion            = ""
+		activeRunsCount      int64
+		suitesCount          int
+		recentSuites         []outbound.SuiteSummary
+		profilesSummary      []outbound.ProfileSummary
+		activeSchedulesCount int
+		recentRuns           []outbound.RunDetail
 	)
 
 	// 1. Health & Version check
@@ -259,18 +268,25 @@ func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOvervi
 		mu.Unlock()
 	}()
 
-	// 3. Recent test suites
+	// 3. Test suites: total count & recent list
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		suites, err := s.controlPlane.ListRecentSuites(ctx, 5)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed querying recent suites")
-			return
-		}
-		if suites != nil {
+		} else if suites != nil {
 			mu.Lock()
 			recentSuites = suites
+			mu.Unlock()
+		}
+
+		total, err := s.controlPlane.GetTotalSuitesCount(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed querying total suites count")
+		} else {
+			mu.Lock()
+			suitesCount = total
 			mu.Unlock()
 		}
 	}()
@@ -291,24 +307,87 @@ func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOvervi
 		}
 	}()
 
+	// 5. Active schedules count
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		schedules, err := s.controlPlane.GetActiveSchedulesCount(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed querying active schedules count")
+			return
+		}
+		mu.Lock()
+		activeSchedulesCount = schedules
+		mu.Unlock()
+	}()
+
+	// 6. Recent runs & SLA metrics
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runs, err := s.controlPlane.ListRuns(ctx, "", 10)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed querying recent runs")
+			return
+		}
+		if runs != nil {
+			mu.Lock()
+			recentRuns = runs
+			mu.Unlock()
+		}
+	}()
+
 	wg.Wait()
 
 	overview.ControlPlaneStatus = cpStatus
 	overview.ControlPlaneVersion = cpVersion
 	overview.ActiveRunsCount = activeRunsCount
+
 	if recentSuites != nil {
 		overview.RecentSuites = recentSuites
 	}
+	if suitesCount > 0 {
+		overview.SuitesCount = suitesCount
+	} else {
+		overview.SuitesCount = len(overview.RecentSuites)
+	}
+
 	if profilesSummary != nil {
 		overview.ProfilesSummary = profilesSummary
 		overview.ProfilesCount = len(profilesSummary)
 	}
 
+	overview.ActiveSchedulesCount = activeSchedulesCount
+
+	if recentRuns != nil {
+		overview.RecentRuns = recentRuns
+		overview.TotalRunsCount = int64(len(recentRuns))
+
+		// Compute SLA pass rate across terminal/completed runs
+		var completedCount, passedCount int
+		for _, r := range recentRuns {
+			if r.Status == "COMPLETED" || r.Status == "FAILED" {
+				completedCount++
+				if r.SLAPassed != nil && *r.SLAPassed {
+					passedCount++
+				}
+			}
+		}
+		if completedCount > 0 {
+			overview.SLAPassRate = (float64(passedCount) / float64(completedCount)) * 100.0
+		} else {
+			overview.SLAPassRate = 100.0
+		}
+	}
+
 	log.Info().
 		Str("control_plane_status", overview.ControlPlaneStatus).
 		Int64("active_runs", overview.ActiveRunsCount).
-		Int("suites_count", len(overview.RecentSuites)).
+		Int("suites_count", overview.SuitesCount).
 		Int("profiles_count", overview.ProfilesCount).
+		Int("active_schedules", overview.ActiveSchedulesCount).
+		Int("recent_runs_count", len(overview.RecentRuns)).
+		Float64("sla_pass_rate", overview.SLAPassRate).
 		Dur("duration_ms", time.Since(start)).
 		Msg("completed dashboard composite aggregation")
 

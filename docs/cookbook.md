@@ -1052,6 +1052,7 @@ Expected response (`200 OK`):
   "control_plane_status": "UP",
   "control_plane_version": "0.0.1",
   "active_runs_count": 2,
+  "suites_count": 14,
   "recent_suites": [
     {
       "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -1075,6 +1076,19 @@ Expected response (`200 OK`):
       "created_at": "2026-09-06T09:00:00Z"
     }
   ],
+  "active_schedules_count": 5,
+  "recent_runs": [
+    {
+      "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+      "suite_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "status": "COMPLETED",
+      "duration_ms": 45000,
+      "sla_passed": true,
+      "created_at": "2026-09-06T11:45:00Z"
+    }
+  ],
+  "sla_pass_rate": 99.4,
+  "total_runs_count": 32,
   "timestamp": "2026-09-06T12:00:00Z"
 }
 ```
