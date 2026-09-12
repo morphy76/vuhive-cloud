@@ -1,5 +1,5 @@
 export type TestSuiteState = 'DRAFT' | 'ACTIVE' | 'ARCHIVED'
-export type BuildStatus = 'READY' | 'BUILDING' | 'FAILED' | 'PENDING'
+export type BuildStatus = 'READY' | 'BUILDING' | 'FAILED' | 'PENDING' | 'CANCELLED'
 export type RunExecutionStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'ABORTED'
 
 export interface TestSuite {

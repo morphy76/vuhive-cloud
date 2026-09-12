@@ -1,11 +1,11 @@
 import React from 'react'
-import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react'
+import { Ban, CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export type StepperStage = 'QUEUED' | 'BUILDING' | 'READY' | 'FAILED'
+export type StepperStage = 'QUEUED' | 'BUILDING' | 'READY' | 'FAILED' | 'CANCELLED'
 
 export interface BuildStatusStepperProps {
-  currentStatus: string // PENDING, QUEUED, BUILDING, READY, FAILED
+  currentStatus: string // PENDING, QUEUED, BUILDING, READY, FAILED, CANCELLED
   platform?: string
   artifactId?: string
   className?: string
@@ -45,8 +45,15 @@ export const BuildStatusStepper: React.FC<BuildStatusStepperProps> = ({
     currentStatus.toUpperCase() === 'PENDING' ? 'QUEUED' : currentStatus.toUpperCase()
 
   const isFailed = normalizedStatus === 'FAILED'
+  const isCancelled = normalizedStatus === 'CANCELLED'
 
   const getStepState = (stepIndex: number) => {
+    if (isCancelled) {
+      if (stepIndex === 0) return 'completed'
+      if (stepIndex === 1) return 'cancelled'
+      return 'pending'
+    }
+
     if (isFailed) {
       if (stepIndex === 0) return 'completed'
       if (stepIndex === 1) return 'failed'
@@ -113,6 +120,8 @@ export const BuildStatusStepper: React.FC<BuildStatusStepperProps> = ({
                     'bg-brand-100 text-brand-600 ring-2 ring-brand-500/30 dark:bg-brand-950 dark:text-brand-400',
                   state === 'failed' &&
                     'bg-red-100 text-red-600 ring-2 ring-red-500/30 dark:bg-red-950 dark:text-red-400',
+                  state === 'cancelled' &&
+                    'bg-amber-100 text-amber-600 ring-2 ring-amber-500/30 dark:bg-amber-950 dark:text-amber-400',
                   state === 'pending' &&
                     'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500'
                 )}
@@ -120,6 +129,7 @@ export const BuildStatusStepper: React.FC<BuildStatusStepperProps> = ({
                 {state === 'completed' && <CheckCircle2 className="w-4 h-4" />}
                 {state === 'active' && <Loader2 className="w-4 h-4 animate-spin" />}
                 {state === 'failed' && <XCircle className="w-4 h-4" />}
+                {state === 'cancelled' && <Ban className="w-4 h-4" />}
                 {state === 'pending' && <Circle className="w-3.5 h-3.5" />}
               </div>
 
@@ -130,14 +140,15 @@ export const BuildStatusStepper: React.FC<BuildStatusStepperProps> = ({
                     'text-xs font-semibold',
                     state === 'active' && 'text-brand-600 dark:text-brand-400',
                     state === 'failed' && 'text-red-600 dark:text-red-400',
+                    state === 'cancelled' && 'text-amber-600 dark:text-amber-400',
                     state === 'completed' && 'text-slate-900 dark:text-white',
                     state === 'pending' && 'text-slate-400 dark:text-slate-500'
                   )}
                 >
-                  {isFailed && idx === 2 ? 'Failed' : step.label}
+                  {isFailed && idx === 2 ? 'Failed' : isCancelled && idx === 2 ? 'Cancelled' : step.label}
                 </div>
                 <div className="text-[10px] text-slate-400 dark:text-slate-500 hidden sm:block">
-                  {isFailed && idx === 2 ? 'Compilation error' : step.description}
+                  {isFailed && idx === 2 ? 'Compilation error' : isCancelled && idx === 2 ? 'Build cancelled' : step.description}
                 </div>
               </div>
             </li>

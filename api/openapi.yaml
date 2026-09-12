@@ -1627,6 +1627,135 @@ paths:
               schema:
                 $ref: '#/components/schemas/ArtifactListResponse'
 
+  /api/v1/suites/{id}/artifacts/{artifactId}/cancel:
+    post:
+      summary: Cancel compilation build
+      description: Cancels an in-progress or pending build and terminates its ephemeral Kubernetes Job.
+      operationId: cancelBuild
+      tags:
+        - Builds
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+        - name: artifactId
+          in: path
+          required: true
+          description: Artifact ID
+          schema:
+            type: string
+      requestBody:
+        description: Optional cancellation reason
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelBuildRequest'
+      responses:
+        '200':
+          description: Build successfully cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactResponse'
+        '400':
+          description: Bad request or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite or artifact not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Artifact is already in terminal state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/suites/{id}/artifacts/{artifactId}/retry:
+    post:
+      summary: Retry compilation build
+      description: Resets a FAILED or CANCELLED build to PENDING and triggers asynchronous re-compilation.
+      operationId: retryBuild
+      tags:
+        - Builds
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+        - name: artifactId
+          in: path
+          required: true
+          description: Artifact ID
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Build retry accepted and initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactResponse'
+        '400':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite, artifact, or source archive not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/suites/{id}/artifacts/{artifactId}:
+    delete:
+      summary: Delete compiled artifact
+      description: Deletes compiled binary and log storage assets and removes the artifact record.
+      operationId: deleteArtifact
+      tags:
+        - Builds
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+        - name: artifactId
+          in: path
+          required: true
+          description: Artifact ID
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Artifact successfully deleted
+        '404':
+          description: Test suite or artifact not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Cannot delete artifact during active compilation or referenced by runs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/profiles:
     get:
       summary: List runner profiles
@@ -2234,6 +2363,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ArtifactResponse'
+
+    CancelBuildRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Optional reason explaining why the build was cancelled
+          example: User cancelled compilation
 
     TolerationDTO:
       type: object

@@ -131,6 +131,69 @@ func TestArtifact_StateTransitions(t *testing.T) {
 		assert.ErrorIs(t, art.MarkBuilding(), model.ErrTerminalState)
 		assert.ErrorIs(t, art.MarkReady("key", validChecksum), model.ErrTerminalState)
 	})
+
+	t.Run("terminal state CANCELLED cannot transition to BUILDING or READY", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, art.Cancel("user requested cancellation"))
+
+		assert.ErrorIs(t, art.MarkBuilding(), model.ErrTerminalState)
+		assert.ErrorIs(t, art.MarkReady("key", validChecksum), model.ErrTerminalState)
+	})
+}
+
+func TestArtifact_Cancel(t *testing.T) {
+	validChecksum := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+	t.Run("cancel from PENDING transitions to CANCELLED and records reason", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		assert.Equal(t, model.ArtifactStatusPending, art.Status())
+
+		err = art.Cancel("cancelled before build started")
+		require.NoError(t, err)
+		assert.Equal(t, model.ArtifactStatusCancelled, art.Status())
+		assert.Equal(t, "cancelled before build started", art.ErrorMessage())
+	})
+
+	t.Run("cancel from BUILDING transitions to CANCELLED and records reason", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, art.MarkBuilding())
+
+		err = art.Cancel("aborted while building")
+		require.NoError(t, err)
+		assert.Equal(t, model.ArtifactStatusCancelled, art.Status())
+		assert.Equal(t, "aborted while building", art.ErrorMessage())
+	})
+
+	t.Run("cancel with empty reason defaults to manual cancellation", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+
+		err = art.Cancel("")
+		require.NoError(t, err)
+		assert.Equal(t, model.ArtifactStatusCancelled, art.Status())
+		assert.Equal(t, "manual cancellation", art.ErrorMessage())
+	})
+
+	t.Run("cancel from terminal states returns ErrTerminalState", func(t *testing.T) {
+		artReady, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, artReady.MarkBuilding())
+		require.NoError(t, artReady.MarkReady("key", validChecksum))
+		assert.ErrorIs(t, artReady.Cancel("cancel ready"), model.ErrTerminalState)
+
+		artFailed, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, artFailed.MarkFailed("failed", "logs"))
+		assert.ErrorIs(t, artFailed.Cancel("cancel failed"), model.ErrTerminalState)
+
+		artCancelled, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, artCancelled.Cancel("first cancel"))
+		assert.ErrorIs(t, artCancelled.Cancel("second cancel"), model.ErrTerminalState)
+	})
 }
 
 func TestArtifact_RetryBuild(t *testing.T) {
@@ -140,6 +203,18 @@ func TestArtifact_RetryBuild(t *testing.T) {
 		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
 		require.NoError(t, err)
 		require.NoError(t, art.MarkFailed("compilation error", "s3://logs/build.log"))
+
+		err = art.RetryBuild()
+		require.NoError(t, err)
+		assert.Equal(t, model.ArtifactStatusPending, art.Status())
+		assert.Empty(t, art.ErrorMessage())
+		assert.Empty(t, art.BuildLogsS3Key())
+	})
+
+	t.Run("CANCELLED -> PENDING succeeds and clears error state", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64)
+		require.NoError(t, err)
+		require.NoError(t, art.Cancel("cancelled by user"))
 
 		err = art.RetryBuild()
 		require.NoError(t, err)

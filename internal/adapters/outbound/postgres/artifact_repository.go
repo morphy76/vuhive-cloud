@@ -202,7 +202,7 @@ func (r *ArtifactRepository) ListOrphanedArtifacts(ctx context.Context, before t
 		SELECT id, suite_id, platform, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at
 		FROM artifacts
 		WHERE created_at < $1
-		  AND (status = 'FAILED' OR status = 'PENDING')
+		  AND (status = 'FAILED' OR status = 'PENDING' OR status = 'CANCELLED')
 		  AND NOT EXISTS (SELECT 1 FROM test_runs tr WHERE tr.artifact_id = artifacts.id)
 		  AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.artifact_id = artifacts.id)
 		ORDER BY created_at ASC

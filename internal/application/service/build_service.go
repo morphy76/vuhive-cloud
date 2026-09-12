@@ -492,6 +492,224 @@ func (s *BuildService) ListArtifacts(ctx context.Context, suiteID string) ([]*mo
 	return artifacts, nil
 }
 
+// CancelBuild cancels an active or pending compilation build, terminates its Kubernetes Job, and transitions the artifact to CANCELLED.
+func (s *BuildService) CancelBuild(ctx context.Context, suiteID, artifactID, reason string) (*model.Artifact, error) {
+	start := time.Now()
+	trimmedSuiteID := strings.TrimSpace(suiteID)
+	trimmedArtifactID := strings.TrimSpace(artifactID)
+	if trimmedSuiteID == "" || trimmedArtifactID == "" {
+		return nil, fmt.Errorf("%w: suiteID and artifactID cannot be empty", model.ErrValidation)
+	}
+
+	trimmedReason := strings.TrimSpace(reason)
+	if trimmedReason == "" {
+		trimmedReason = "manual cancellation"
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "BuildService.CancelBuild").
+		Str("suite_id", trimmedSuiteID).
+		Str("artifact_id", trimmedArtifactID).
+		Str("reason", trimmedReason).
+		Logger()
+	log.Debug().Msg("starting build cancellation")
+
+	artifact, err := s.artifactRepo.FindByID(ctx, trimmedArtifactID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed fetching artifact to cancel")
+		return nil, err
+	}
+
+	if artifact.SuiteID() != trimmedSuiteID {
+		err := fmt.Errorf("%w: artifact %s does not belong to suite %s", model.ErrValidation, trimmedArtifactID, trimmedSuiteID)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("suite ID mismatch")
+		return nil, err
+	}
+
+	if artifact.Status() == model.ArtifactStatusReady || artifact.Status() == model.ArtifactStatusFailed || artifact.Status() == model.ArtifactStatusCancelled {
+		err := fmt.Errorf("%w: artifact %s is already in terminal status %s", model.ErrTerminalState, trimmedArtifactID, artifact.Status())
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("cannot cancel artifact in terminal state")
+		return nil, err
+	}
+
+	if s.orchestrator != nil {
+		jobName := formatBuildJobName(artifact.ID())
+		if err := s.orchestrator.DeleteJob(ctx, jobName); err != nil {
+			log.Warn().Err(err).Str("job_name", jobName).Msg("deleting build job in kubernetes reported warning; continuing")
+		}
+	}
+
+	if err := artifact.Cancel(trimmedReason); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed transitioning artifact state to CANCELLED")
+		return nil, err
+	}
+
+	if err := s.artifactRepo.Save(ctx, artifact); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed persisting cancelled artifact")
+		return nil, err
+	}
+
+	log.Info().
+		Str("status", string(artifact.Status())).
+		Dur("duration_ms", time.Since(start)).
+		Msg("completed artifact build cancellation")
+
+	return artifact, nil
+}
+
+// RetryBuild resets a FAILED or CANCELLED artifact to PENDING and triggers asynchronous re-compilation.
+func (s *BuildService) RetryBuild(ctx context.Context, suiteID, artifactID string) (*model.Artifact, error) {
+	start := time.Now()
+	trimmedSuiteID := strings.TrimSpace(suiteID)
+	trimmedArtifactID := strings.TrimSpace(artifactID)
+	if trimmedSuiteID == "" || trimmedArtifactID == "" {
+		return nil, fmt.Errorf("%w: suiteID and artifactID cannot be empty", model.ErrValidation)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "BuildService.RetryBuild").
+		Str("suite_id", trimmedSuiteID).
+		Str("artifact_id", trimmedArtifactID).
+		Logger()
+	log.Debug().Msg("starting artifact build retry")
+
+	if s.suiteRepo != nil {
+		if _, err := s.suiteRepo.FindByID(ctx, trimmedSuiteID); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed verifying test suite for retry")
+			return nil, err
+		}
+	}
+
+	artifact, err := s.artifactRepo.FindByID(ctx, trimmedArtifactID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed fetching artifact to retry")
+		return nil, err
+	}
+
+	if artifact.SuiteID() != trimmedSuiteID {
+		err := fmt.Errorf("%w: artifact %s does not belong to suite %s", model.ErrValidation, trimmedArtifactID, trimmedSuiteID)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("suite ID mismatch")
+		return nil, err
+	}
+
+	if artifact.Status() != model.ArtifactStatusFailed && artifact.Status() != model.ArtifactStatusCancelled {
+		err := fmt.Errorf("%w: only FAILED or CANCELLED artifacts can be retried (current status: %s)", model.ErrInvalidStateTransition, artifact.Status())
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("invalid artifact status for retry")
+		return nil, err
+	}
+
+	sourceKey := formatSourceKey(trimmedSuiteID)
+	exists, err := s.storage.Exists(ctx, sourceKey)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed checking source archive existence")
+		return nil, err
+	}
+	if !exists {
+		err := fmt.Errorf("%w: source archive not found at %s", model.ErrNotFound, sourceKey)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("source archive missing for retry")
+		return nil, err
+	}
+
+	if err := artifact.RetryBuild(); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed resetting artifact state for retry")
+		return nil, err
+	}
+
+	if err := s.artifactRepo.Save(ctx, artifact); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed persisting reset artifact")
+		return nil, err
+	}
+
+	// Trigger asynchronous compilation
+	go func() {
+		bgCtx := context.Background()
+		bgLog := zerolog.Nop().With().
+			Str("op", "BuildService.AsyncRetryBuild").
+			Str("suite_id", trimmedSuiteID).
+			Str("artifact_id", artifact.ID()).
+			Str("platform", string(artifact.Platform())).
+			Logger()
+		bgCtx = bgLog.WithContext(bgCtx)
+		if _, err := s.BuildArtifact(bgCtx, trimmedSuiteID, artifact.ID()); err != nil {
+			bgLog.Error().Err(err).Msg("asynchronous artifact retry build failed")
+		} else {
+			bgLog.Info().Msg("asynchronous artifact retry build completed successfully")
+		}
+	}()
+
+	log.Info().
+		Str("status", string(artifact.Status())).
+		Dur("duration_ms", time.Since(start)).
+		Msg("successfully initiated artifact build retry")
+
+	return artifact, nil
+}
+
+// DeleteArtifact cleans up binary and log storage assets and removes an artifact record.
+func (s *BuildService) DeleteArtifact(ctx context.Context, suiteID, artifactID string) error {
+	start := time.Now()
+	trimmedSuiteID := strings.TrimSpace(suiteID)
+	trimmedArtifactID := strings.TrimSpace(artifactID)
+	if trimmedSuiteID == "" || trimmedArtifactID == "" {
+		return fmt.Errorf("%w: suiteID and artifactID cannot be empty", model.ErrValidation)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "BuildService.DeleteArtifact").
+		Str("suite_id", trimmedSuiteID).
+		Str("artifact_id", trimmedArtifactID).
+		Logger()
+	log.Debug().Msg("starting artifact deletion")
+
+	artifact, err := s.artifactRepo.FindByID(ctx, trimmedArtifactID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed fetching artifact for deletion")
+		return err
+	}
+
+	if artifact.SuiteID() != trimmedSuiteID {
+		err := fmt.Errorf("%w: artifact %s does not belong to suite %s", model.ErrValidation, trimmedArtifactID, trimmedSuiteID)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("suite ID mismatch")
+		return err
+	}
+
+	if artifact.Status() == model.ArtifactStatusBuilding {
+		err := fmt.Errorf("%w: cannot delete artifact while compilation is active; cancel build first", model.ErrConflict)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("active build deletion rejected")
+		return err
+	}
+
+	if s.storage != nil {
+		if artifact.S3BinaryKey() != "" {
+			if err := s.storage.Delete(ctx, artifact.S3BinaryKey()); err != nil {
+				log.Warn().Err(err).Str("s3_key", artifact.S3BinaryKey()).Msg("failed deleting artifact binary from storage; continuing")
+			}
+		}
+		if artifact.BuildLogsS3Key() != "" {
+			if err := s.storage.Delete(ctx, artifact.BuildLogsS3Key()); err != nil {
+				log.Warn().Err(err).Str("s3_key", artifact.BuildLogsS3Key()).Msg("failed deleting build logs from storage; continuing")
+			}
+		}
+	}
+
+	if err := s.artifactRepo.Delete(ctx, trimmedArtifactID); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed deleting artifact from repository")
+		return err
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed artifact deletion")
+	return nil
+}
+
+func formatBuildJobName(artifactID string) string {
+	cleaned := strings.ToLower(artifactID)
+	name := fmt.Sprintf("vuhive-build-%s", cleaned)
+	if len(name) > 63 {
+		name = name[:63]
+	}
+	return strings.TrimRight(name, "-")
+}
+
 func (s *BuildService) computeSHA256FromStorage(ctx context.Context, binaryKey string) (string, error) {
 	reader, err := s.storage.Download(ctx, binaryKey)
 	if err != nil {

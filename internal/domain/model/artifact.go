@@ -38,16 +38,17 @@ func ParsePlatform(s string) (Platform, error) {
 type ArtifactStatus string
 
 const (
-	ArtifactStatusPending  ArtifactStatus = "PENDING"
-	ArtifactStatusBuilding ArtifactStatus = "BUILDING"
-	ArtifactStatusReady    ArtifactStatus = "READY"
-	ArtifactStatusFailed   ArtifactStatus = "FAILED"
+	ArtifactStatusPending   ArtifactStatus = "PENDING"
+	ArtifactStatusBuilding  ArtifactStatus = "BUILDING"
+	ArtifactStatusReady     ArtifactStatus = "READY"
+	ArtifactStatusFailed    ArtifactStatus = "FAILED"
+	ArtifactStatusCancelled ArtifactStatus = "CANCELLED"
 )
 
 // IsValid checks whether the ArtifactStatus is recognized.
 func (s ArtifactStatus) IsValid() bool {
 	switch s {
-	case ArtifactStatusPending, ArtifactStatusBuilding, ArtifactStatusReady, ArtifactStatusFailed:
+	case ArtifactStatusPending, ArtifactStatusBuilding, ArtifactStatusReady, ArtifactStatusFailed, ArtifactStatusCancelled:
 		return true
 	default:
 		return false
@@ -171,7 +172,7 @@ func (a *Artifact) CreatedAt() time.Time {
 
 // MarkBuilding transitions the artifact from PENDING to BUILDING.
 func (a *Artifact) MarkBuilding() error {
-	if a.status == ArtifactStatusReady || a.status == ArtifactStatusFailed {
+	if a.status == ArtifactStatusReady || a.status == ArtifactStatusFailed || a.status == ArtifactStatusCancelled {
 		return ErrTerminalState
 	}
 	if a.status != ArtifactStatusPending {
@@ -183,7 +184,7 @@ func (a *Artifact) MarkBuilding() error {
 
 // MarkReady transitions the artifact to READY upon successful compilation and upload.
 func (a *Artifact) MarkReady(s3BinaryKey, sha256Checksum string) error {
-	if a.status == ArtifactStatusReady || a.status == ArtifactStatusFailed {
+	if a.status == ArtifactStatusReady || a.status == ArtifactStatusFailed || a.status == ArtifactStatusCancelled {
 		return ErrTerminalState
 	}
 	if a.status != ArtifactStatusBuilding {
@@ -206,7 +207,7 @@ func (a *Artifact) MarkReady(s3BinaryKey, sha256Checksum string) error {
 
 // MarkFailed transitions the artifact to FAILED if build or static checks fail.
 func (a *Artifact) MarkFailed(errorMessage, buildLogsS3Key string) error {
-	if a.status == ArtifactStatusReady || a.status == ArtifactStatusFailed {
+	if a.status == ArtifactStatusReady || a.status == ArtifactStatusFailed || a.status == ArtifactStatusCancelled {
 		return ErrTerminalState
 	}
 	a.errorMessage = errorMessage
@@ -215,11 +216,25 @@ func (a *Artifact) MarkFailed(errorMessage, buildLogsS3Key string) error {
 	return nil
 }
 
-// RetryBuild resets a FAILED artifact back to PENDING, clearing previous error state,
+// Cancel transitions the artifact from PENDING or BUILDING to CANCELLED.
+func (a *Artifact) Cancel(reason string) error {
+	if a.status == ArtifactStatusReady || a.status == ArtifactStatusFailed || a.status == ArtifactStatusCancelled {
+		return ErrTerminalState
+	}
+	trimmedReason := strings.TrimSpace(reason)
+	if trimmedReason == "" {
+		trimmedReason = "manual cancellation"
+	}
+	a.errorMessage = trimmedReason
+	a.status = ArtifactStatusCancelled
+	return nil
+}
+
+// RetryBuild resets a FAILED or CANCELLED artifact back to PENDING, clearing previous error state,
 // and allowing a new compilation attempt to proceed from a clean baseline.
-// Only valid from the FAILED state; any other status returns ErrInvalidStateTransition.
+// Only valid from the FAILED or CANCELLED state; any other status returns ErrInvalidStateTransition.
 func (a *Artifact) RetryBuild() error {
-	if a.status != ArtifactStatusFailed {
+	if a.status != ArtifactStatusFailed && a.status != ArtifactStatusCancelled {
 		return ErrInvalidStateTransition
 	}
 	a.status = ArtifactStatusPending

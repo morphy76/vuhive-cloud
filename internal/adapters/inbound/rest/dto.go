@@ -33,6 +33,11 @@ type BuildTriggerResponse struct {
 	Artifacts []ArtifactResponse `json:"artifacts"`
 }
 
+// CancelBuildRequest represents optional request payload when cancelling a build.
+type CancelBuildRequest struct {
+	Reason string `json:"reason,omitempty"`
+}
+
 // ErrorResponse represents a standardized API error response.
 type ErrorResponse struct {
 	Error string `json:"error"`

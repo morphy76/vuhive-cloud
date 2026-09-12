@@ -106,6 +106,9 @@ type BuildsUseCase interface {
 	BuildSuite(ctx context.Context, suiteID string) ([]*model.Artifact, error)
 	GetArtifact(ctx context.Context, id string) (*model.Artifact, error)
 	ListArtifacts(ctx context.Context, suiteID string) ([]*model.Artifact, error)
+	CancelBuild(ctx context.Context, suiteID, artifactID, reason string) (*model.Artifact, error)
+	RetryBuild(ctx context.Context, suiteID, artifactID string) (*model.Artifact, error)
+	DeleteArtifact(ctx context.Context, suiteID, artifactID string) error
 }
 
 // CreateProfileCommand encapsulates input parameters for creating a new runner profile.

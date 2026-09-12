@@ -663,6 +663,67 @@ export const api = {
     })
   },
 
+  async cancelSuiteBuild(
+    suiteId: string,
+    artifactId: string,
+    reason?: string
+  ): Promise<CompiledArtifact> {
+    const res = await apiRequest<any>(
+      `/suites/${encodeURIComponent(suiteId)}/artifacts/${encodeURIComponent(artifactId)}/cancel`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reason ? { reason } : {}),
+      }
+    )
+    return {
+      id: res.id,
+      suiteId: res.suite_id || suiteId,
+      platform: res.platform,
+      s3BinaryKey: res.s3_binary_key,
+      sha256Checksum: res.sha256_checksum,
+      buildLogsS3Key: res.build_logs_s3_key,
+      status: res.status,
+      errorMessage: res.error_message,
+      createdAt: res.created_at,
+    }
+  },
+
+  async retrySuiteBuild(
+    suiteId: string,
+    artifactId: string
+  ): Promise<CompiledArtifact> {
+    const res = await apiRequest<any>(
+      `/suites/${encodeURIComponent(suiteId)}/artifacts/${encodeURIComponent(artifactId)}/retry`,
+      {
+        method: 'POST',
+      }
+    )
+    return {
+      id: res.id,
+      suiteId: res.suite_id || suiteId,
+      platform: res.platform,
+      s3BinaryKey: res.s3_binary_key,
+      sha256Checksum: res.sha256_checksum,
+      buildLogsS3Key: res.build_logs_s3_key,
+      status: res.status,
+      errorMessage: res.error_message,
+      createdAt: res.created_at,
+    }
+  },
+
+  async deleteSuiteArtifact(
+    suiteId: string,
+    artifactId: string
+  ): Promise<void> {
+    await apiRequest<void>(
+      `/suites/${encodeURIComponent(suiteId)}/artifacts/${encodeURIComponent(artifactId)}`,
+      {
+        method: 'DELETE',
+      }
+    )
+  },
+
   async getRuns(filter?: { suiteId?: string; status?: string; scheduleId?: string }): Promise<HistoricalRun[]> {
     const params = new URLSearchParams()
     if (filter?.suiteId) params.set('suite_id', filter.suiteId)

@@ -15,9 +15,9 @@ import { InfoBadge } from '@/components/help/InfoBadge'
 import { BuildStatusStepper } from '@/components/build/BuildStatusStepper'
 import { AstErrorCallout } from '@/components/build/AstErrorCallout'
 import { BuildLogViewer } from '@/components/build/BuildLogViewer'
-import { useUploadSuiteBuild } from '@/hooks/use-suites'
+import { useUploadSuiteBuild, useCancelSuiteBuild, useRetrySuiteBuild } from '@/hooks/use-suites'
 import { useBuildEvents, type BuildStatusChangedEvent } from '@/hooks/use-events'
-import { UploadCloud, FileArchive, X, AlertCircle, CheckCircle2, RotateCw } from 'lucide-react'
+import { UploadCloud, FileArchive, X, AlertCircle, CheckCircle2, RotateCw, Ban } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface UploadBuildDialogProps {
@@ -50,6 +50,8 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
   const [compilationLogs, setCompilationLogs] = React.useState<string | null>(null)
 
   const uploadMutation = useUploadSuiteBuild(suiteId)
+  const cancelMutation = useCancelSuiteBuild(suiteId)
+  const retryMutation = useRetrySuiteBuild(suiteId)
 
   // Listen to SSE live build status changes
   useBuildEvents(suiteId, (event: BuildStatusChangedEvent) => {
@@ -64,6 +66,10 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
 
     if (event.status === 'FAILED') {
       const errMsg = event.error_message || 'Compilation failed in Kubernetes builder'
+      setBuildError(errMsg)
+      setCompilationLogs(errMsg)
+    } else if (event.status === 'CANCELLED') {
+      const errMsg = event.error_message || 'Build cancelled'
       setBuildError(errMsg)
       setCompilationLogs(errMsg)
     } else if (event.status === 'READY') {
@@ -209,6 +215,29 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
     }
   }
 
+  const handleCancelBuild = async () => {
+    if (!activeArtifactId) return
+    try {
+      await cancelMutation.mutateAsync({ artifactId: activeArtifactId, reason: 'Cancelled by user' })
+      setBuildStatus('CANCELLED')
+      setBuildError('Build was cancelled.')
+    } catch (err: any) {
+      console.error('Failed to cancel build:', err)
+    }
+  }
+
+  const handleRetryBuild = async () => {
+    if (!activeArtifactId) return
+    try {
+      await retryMutation.mutateAsync(activeArtifactId)
+      setBuildStatus('BUILDING')
+      setBuildError(null)
+      setCompilationLogs(null)
+    } catch (err: any) {
+      console.error('Failed to retry build:', err)
+    }
+  }
+
   const handleResetForRetry = () => {
     setBuildStatus(null)
     setBuildError(null)
@@ -270,16 +299,46 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
               </div>
             )}
 
+            {buildStatus === 'CANCELLED' && (
+              <div className="space-y-3">
+                <div className="rounded-xl p-3 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900/60 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-300">
+                  <Ban className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold">Build Cancelled:</span>
+                    <p className="mt-0.5">{buildError || 'The build was cancelled.'}</p>
+                  </div>
+                </div>
+
+                {compilationLogs && (
+                  <BuildLogViewer
+                    logs={compilationLogs}
+                    title="Build Cancellation Output"
+                    defaultExpanded={true}
+                  />
+                )}
+              </div>
+            )}
+
             <DialogFooter className="gap-2 sm:gap-0 mt-4">
-              {buildStatus === 'FAILED' ? (
+              {buildStatus === 'FAILED' || buildStatus === 'CANCELLED' ? (
                 <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleRetryBuild}
+                    disabled={retryMutation.isPending || !activeArtifactId}
+                    className="min-h-[44px] gap-1.5"
+                  >
+                    <RotateCw className={cn('w-4 h-4', retryMutation.isPending && 'animate-spin')} />
+                    <span>Retry Build</span>
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleResetForRetry}
                     className="min-h-[44px] gap-1.5"
                   >
-                    <RotateCw className="w-4 h-4" />
+                    <UploadCloud className="w-4 h-4" />
                     <span>Upload New Package</span>
                   </Button>
                   <Button
@@ -290,14 +349,34 @@ export const UploadBuildDialog: React.FC<UploadBuildDialogProps> = ({
                     Close
                   </Button>
                 </>
-              ) : (
+              ) : buildStatus === 'READY' ? (
                 <Button
                   type="button"
                   onClick={() => handleOpenChange(false)}
                   className="min-h-[44px]"
                 >
-                  {buildStatus === 'READY' ? 'Done' : 'Dismiss'}
+                  Done
                 </Button>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancelBuild}
+                    disabled={cancelMutation.isPending || !activeArtifactId}
+                    className="min-h-[44px] gap-1.5 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300 border-rose-200 dark:border-rose-900/60"
+                  >
+                    <Ban className="w-4 h-4" />
+                    <span>Cancel Build</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => handleOpenChange(false)}
+                    className="min-h-[44px]"
+                  >
+                    Dismiss
+                  </Button>
+                </>
               )}
             </DialogFooter>
           </div>

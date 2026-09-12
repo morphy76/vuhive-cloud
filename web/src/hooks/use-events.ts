@@ -6,7 +6,7 @@ export interface BuildStatusChangedEvent {
   artifact_id: string
   suite_id: string
   platform: string
-  status: 'PENDING' | 'BUILDING' | 'READY' | 'FAILED'
+  status: 'PENDING' | 'BUILDING' | 'READY' | 'FAILED' | 'CANCELLED'
   previous_status?: string
   s3_binary_key?: string
   sha256_checksum?: string

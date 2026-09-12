@@ -734,3 +734,225 @@ func NewScenario() *vuhive.Scenario {
 	})
 }
 
+func TestBuildService_CancelBuild(t *testing.T) {
+	ctx := context.Background()
+	suiteID := "suite-123"
+
+	t.Run("validation failure on empty IDs", func(t *testing.T) {
+		svc := service.NewBuildService(nil, nil, nil, nil)
+		_, err := svc.CancelBuild(ctx, "", "art-1", "reason")
+		assert.ErrorIs(t, err, model.ErrValidation)
+
+		_, err = svc.CancelBuild(ctx, suiteID, "", "reason")
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("fails when artifact not found", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		repo.On("FindByID", ctx, "art-missing").Return(nil, model.ErrNotFound)
+
+		svc := service.NewBuildService(nil, repo, nil, nil)
+		_, err := svc.CancelBuild(ctx, suiteID, "art-missing", "cancel")
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("fails when artifact belongs to another suite", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		art, _ := model.NewArtifact("other-suite", model.PlatformLinuxAmd64)
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+
+		svc := service.NewBuildService(nil, repo, nil, nil)
+		_, err := svc.CancelBuild(ctx, suiteID, art.ID(), "cancel")
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("fails when artifact is already in terminal state", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		_ = art.MarkFailed("build failed", "")
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+
+		svc := service.NewBuildService(nil, repo, nil, nil)
+		_, err := svc.CancelBuild(ctx, suiteID, art.ID(), "cancel")
+		assert.ErrorIs(t, err, model.ErrTerminalState)
+	})
+
+	t.Run("successfully cancels BUILDING artifact and deletes K8s job", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		_ = art.MarkBuilding()
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+		orchestrator.On("DeleteJob", ctx, mock.MatchedBy(func(name string) bool {
+			return strings.Contains(name, strings.ToLower(art.ID()))
+		})).Return(nil)
+		repo.On("Save", ctx, mock.MatchedBy(func(saved *model.Artifact) bool {
+			return saved.ID() == art.ID() && saved.Status() == model.ArtifactStatusCancelled && saved.ErrorMessage() == "user requested abort"
+		})).Return(nil)
+
+		svc := service.NewBuildService(nil, repo, nil, orchestrator)
+		cancelled, err := svc.CancelBuild(ctx, suiteID, art.ID(), "user requested abort")
+		require.NoError(t, err)
+		assert.Equal(t, model.ArtifactStatusCancelled, cancelled.Status())
+		assert.Equal(t, "user requested abort", cancelled.ErrorMessage())
+		orchestrator.AssertExpectations(t)
+		repo.AssertExpectations(t)
+	})
+}
+
+func TestBuildService_RetryBuild(t *testing.T) {
+	ctx := context.Background()
+	suiteID := "suite-123"
+
+	t.Run("validation failure on empty IDs", func(t *testing.T) {
+		svc := service.NewBuildService(nil, nil, nil, nil)
+		_, err := svc.RetryBuild(ctx, "", "art-1")
+		assert.ErrorIs(t, err, model.ErrValidation)
+
+		_, err = svc.RetryBuild(ctx, suiteID, "")
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("fails when suite not found", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		suiteRepo.On("FindByID", ctx, suiteID).Return(nil, model.ErrNotFound)
+
+		svc := service.NewBuildService(suiteRepo, nil, nil, nil)
+		_, err := svc.RetryBuild(ctx, suiteID, "art-1")
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("fails when artifact in non-retryable status", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		repo := new(MockArtifactRepository)
+
+		suite, _ := model.NewTestSuite("Suite", "desc")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		// art is PENDING
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+
+		svc := service.NewBuildService(suiteRepo, repo, nil, nil)
+		_, err := svc.RetryBuild(ctx, suiteID, art.ID())
+		assert.ErrorIs(t, err, model.ErrInvalidStateTransition)
+	})
+
+	t.Run("fails when source archive does not exist", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+
+		suite, _ := model.NewTestSuite("Suite", "desc")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		_ = art.MarkFailed("old failure", "")
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+		storage.On("Exists", ctx, "suites/"+suiteID+"/sources/source.tar.gz").Return(false, nil)
+
+		svc := service.NewBuildService(suiteRepo, repo, storage, nil)
+		_, err := svc.RetryBuild(ctx, suiteID, art.ID())
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("successfully retries FAILED artifact and triggers build", func(t *testing.T) {
+		suiteRepo := new(MockTestSuiteRepository)
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		suite, _ := model.NewTestSuite("Suite", "desc")
+		suiteRepo.On("FindByID", ctx, suiteID).Return(suite, nil)
+
+		art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		_ = art.MarkFailed("compile failure", "s3://logs")
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+		storage.On("Exists", ctx, "suites/"+suiteID+"/sources/source.tar.gz").Return(true, nil)
+		repo.On("Save", ctx, mock.MatchedBy(func(saved *model.Artifact) bool {
+			return saved.ID() == art.ID() && saved.Status() == model.ArtifactStatusPending && saved.ErrorMessage() == ""
+		})).Return(nil).Once()
+		repo.On("Save", mock.Anything, mock.AnythingOfType("*model.Artifact")).Return(nil).Maybe()
+
+		// Async build mocks
+		repo.On("FindByID", mock.Anything, art.ID()).Return(art, nil).Maybe()
+		storage.On("Exists", mock.Anything, mock.Anything).Return(true, nil).Maybe()
+		storage.On("PresignDownload", mock.Anything, mock.Anything, mock.Anything).Return("https://download", nil).Maybe()
+		storage.On("PresignUpload", mock.Anything, mock.Anything, mock.Anything).Return("https://upload", nil).Maybe()
+		orchestrator.On("DispatchBuildJob", mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
+		orchestrator.On("WaitForJob", mock.Anything, "job-1").Return(&outbound.BuildJobExecution{
+			JobName:        "job-1",
+			SHA256Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			Logs:           io.NopCloser(strings.NewReader("logs")),
+		}, nil).Maybe()
+		storage.On("Upload", mock.Anything, mock.Anything, mock.Anything, mock.Anything, "text/plain").Return(nil).Maybe()
+
+		svc := service.NewBuildService(suiteRepo, repo, storage, orchestrator)
+		retried, err := svc.RetryBuild(ctx, suiteID, art.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.ArtifactStatusPending, retried.Status())
+	})
+}
+
+func TestBuildService_DeleteArtifact(t *testing.T) {
+	ctx := context.Background()
+	suiteID := "suite-123"
+
+	t.Run("validation failure on empty IDs", func(t *testing.T) {
+		svc := service.NewBuildService(nil, nil, nil, nil)
+		err := svc.DeleteArtifact(ctx, "", "art-1")
+		assert.ErrorIs(t, err, model.ErrValidation)
+
+		err = svc.DeleteArtifact(ctx, suiteID, "")
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("fails when artifact not found", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		repo.On("FindByID", ctx, "art-missing").Return(nil, model.ErrNotFound)
+
+		svc := service.NewBuildService(nil, repo, nil, nil)
+		err := svc.DeleteArtifact(ctx, suiteID, "art-missing")
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("fails when artifact belongs to different suite", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		art, _ := model.NewArtifact("other-suite", model.PlatformLinuxAmd64)
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+
+		svc := service.NewBuildService(nil, repo, nil, nil)
+		err := svc.DeleteArtifact(ctx, suiteID, art.ID())
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("fails when artifact is currently BUILDING", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		_ = art.MarkBuilding()
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+
+		svc := service.NewBuildService(nil, repo, nil, nil)
+		err := svc.DeleteArtifact(ctx, suiteID, art.ID())
+		assert.ErrorIs(t, err, model.ErrConflict)
+	})
+
+	t.Run("successfully deletes FAILED artifact with logs key and storage cleanup", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+
+		art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+		_ = art.MarkFailed("failed", "suites/suite-123/artifacts/art-1/build.log")
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+		storage.On("Delete", ctx, "suites/suite-123/artifacts/art-1/build.log").Return(nil)
+		repo.On("Delete", ctx, art.ID()).Return(nil)
+
+		svc := service.NewBuildService(nil, repo, storage, nil)
+		err := svc.DeleteArtifact(ctx, suiteID, art.ID())
+		require.NoError(t, err)
+		storage.AssertExpectations(t)
+		repo.AssertExpectations(t)
+	})
+}
+
