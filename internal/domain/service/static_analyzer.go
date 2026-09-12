@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"compress/bzip2"
 	"compress/gzip"
 	"fmt"
 	"go/ast"
@@ -70,7 +71,7 @@ func NewStaticAnalyzer(cfg StaticAnalyzerConfig) *StaticAnalyzer {
 	return &StaticAnalyzer{cfg: cfg}
 }
 
-// AnalyzeArchive parses the uploaded .tar.gz archive, verifies go.mod and AST compliance, and returns analysis metadata.
+// AnalyzeArchive parses the uploaded archive (.tar.gz, .tar.bz2, or .zip), verifies go.mod and AST compliance, and returns analysis metadata.
 func (a *StaticAnalyzer) AnalyzeArchive(r io.Reader, opts StaticAnalysisOptions) (*AnalysisResult, error) {
 	if r == nil {
 		return nil, fmt.Errorf("%w: source archive cannot be nil", model.ErrValidation)
@@ -474,6 +475,11 @@ func extractArchive(r io.Reader) (map[string][]byte, error) {
 		return extractTarGz(bytes.NewReader(data))
 	}
 
+	// Bzip2: 0x42 0x5a 0x68 ('B' 'Z' 'h')
+	if data[0] == 0x42 && data[1] == 0x5a && data[2] == 0x68 {
+		return extractTarBz2(bytes.NewReader(data))
+	}
+
 	// Zip: 0x50 0x4b (PK\x03\x04 or PK\x05\x06)
 	if data[0] == 0x50 && data[1] == 0x4b {
 		return extractZip(bytes.NewReader(data), int64(len(data)))
@@ -483,11 +489,14 @@ func extractArchive(r io.Reader) (map[string][]byte, error) {
 	if files, err := extractTarGz(bytes.NewReader(data)); err == nil {
 		return files, nil
 	}
+	if files, err := extractTarBz2(bytes.NewReader(data)); err == nil {
+		return files, nil
+	}
 	if files, err := extractZip(bytes.NewReader(data), int64(len(data))); err == nil {
 		return files, nil
 	}
 
-	return nil, fmt.Errorf("%w: unsupported archive format, must be .tar.gz or .zip", model.ErrInvalidArchive)
+	return nil, fmt.Errorf("%w: unsupported archive format, must be .tar.gz, .tar.bz2, or .zip", model.ErrInvalidArchive)
 }
 
 func extractZip(ra io.ReaderAt, size int64) (map[string][]byte, error) {
@@ -530,7 +539,16 @@ func extractTarGz(r io.Reader) (map[string][]byte, error) {
 		_ = gr.Close()
 	}()
 
-	tr := tar.NewReader(gr)
+	return extractTar(gr)
+}
+
+func extractTarBz2(r io.Reader) (map[string][]byte, error) {
+	bzr := bzip2.NewReader(r)
+	return extractTar(bzr)
+}
+
+func extractTar(r io.Reader) (map[string][]byte, error) {
+	tr := tar.NewReader(r)
 	files := make(map[string][]byte)
 
 	for {

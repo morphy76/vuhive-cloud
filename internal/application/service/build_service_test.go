@@ -868,7 +868,7 @@ func TestBuildService_RetryBuild(t *testing.T) {
 
 		art, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
 		_ = art.MarkFailed("compile failure", "s3://logs")
-		repo.On("FindByID", ctx, art.ID()).Return(art, nil)
+		repo.On("FindByID", ctx, art.ID()).Return(art, nil).Once()
 		storage.On("Exists", ctx, "suites/"+suiteID+"/sources/source.tar.gz").Return(true, nil)
 		repo.On("Save", ctx, mock.MatchedBy(func(saved *model.Artifact) bool {
 			return saved.ID() == art.ID() && saved.Status() == model.ArtifactStatusPending && saved.ErrorMessage() == ""
@@ -876,7 +876,8 @@ func TestBuildService_RetryBuild(t *testing.T) {
 		repo.On("Save", mock.Anything, mock.AnythingOfType("*model.Artifact")).Return(nil).Maybe()
 
 		// Async build mocks
-		repo.On("FindByID", mock.Anything, art.ID()).Return(art, nil).Maybe()
+		asyncArt, _ := model.NewArtifactWithID(art.ID(), art.SuiteID(), art.Platform(), art.S3BinaryKey(), art.SHA256Checksum(), art.BuildLogsS3Key(), model.ArtifactStatusPending, "", art.CreatedAt())
+		repo.On("FindByID", mock.Anything, art.ID()).Return(asyncArt, nil).Maybe()
 		storage.On("Exists", mock.Anything, mock.Anything).Return(true, nil).Maybe()
 		storage.On("PresignDownload", mock.Anything, mock.Anything, mock.Anything).Return("https://download", nil).Maybe()
 		storage.On("PresignUpload", mock.Anything, mock.Anything, mock.Anything).Return("https://upload", nil).Maybe()
@@ -886,12 +887,20 @@ func TestBuildService_RetryBuild(t *testing.T) {
 			SHA256Checksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			Logs:           io.NopCloser(strings.NewReader("logs")),
 		}, nil).Maybe()
-		storage.On("Upload", mock.Anything, mock.Anything, mock.Anything, mock.Anything, "text/plain").Return(nil).Maybe()
+		buildDone := make(chan struct{})
+		storage.On("Upload", mock.Anything, mock.Anything, mock.Anything, mock.Anything, "text/plain").Run(func(args mock.Arguments) {
+			close(buildDone)
+		}).Return(nil).Maybe()
 
 		svc := service.NewBuildService(suiteRepo, repo, storage, orchestrator)
 		retried, err := svc.RetryBuild(ctx, suiteID, art.ID())
 		require.NoError(t, err)
 		assert.Equal(t, model.ArtifactStatusPending, retried.Status())
+
+		select {
+		case <-buildDone:
+		case <-time.After(2 * time.Second):
+		}
 	})
 }
 

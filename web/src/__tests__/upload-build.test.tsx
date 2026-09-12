@@ -97,6 +97,52 @@ describe('UploadBuildDialog & Drag-and-Drop Build Workflow', () => {
     expect(screen.getByRole('button', { name: /Upload & Build/i })).not.toBeDisabled()
   })
 
+  it('accepts valid .tar.bz2 file via file input and enables submit button', () => {
+    render(
+      <UploadBuildDialog
+        suiteId="suite-test-123"
+        open={true}
+        onOpenChange={mockOnOpenChange}
+      />,
+      { wrapper: createTestWrapper() }
+    )
+
+    const file = new File(['bzip2 content'], 'scenario.tar.bz2', {
+      type: 'application/x-bzip2',
+    })
+    const input = screen.getByTestId('source-file-input') as HTMLInputElement
+
+    fireEvent.change(input, { target: { files: [file] } })
+
+    expect(screen.getByText('scenario.tar.bz2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Upload & Build/i })).not.toBeDisabled()
+  })
+
+  it('accepts valid .tbz2 file via drag and drop', () => {
+    render(
+      <UploadBuildDialog
+        suiteId="suite-test-123"
+        open={true}
+        onOpenChange={mockOnOpenChange}
+      />,
+      { wrapper: createTestWrapper() }
+    )
+
+    const dropZone = screen.getByTestId('dropzone')
+    const file = new File(['tbz2 content'], 'loadtest.tbz2', {
+      type: 'application/x-bzip2',
+    })
+
+    fireEvent.dragEnter(dropZone)
+    fireEvent.dragOver(dropZone)
+    fireEvent.drop(dropZone, {
+      dataTransfer: { files: [file] },
+    })
+
+    expect(screen.getByText('loadtest.tbz2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Upload & Build/i })).not.toBeDisabled()
+  })
+
   it('rejects unsupported file formats with validation message', () => {
     render(
       <UploadBuildDialog
@@ -116,7 +162,11 @@ describe('UploadBuildDialog & Drag-and-Drop Build Workflow', () => {
       dataTransfer: { files: [file] },
     })
 
-    expect(screen.getByText(/Unsupported archive format/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        /Unsupported archive format\. Please upload a \.tar\.gz, \.tar\.bz2, or \.zip archive\./i
+      )
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Upload & Build/i })).toBeDisabled()
   })
 

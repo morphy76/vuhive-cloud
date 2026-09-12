@@ -117,7 +117,7 @@ export const RECIPES: RecipeDefinition[] = [
         id: 'step-upload-source',
         title: 'Step 3: Upload Source Archive & Trigger Compilation',
         description:
-          'Upload Go source archive to perform AST static validation and dispatch an ephemeral Kubernetes build Job.',
+          'Upload Go source archive (.tar.gz, .tar.bz2, or .zip) to perform AST static validation and dispatch an ephemeral Kubernetes build Job.',
         endpoint: '/api/v1/suites/{id}/builds',
         method: 'POST',
         generateCurl: (p) =>
