@@ -60,6 +60,8 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --wait --timeout=180s
 ```
 
+The OpenAPI viewer runs with its own dedicated context root defaulting to `/docs` (`openapiViewer.contextPath: "/docs"`), passing `BASE_URL: "/docs"` to the Swagger UI container.
+
 > [!IMPORTANT]
 > **Browser-Accessible `specUrl` Requirement**:
 > Swagger UI is a client-side Single Page Application (SPA) executed directly inside the operator's desktop browser (not a server-side proxy in the cluster). When loaded, the browser directly resolves and fetches the specification URL (`specUrl`).
@@ -80,24 +82,26 @@ kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openap
 kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080
 ```
 
-Then navigate to `http://localhost:8081` in your desktop browser. Swagger UI initiates a browser `fetch()` to `http://localhost:8080/openapi.json`.
+Then navigate to `http://localhost:8081/docs` in your desktop browser. Swagger UI serves under context root `/docs` and initiates a browser `fetch()` to `http://localhost:8080/openapi.json`.
 
 Because modern web browsers enforce the Same-Origin Policy when fetching resources across different ports or hostnames, the `vuhive-cloud` control plane includes built-in Cross-Origin Resource Sharing (CORS) middleware and responds to HTTP `OPTIONS` preflight requests with `204 No Content` and standard CORS headers (`Access-Control-Allow-Origin: *`), ensuring seamless API exploration and ad-hoc request testing without browser blocks.
 
 ### MinIO (S3-Compatible Object Storage)
 
 MinIO provides local S3-compatible object storage for test scenario archives, compiled binaries, and execution logs:
-- **S3 API Endpoint (Port `9000`)**: `http://vuhive-infra-minio:9000` — configured as `s3.endpoint` in `vuhive-cloud`.
+- **Dedicated Context Root**: MinIO Console is pre-configured with context root `/minio` via `CONSOLE_SUBPATH: "/minio"` and `MINIO_BROWSER_REDIRECT_URL: "/minio"`. This guarantees that console web assets and API calls are scoped cleanly under `/minio`, avoiding collisions with root-level applications or other path-based routes.
+- **S3 API Endpoint (Port `9000`)**: `http://vuhive-infra-minio:9000` — configured as `s3.endpoint` in `vuhive-cloud`. When exposed via Ingress, routes under path `/s3`.
 - **MinIO Console / WebUI (Port `9001`)**:
   ```bash
   kubectl port-forward -n vuhive-system svc/vuhive-infra-minio 9001:9001
   ```
-  Navigate to `http://localhost:9001` and sign in with root credentials (`vuhive-dev` / `vuhive-dev-secret`).
+  Navigate to `http://localhost:9001/minio` (or `http://localhost:9001` which redirects automatically) and sign in with root credentials (`vuhive-dev` / `vuhive-dev-secret`).
 
 ### Keycloak (OIDC Identity Provider & Authorization Server)
 
 Keycloak provides OIDC authentication and token issuance for the control plane and developer CLI:
 - **Image**: `quay.io/keycloak/keycloak:26.1.0`
+- **Dedicated Context Root (`/auth`)**: Keycloak is deployed with `KC_HTTP_RELATIVE_PATH: "/auth"` (`keycloak.httpRelativePath: "/auth"`). All realm discovery (`/auth/realms/vuhive/.well-known/openid-configuration`), token issuance (`/auth/realms/vuhive/protocol/openid-connect/token`), and admin console routes are scoped under `/auth`. Keycloak Quarkus liveness and readiness health probes execute independently on management port `9000` (`/health/live`, `/health/ready`).
 - **Database Backend & Isolation**: Automatically connects to the in-chart PostgreSQL instance (`vuhive-infra-postgresql`) using a dedicated database (`keycloak`) provisioned during initial startup via PostgreSQL `customScripts` (`02-init-keycloak-db.sh`). This isolates Keycloak's 87 internal IAM tables entirely from the core control plane and BFF tables residing in the `vuhive` database's `public` schema. An optional dedicated schema can also be specified via `keycloak.database.schema`.
 - **Declarative Realm Import**: Imports `files/vuhive-realm.json` defining the `vuhive` realm with **zero pre-created users**, standard roles (`vuhive-admin`, `vuhive-deployer`, `vuhive-developer`, `vuhive-viewer`, `vuhive-runner`), groups (`/administrators`, `/deployers`, `/developers`, `/viewers`), and clients (`vuhive-cloud-api`, `vuhive-cloud-cli`, `vuhive-runner`, `vuhive-cloud-bff`).
 - **Backchannel Logout Resolution**: Pre-configured with backchannel logout targeting the canonical BFF service `http://vuhive-vuhive-cloud-bff:8081/api/v1/bff/auth/backchannel-logout`.
@@ -105,7 +109,64 @@ Keycloak provides OIDC authentication and token issuance for the control plane a
   ```bash
   kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-keycloak 8082:8080
   ```
-  Navigate to `http://localhost:8082` and sign in with admin credentials (`admin` / `admin`).
+  Navigate to `http://localhost:8082/auth/admin` and sign in with admin credentials (`admin` / `admin`).
+
+## Dedicated Context Roots & Path-Based Ingress
+
+Every backing service in `vuhive-cloud-infra` is configured with its own dedicated context root rather than binding to root `/`. This architectural pattern enables operators to expose the entire stack behind a unified domain (or local Ingress controller such as Traefik or Ingress NGINX) using path-based routing rules without requiring URL rewrites, strip-prefix plugins, or facing broken asset links:
+
+| Component | Default Context Root | Service Port | Ingress Path (Prefix) | Example Ingress URL |
+|---|---|---|---|---|
+| **Control Plane API** (app chart) | `/api/v1` | `8080` | `/api/v1` | `http://vuhive.local/api/v1` |
+| **Web UI & BFF** (app chart) | `/` & `/api/v1/bff` | `8081` | `/` | `http://vuhive.local/` |
+| **OpenAPI Viewer** | `/docs` | `8080` | `/docs` | `http://vuhive.local/docs` |
+| **Keycloak IAM** | `/auth` | `8080` | `/auth` | `http://vuhive.local/auth` |
+| **MinIO Console** | `/minio` | `9001` | `/minio` | `http://vuhive.local/minio` |
+| **MinIO S3 API** | `/s3` | `9000` | `/s3` | `http://vuhive.local/s3` |
+
+### Unified Path-Based Ingress Example
+
+To expose all infrastructure services under a single hostname (e.g. `vuhive.local`), enable ingress on each component:
+
+```yaml
+# deploy/helm/vuhive-cloud-infra values snippet
+openapiViewer:
+  enabled: true
+  contextPath: "/docs"
+  specUrl: "/openapi.json"
+  ingress:
+    enabled: true
+    hosts:
+      - host: vuhive.local
+        paths:
+          - path: /docs
+            pathType: Prefix
+
+keycloak:
+  httpRelativePath: "/auth"
+  ingress:
+    enabled: true
+    hosts:
+      - host: vuhive.local
+        paths:
+          - path: /auth
+            pathType: Prefix
+
+minio:
+  environment:
+    CONSOLE_SUBPATH: "/minio"
+    MINIO_BROWSER_REDIRECT_URL: "http://vuhive.local/minio"
+  consoleIngress:
+    enabled: true
+    hosts:
+      - vuhive.local
+    path: /minio
+  ingress:
+    enabled: true
+    hosts:
+      - vuhive.local
+    path: /s3
+```
 
 ## Configuration Parameters
 
@@ -120,11 +181,18 @@ Keycloak provides OIDC authentication and token issuance for the control plane a
 | `minio.rootPassword` | MinIO root password | `vuhive-dev-secret` |
 | `minio.buckets[0].name` | Default artifact bucket name | `vuhive-artifacts` |
 | `minio.buckets[0].policy` | Default artifact bucket policy | `none` |
+| `minio.environment.CONSOLE_SUBPATH` | MinIO Console UI context subpath | `"/minio"` |
+| `minio.environment.MINIO_BROWSER_REDIRECT_URL` | MinIO Console browser redirect URL | `"/minio"` |
+| `minio.consoleIngress.enabled` | Enable Ingress for MinIO Console | `false` |
+| `minio.consoleIngress.path` | Ingress path for MinIO Console | `/minio` |
+| `minio.ingress.enabled` | Enable Ingress for MinIO S3 API | `false` |
+| `minio.ingress.path` | Ingress path for MinIO S3 API | `/s3` |
 | `keycloak.enabled` | Deploy Keycloak OIDC identity provider | `true` |
 | `keycloak.image.repository` | Container image repository for Keycloak | `quay.io/keycloak/keycloak` |
 | `keycloak.image.tag` | Container image tag | `26.1.0` |
 | `keycloak.adminUser` | Keycloak bootstrap administrator username | `admin` |
 | `keycloak.adminPassword` | Keycloak bootstrap administrator password | `admin` |
+| `keycloak.httpRelativePath` | Keycloak HTTP relative context path (`KC_HTTP_RELATIVE_PATH`) | `"/auth"` |
 | `keycloak.database.host` | Keycloak PostgreSQL host (defaults to in-chart service) | `""` |
 | `keycloak.database.port` | Keycloak PostgreSQL port | `5432` |
 | `keycloak.database.name` | Isolated Keycloak database name | `keycloak` |
@@ -132,17 +200,22 @@ Keycloak provides OIDC authentication and token issuance for the control plane a
 | `keycloak.database.password` | Keycloak database password | `vuhive-dev` |
 | `keycloak.database.schema` | Optional Keycloak database schema (`KC_DB_SCHEMA`) | `""` |
 | `keycloak.service.port` | Keycloak service port | `8080` |
+| `keycloak.ingress.enabled` | Enable Kubernetes Ingress for Keycloak | `false` |
+| `keycloak.ingress.className` | Ingress class name for Keycloak | `""` |
+| `keycloak.ingress.hosts[0].host` | Ingress host for Keycloak | `keycloak.local` |
+| `keycloak.ingress.hosts[0].paths[0].path` | Ingress path for Keycloak | `/auth` |
 | `openapiViewer.enabled` | Deploy optional third-party OpenAPI viewer (Swagger UI) | `false` |
 | `openapiViewer.image.repository` | Container image repository for OpenAPI viewer | `swaggerapi/swagger-ui` |
 | `openapiViewer.image.tag` | Container image tag | `v5.18.2` |
 | `openapiViewer.image.pullPolicy` | Container image pull policy | `IfNotPresent` |
+| `openapiViewer.contextPath` | Dedicated context root for Swagger UI (`BASE_URL`) | `"/docs"` |
 | `openapiViewer.specUrl` | Target URL to OpenAPI spec (fetched client-side by browser). Use `http://localhost:8080/openapi.json` for `kubectl port-forward` or `/openapi.json` for shared Ingress | `http://vuhive-vuhive-cloud:8080/openapi.json` |
 | `openapiViewer.service.type` | Kubernetes service type | `ClusterIP` |
 | `openapiViewer.service.port` | Kubernetes service port | `8080` |
 | `openapiViewer.ingress.enabled` | Enable Kubernetes Ingress for OpenAPI viewer | `false` |
 | `openapiViewer.ingress.className` | Ingress class name | `""` |
 | `openapiViewer.ingress.hosts[0].host` | Ingress host | `openapi.local` |
-| `openapiViewer.ingress.hosts[0].paths[0].path` | Ingress path | `/` |
+| `openapiViewer.ingress.hosts[0].paths[0].path` | Ingress path | `/docs` |
 
 > **Note:** Default credentials are intended for local development only.
 > Always override secrets in production using `existingSecret` references.

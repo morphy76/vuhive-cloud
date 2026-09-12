@@ -1,24 +1,25 @@
-{{- if and .Values.openapiViewer.enabled .Values.openapiViewer.ingress.enabled -}}
-{{- $fullName := include "vuhive-cloud-infra.openapiViewer.fullname" . -}}
-{{- $svcPort := .Values.openapiViewer.service.port -}}
+{{- if and .Values.keycloak.enabled .Values.keycloak.ingress.enabled -}}
+{{- $fullName := include "vuhive-cloud-infra.keycloak.fullname" . -}}
+{{- $svcPort := .Values.keycloak.service.port -}}
+{{- $defaultPath := default "/auth" .Values.keycloak.httpRelativePath -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ $fullName }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "vuhive-cloud-infra.openapiViewer.labels" . | nindent 4 }}
-  {{- with .Values.openapiViewer.ingress.annotations }}
+    {{- include "vuhive-cloud-infra.keycloak.labels" . | nindent 4 }}
+  {{- with .Values.keycloak.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if .Values.openapiViewer.ingress.className }}
-  ingressClassName: {{ .Values.openapiViewer.ingress.className }}
+  {{- if .Values.keycloak.ingress.className }}
+  ingressClassName: {{ .Values.keycloak.ingress.className }}
   {{- end }}
-  {{- if .Values.openapiViewer.ingress.tls }}
+  {{- if .Values.keycloak.ingress.tls }}
   tls:
-    {{- range .Values.openapiViewer.ingress.tls }}
+    {{- range .Values.keycloak.ingress.tls }}
     - hosts:
         {{- range .hosts }}
         - {{ . | quote }}
@@ -27,8 +28,8 @@ spec:
     {{- end }}
   {{- end }}
   rules:
-    {{- if .Values.openapiViewer.ingress.hosts }}
-    {{- range .Values.openapiViewer.ingress.hosts }}
+    {{- if .Values.keycloak.ingress.hosts }}
+    {{- range .Values.keycloak.ingress.hosts }}
     - host: {{ .host | quote }}
       http:
         paths:
@@ -45,7 +46,7 @@ spec:
     {{- else }}
     - http:
         paths:
-          - path: {{ default (default "/docs" .Values.openapiViewer.contextPath) .Values.openapiViewer.ingress.path }}
+          - path: {{ default $defaultPath .Values.keycloak.ingress.path }}
             pathType: ImplementationSpecific
             backend:
               service:

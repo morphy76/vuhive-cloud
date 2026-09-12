@@ -23,19 +23,23 @@ spec:
           env:
             - name: URL
               value: {{ .Values.openapiViewer.specUrl | quote }}
+            {{- if .Values.openapiViewer.contextPath }}
+            - name: BASE_URL
+              value: {{ .Values.openapiViewer.contextPath | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
+              path: {{ .Values.openapiViewer.contextPath | default "/docs" }}
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /
+              path: {{ .Values.openapiViewer.contextPath | default "/docs" }}
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
