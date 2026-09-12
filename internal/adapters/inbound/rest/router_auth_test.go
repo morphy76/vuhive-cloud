@@ -62,10 +62,20 @@ func TestRouter_RBACProtection(t *testing.T) {
 		router.ServeHTTP(w2, req2)
 		assert.Equal(t, http.StatusOK, w2.Code)
 
-		req3, _ := http.NewRequest(http.MethodGet, "/version", nil)
+		req3, _ := http.NewRequest(http.MethodGet, "/api/version", nil)
 		w3 := httptest.NewRecorder()
 		router.ServeHTTP(w3, req3)
 		assert.Equal(t, http.StatusOK, w3.Code)
+
+		req4, _ := http.NewRequest(http.MethodGet, "/api/openapi.yaml", nil)
+		w4 := httptest.NewRecorder()
+		router.ServeHTTP(w4, req4)
+		assert.Equal(t, http.StatusOK, w4.Code)
+
+		req5, _ := http.NewRequest(http.MethodGet, "/api/openapi.json", nil)
+		w5 := httptest.NewRecorder()
+		router.ServeHTTP(w5, req5)
+		assert.Equal(t, http.StatusOK, w5.Code)
 	})
 
 	t.Run("unauthenticated request to protected endpoint returns 401", func(t *testing.T) {

@@ -18,7 +18,7 @@ This chart bundles backing infrastructure dependencies for the `vuhive-cloud` co
 > - **Developer & Contributor Guide**: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
 > - **Control Plane Helm Chart**: [`deploy/helm/vuhive-cloud/README.md`](../vuhive-cloud/README.md)
 > - **Adoption Guide & API Recipes**: [`docs/cookbook.md`](../../docs/cookbook.md)
-> - **REST API Reference**: [OpenAPI 3.1 Specification (`api/openapi.yaml`)](../../api/openapi.yaml) (served live at `GET /openapi.yaml` and `GET /openapi.json`)
+> - **REST API Reference**: [OpenAPI 3.1 Specification (`api/openapi.yaml`)](../../api/openapi.yaml) (served live at `GET /api/openapi.yaml` and `GET /api/openapi.json`)
 > - **Engineering Philosophy**: [`AI_DISCLOSURE.md`](../../AI_DISCLOSURE.md)
 
 ## Prerequisites
@@ -56,7 +56,7 @@ helm install vuhive-infra deploy/helm/vuhive-cloud-infra \
   --namespace vuhive-system \
   --create-namespace \
   --set openapiViewer.enabled=true \
-  --set openapiViewer.specUrl="http://localhost:8080/openapi.json" \
+  --set openapiViewer.specUrl="http://localhost:8080/api/openapi.json" \
   --wait --timeout=180s
 ```
 
@@ -66,9 +66,9 @@ The OpenAPI viewer runs with its own dedicated context root defaulting to `/docs
 > **Browser-Accessible `specUrl` Requirement**:
 > Swagger UI is a client-side Single Page Application (SPA) executed directly inside the operator's desktop browser (not a server-side proxy in the cluster). When loaded, the browser directly resolves and fetches the specification URL (`specUrl`).
 >
-> - **In-Cluster Default (`http://vuhive-vuhive-cloud:8080/openapi.json`)**: Resolves only inside the Kubernetes pod network. Desktop browsers accessing Swagger UI externally cannot resolve Kubernetes internal DNS names (`vuhive-vuhive-cloud`), causing `ERR_NAME_NOT_RESOLVED`.
-> - **Local Development via `kubectl port-forward`**: Configure `specUrl: "http://localhost:8080/openapi.json"` (as shown above) and port-forward both the viewer and the control plane to your local machine.
-> - **Ingress / Shared Domain**: When exposing Swagger UI and the control plane under the same ingress hostname, configure a relative path (e.g., `--set openapiViewer.specUrl="/openapi.json"`).
+> - **In-Cluster Default (`http://vuhive-vuhive-cloud:8080/api/openapi.json`)**: Resolves only inside the Kubernetes pod network. Desktop browsers accessing Swagger UI externally cannot resolve Kubernetes internal DNS names (`vuhive-vuhive-cloud`), causing `ERR_NAME_NOT_RESOLVED`.
+> - **Local Development via `kubectl port-forward`**: Configure `specUrl: "http://localhost:8080/api/openapi.json"` (as shown above) and port-forward both the viewer and the control plane to your local machine.
+> - **Ingress / Shared Domain**: When exposing Swagger UI and the control plane under the same ingress hostname, configure a relative path (e.g., `--set openapiViewer.specUrl="/api/openapi.json"`).
 
 #### Accessing Swagger UI via Port-Forwarding
 
@@ -82,7 +82,7 @@ kubectl port-forward -n vuhive-system svc/vuhive-infra-vuhive-cloud-infra-openap
 kubectl port-forward -n vuhive-system svc/vuhive-vuhive-cloud 8080:8080
 ```
 
-Then navigate to `http://localhost:8081/docs` in your desktop browser. Swagger UI serves under context root `/docs` and initiates a browser `fetch()` to `http://localhost:8080/openapi.json`.
+Then navigate to `http://localhost:8081/docs` in your desktop browser. Swagger UI serves under context root `/docs` and initiates a browser `fetch()` to `http://localhost:8080/api/openapi.json`.
 
 Because modern web browsers enforce the Same-Origin Policy when fetching resources across different ports or hostnames, the `vuhive-cloud` control plane includes built-in Cross-Origin Resource Sharing (CORS) middleware and responds to HTTP `OPTIONS` preflight requests with `204 No Content` and standard CORS headers (`Access-Control-Allow-Origin: *`), ensuring seamless API exploration and ad-hoc request testing without browser blocks.
 
@@ -225,7 +225,7 @@ spec:
 | `openapiViewer.image.tag` | Container image tag | `v5.18.2` |
 | `openapiViewer.image.pullPolicy` | Container image pull policy | `IfNotPresent` |
 | `openapiViewer.contextPath` | Dedicated context root for Swagger UI (`BASE_URL`) | `"/docs"` |
-| `openapiViewer.specUrl` | Target URL to OpenAPI spec (fetched client-side by browser). Use `http://localhost:8080/openapi.json` for `kubectl port-forward` or `/openapi.json` for shared Ingress | `http://vuhive-vuhive-cloud:8080/openapi.json` |
+| `openapiViewer.specUrl` | Target URL to OpenAPI spec (fetched client-side by browser). Use `http://localhost:8080/api/openapi.json` for `kubectl port-forward` or `/api/openapi.json` for shared Ingress | `http://vuhive-vuhive-cloud:8080/api/openapi.json` |
 | `openapiViewer.service.type` | Kubernetes service type | `ClusterIP` |
 | `openapiViewer.service.port` | Kubernetes service port | `8080` |
 

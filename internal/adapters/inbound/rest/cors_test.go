@@ -14,8 +14,8 @@ func TestCORSMiddleware_DefaultWildcard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := rest.SetupRouter(nil, nil, nil, nil)
 
-	t.Run("OPTIONS /openapi.json returns 204 with CORS headers", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodOptions, "/openapi.json", nil)
+	t.Run("OPTIONS /api/openapi.json returns 204 with CORS headers", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodOptions, "/api/openapi.json", nil)
 		req.Header.Set("Origin", "http://localhost:8081")
 		req.Header.Set("Access-Control-Request-Method", "GET")
 		req.Header.Set("Access-Control-Request-Headers", "Content-Type, X-Request-ID")
@@ -33,8 +33,8 @@ func TestCORSMiddleware_DefaultWildcard(t *testing.T) {
 		assert.Equal(t, "86400", w.Header().Get("Access-Control-Max-Age"))
 	})
 
-	t.Run("OPTIONS /openapi.yaml returns 204 with CORS headers", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodOptions, "/openapi.yaml", nil)
+	t.Run("OPTIONS /api/openapi.yaml returns 204 with CORS headers", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodOptions, "/api/openapi.yaml", nil)
 		req.Header.Set("Origin", "http://localhost:8081")
 		w := httptest.NewRecorder()
 
@@ -66,8 +66,8 @@ func TestCORSMiddleware_DefaultWildcard(t *testing.T) {
 		assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
 	})
 
-	t.Run("GET /openapi.json with Origin returns 200 with CORS headers", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
+	t.Run("GET /api/openapi.json with Origin returns 200 with CORS headers", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/openapi.json", nil)
 		req.Header.Set("Origin", "http://localhost:8081")
 		w := httptest.NewRecorder()
 

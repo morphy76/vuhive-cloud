@@ -44,7 +44,7 @@ paths:
                     type: string
                     example: ok
 
-  /version:
+  /api/version:
     get:
       summary: Component version
       description: Returns semantic version, git commit hash, and build timestamp.
@@ -58,7 +58,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/VersionResponse'
 
-  /openapi.yaml:
+  /api/openapi.yaml:
     get:
       summary: OpenAPI 3.1 YAML specification
       description: Returns raw OpenAPI 3.1 specification definition in YAML format.
@@ -72,7 +72,7 @@ paths:
               schema:
                 type: string
 
-  /openapi.json:
+  /api/openapi.json:
     get:
       summary: OpenAPI 3.1 JSON specification
       description: Returns raw OpenAPI 3.1 specification definition in JSON format.

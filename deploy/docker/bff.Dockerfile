@@ -12,6 +12,9 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml* ./
 RUN pnpm install --frozen-lockfile
 
+# Copy documentation referenced by frontend (cookbook)
+COPY docs/ /src/docs/
+
 # Copy frontend source code and configuration files
 COPY web/ .
 

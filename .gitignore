@@ -39,6 +39,8 @@ node_modules
 web/node_modules
 .pnpm-store/
 .vite/
+dist/
+web/dist/
 coverage/
 web/coverage/
 *.tsbuildinfo

@@ -192,7 +192,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: any) => void }> = ({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <a
-                      href="/openapi.yaml"
+                      href="/api/openapi.yaml"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors text-xs font-medium text-slate-700 dark:text-slate-300"
