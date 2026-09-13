@@ -200,7 +200,6 @@ cat << 'EOF' > /tmp/smoke-test-module/scenario.go
 package scenario
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -210,14 +209,19 @@ import (
 
 func NewScenario() *vuhive.Scenario {
 	client := &http.Client{Timeout: 5 * time.Second}
-	return vuhive.NewScenario("Smoke Test").
-		Step("Ping", func(ctx context.Context) error {
-			resp, err := client.Get("http://vuhive-vuhive-cloud:8080/healthz")
+	return &vuhive.Scenario{
+		RunVU: func(ctx vuhive.VUContext) error {
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://vuhive-vuhive-cloud:8080/healthz", nil)
+			if err != nil {
+				return err
+			}
+			resp, err := client.Do(req)
 			if err != nil || resp.StatusCode != http.StatusOK {
 				return fmt.Errorf("ping failed: %w", err)
 			}
-			return nil
-		})
+			return resp.Body.Close()
+		},
+	}
 }
 EOF
 

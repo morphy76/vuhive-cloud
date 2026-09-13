@@ -1,0 +1,7 @@
+name: CodeQL Configuration
+
+# Exclude the web frontend from CodeQL analysis
+# The web directory contains Node.js/React code which is out of scope for Go security scanning
+# and requires pnpm/Node.js setup that is unnecessary for analyzing the Go codebase
+paths-ignore:
+  - web

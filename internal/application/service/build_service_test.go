@@ -700,7 +700,7 @@ import (
 )
 
 func NewScenario() *vuhive.Scenario {
-	return vuhive.NewScenario("Test")
+	return &vuhive.Scenario{}
 }
 `,
 		})
@@ -1070,7 +1070,7 @@ import (
 )
 
 func NewScenario() *vuhive.Scenario {
-	return vuhive.NewScenario("Auto Test")
+	return &vuhive.Scenario{}
 }
 `,
 		})

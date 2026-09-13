@@ -108,7 +108,6 @@ func validScenarioCode() string {
 	return `package scenario
 
 import (
-	"context"
 	"net/http"
 	"time"
 
@@ -117,14 +116,19 @@ import (
 
 func NewScenario() *vuhive.Scenario {
 	client := &http.Client{Timeout: 5 * time.Second}
-	return vuhive.NewScenario("User Checkout Flow").
-		Step("Homepage", func(ctx context.Context) error {
-			resp, err := client.Get("http://target/healthz")
+	return &vuhive.Scenario{
+		RunVU: func(ctx vuhive.VUContext) error {
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://target/healthz", nil)
+			if err != nil {
+				return err
+			}
+			resp, err := client.Do(req)
 			if err != nil {
 				return err
 			}
 			return resp.Body.Close()
-		})
+		},
+	}
 }
 `
 }
@@ -424,7 +428,7 @@ var Scenario = vuhive.NewScenario("Checkout")
 		assert.Equal(t, service.EntrypointKindVariable, res.EntrypointKind)
 	})
 
-	t.Run("succeeds with Register function", func(t *testing.T) {
+	t.Run("succeeds with Register function accepting Engine", func(t *testing.T) {
 		archive := createTestTarGz(t, map[string]string{
 			"go.mod": validGoMod(),
 			"scenario.go": `package scenario
@@ -432,7 +436,27 @@ var Scenario = vuhive.NewScenario("Checkout")
 import "github.com/morphy76/vuhive"
 
 func Register(engine *vuhive.Engine) {
-	_ = engine.Run(vuhive.NewScenario("Checkout"))
+	_ = engine
+}
+`,
+		})
+		res, err := analyzer.AnalyzeArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, "Register", res.EntrypointName)
+		assert.Equal(t, service.EntrypointKindRegister, res.EntrypointKind)
+	})
+
+	t.Run("succeeds with Register function accepting Suite", func(t *testing.T) {
+		archive := createTestTarGz(t, map[string]string{
+			"go.mod": validGoMod(),
+			"scenario.go": `package scenario
+
+import "github.com/morphy76/vuhive/pkg/vuhive"
+
+func Register(suite *vuhive.Suite) {
+	suite.RegisterScenario("Checkout", vuhive.Scenario{
+		RunVU: func(ctx vuhive.VUContext) error { return nil },
+	})
 }
 `,
 		})
@@ -513,7 +537,9 @@ func TestStaticAnalyzer_PrepareSourceArchive(t *testing.T) {
 			"scenario.go": validScenarioCode(),
 		})
 
-		preparedBytes, res, err := analyzer.PrepareSourceArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{})
+		preparedBytes, res, err := analyzer.PrepareSourceArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{
+			SuiteName: "User Checkout Flow",
+		})
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		assert.Equal(t, "mytest", res.ModuleName)
@@ -547,6 +573,10 @@ func TestStaticAnalyzer_PrepareSourceArchive(t *testing.T) {
 		assert.Contains(t, mainContent, `"summary-export"`)
 		assert.Contains(t, mainContent, `"github.com/morphy76/vuhive/pkg/vuhive"`)
 		assert.NotContains(t, mainContent, "\t\"github.com/morphy76/vuhive\"\n")
+		assert.Contains(t, mainContent, `vuhive.NewSuite("User Checkout Flow")`)
+		assert.NotContains(t, mainContent, "vuhive.EngineConfig")
+		assert.NotContains(t, mainContent, "vuhive.NewEngine")
+		assert.Contains(t, mainContent, "--json-report-out=")
 	})
 
 	t.Run("successfully repackages zip archive into tar.gz with injected main.go", func(t *testing.T) {
@@ -684,3 +714,4 @@ require github.com/morphy76/vuhive v1.1.5
 		assert.Equal(t, "1.27", detected)
 	})
 }
+

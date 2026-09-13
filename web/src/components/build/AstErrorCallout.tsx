@@ -51,7 +51,7 @@ export const AstErrorCallout: React.FC<AstErrorCalloutProps> = ({
           'Do not declare "package main" or "func main()". The cloud builder automatically injects a hardened execution driver.',
           'Declare "package scenario" in your Go file and export a constructor such as func NewScenario() *vuhive.Scenario.',
         ],
-        codeSnippet: 'package scenario\n\nimport "github.com/morphy76/vuhive/pkg/vuhive"\n\nfunc NewScenario() *vuhive.Scenario {\n    return vuhive.NewScenario("User Flow")\n}',
+        codeSnippet: 'package scenario\n\nimport "github.com/morphy76/vuhive/pkg/vuhive"\n\nfunc NewScenario() *vuhive.Scenario {\n    return &vuhive.Scenario{\n        RunVU: func(ctx vuhive.VUContext) error {\n            return nil\n        },\n    }\n}',
       }
     }
 
@@ -73,9 +73,9 @@ export const AstErrorCallout: React.FC<AstErrorCalloutProps> = ({
         title: 'Missing Scenario Entrypoint Contract',
         rule: 'Scenario Contract Requirement',
         tips: [
-          'Ensure your package implements func NewScenario() *vuhive.Scenario, func Scenario(), or func Register(*vuhive.Engine).',
+          'Ensure your package implements func NewScenario() *vuhive.Scenario, func Scenario(), or func Register(*vuhive.Suite).',
         ],
-        codeSnippet: 'func NewScenario() *vuhive.Scenario {\n    return vuhive.NewScenario("Load Test")\n}',
+        codeSnippet: 'func NewScenario() *vuhive.Scenario {\n    return &vuhive.Scenario{\n        RunVU: func(ctx vuhive.VUContext) error {\n            return nil\n        },\n    }\n}',
       }
     }
 
