@@ -219,6 +219,7 @@ describe('Run Runtime Cleanup and Deletion UI', () => {
         {
           id: 'suite-1',
           name: 'Smoke Test Suite',
+          description: 'Smoke test suite description',
           state: 'ACTIVE',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),

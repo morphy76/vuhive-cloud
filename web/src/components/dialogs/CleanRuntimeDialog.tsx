@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { AlertTriangle, Loader2, Sparkles } from 'lucide-react'
+import { Loader2, Sparkles } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -73,7 +73,7 @@ export const CleanRuntimeDialog: React.FC<CleanRuntimeDialogProps> = ({
             </div>
             {run.k8sJobName && (
               <div className="text-[11px] text-slate-500 dark:text-slate-400 font-mono">
-                Job: {run.k8sJobName} {run.runnerNamespace ? `in ${run.runnerNamespace}` : ''}
+                Job: {run.k8sJobName} {run.k8sNamespace ? `in ${run.k8sNamespace}` : ''}
               </div>
             )}
             <div className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -94,7 +94,7 @@ export const CleanRuntimeDialog: React.FC<CleanRuntimeDialogProps> = ({
           </Button>
           <Button
             type="button"
-            variant="warning"
+            variant="default"
             onClick={handleConfirm}
             disabled={isCleaning}
             className="min-h-[40px] bg-amber-600 hover:bg-amber-700 text-white gap-1.5"

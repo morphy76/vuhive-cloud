@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { AlertTriangle, Loader2, Trash2 } from 'lucide-react'
+import { Loader2, Trash2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -78,9 +78,9 @@ export const DeleteRunDialog: React.FC<DeleteRunDialogProps> = ({
             <div className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
               {run.id}
             </div>
-            {run.suiteName && (
+            {run.suiteId && (
               <div className="text-[11px] text-slate-600 dark:text-slate-300">
-                Suite: {run.suiteName}
+                Suite ID: {run.suiteId}
               </div>
             )}
             <div className="text-[11px] text-slate-500 dark:text-slate-400">
