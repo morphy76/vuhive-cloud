@@ -6,6 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { VirtualizedLogViewer } from '@/components/logs/VirtualizedLogViewer'
 import { useRunLogs } from '@/hooks/use-runs'
 import type { HistoricalRun } from '@/types/suite'
@@ -40,15 +41,17 @@ export const ExecutionLogDialog: React.FC<ExecutionLogDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <VirtualizedLogViewer
-          logs={logs}
-          runId={run.id}
-          title="Container Execution Logs (run.log)"
-          subtitle={`Status: ${run.status} • Job: ${run.k8sJobName || 'vuhive-run'}`}
-          isLoading={isLoading}
-          onClose={() => onOpenChange(false)}
-          className="h-full border-0 rounded-none"
-        />
+        <TooltipProvider>
+          <VirtualizedLogViewer
+            logs={logs}
+            runId={run.id}
+            title="Container Execution Logs (run.log)"
+            subtitle={`Status: ${run.status} • Job: ${run.k8sJobName || 'vuhive-run'}`}
+            isLoading={isLoading}
+            onClose={() => onOpenChange(false)}
+            className="h-full border-0 rounded-none"
+          />
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
   )

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { useProfile } from '@/hooks/use-profiles'
 import { useSuiteArtifacts } from '@/hooks/use-suites'
@@ -223,16 +224,21 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
           </Button>
 
           {onClose && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-9 w-9 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-              aria-label="Close summary dashboard"
-            >
-              <X className="w-5 h-5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClose}
+                  className="h-9 w-9 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  aria-label="Close summary dashboard"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Close summary dashboard</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
@@ -569,20 +575,25 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
                     {checksum}
                   </span>
                   {checksum !== 'N/A' && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleCopyChecksum}
-                      className="h-7 w-7 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                      aria-label="Copy checksum"
-                    >
-                      {copiedChecksum ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-500" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={handleCopyChecksum}
+                          className="h-7 w-7 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                          aria-label="Copy checksum"
+                        >
+                          {copiedChecksum ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{copiedChecksum ? 'Copied' : 'Copy checksum'}</TooltipContent>
+                    </Tooltip>
                   )}
                 </div>
               </div>

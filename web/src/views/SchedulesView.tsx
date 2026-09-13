@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { CreateScheduleDialog } from '@/components/dialogs/CreateScheduleDialog'
@@ -330,18 +331,25 @@ export const SchedulesView: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
                               <span>{s.id}</span>
-                              <button
-                                type="button"
-                                aria-label={`Copy ID for ${s.name}`}
-                                onClick={() => handleCopy(s.id, s.id)}
-                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                              >
-                                {copiedId === s.id ? (
-                                  <Check className="w-3 h-3 text-emerald-500" />
-                                ) : (
-                                  <Copy className="w-3 h-3" />
-                                )}
-                              </button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    aria-label={`Copy ID for ${s.name}`}
+                                    onClick={() => handleCopy(s.id, s.id)}
+                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-0.5"
+                                  >
+                                    {copiedId === s.id ? (
+                                      <Check className="w-3 h-3 text-emerald-500" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {copiedId === s.id ? 'Copied!' : 'Copy schedule ID'}
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
                           </div>
                         </div>
@@ -391,71 +399,93 @@ export const SchedulesView: React.FC = () => {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {/* Run Now (Ad-Hoc Trigger) */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={isRowPending}
-                            onClick={() => handleRunNow(s)}
-                            className="h-8 px-2 text-xs gap-1 text-brand-600 dark:text-brand-400 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/40"
-                            aria-label={`Run now for schedule ${s.name}`}
-                          >
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            <span className="hidden md:inline">Run Now</span>
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isRowPending}
+                                onClick={() => handleRunNow(s)}
+                                className="h-9 px-2 text-xs gap-1 text-brand-600 dark:text-brand-400 hover:text-brand-700 hover:bg-brand-50 dark:hover:bg-brand-950/40"
+                                aria-label={`Run now for schedule ${s.name}`}
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span className="hidden md:inline">Run Now</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Run now</TooltipContent>
+                          </Tooltip>
 
                           {/* Pause / Resume */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={isRowPending}
-                            onClick={() => handleToggleActive(s)}
-                            className={`h-8 px-2 text-xs gap-1 ${
-                              s.isActive
-                                ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
-                                : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
-                            }`}
-                            aria-label={
-                              s.isActive
-                                ? `Pause schedule ${s.name}`
-                                : `Resume schedule ${s.name}`
-                            }
-                          >
-                            {s.isActive ? (
-                              <>
-                                <Pause className="w-3.5 h-3.5" />
-                                <span className="hidden md:inline">Pause</span>
-                              </>
-                            ) : (
-                              <>
-                                <Play className="w-3.5 h-3.5" />
-                                <span className="hidden md:inline">Resume</span>
-                              </>
-                            )}
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isRowPending}
+                                onClick={() => handleToggleActive(s)}
+                                className={`h-9 px-2 text-xs gap-1 ${
+                                  s.isActive
+                                    ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                                    : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                                }`}
+                                aria-label={
+                                  s.isActive
+                                    ? `Pause schedule ${s.name}`
+                                    : `Resume schedule ${s.name}`
+                                }
+                              >
+                                {s.isActive ? (
+                                  <>
+                                    <Pause className="w-3.5 h-3.5" />
+                                    <span className="hidden md:inline">Pause</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="w-3.5 h-3.5" />
+                                    <span className="hidden md:inline">Resume</span>
+                                  </>
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {s.isActive ? 'Pause schedule' : 'Resume schedule'}
+                            </TooltipContent>
+                          </Tooltip>
 
                           {/* Execution History */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleOpenHistory(s)}
-                            className="h-8 px-2 text-xs gap-1 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                            aria-label={`View execution history for ${s.name}`}
-                          >
-                            <History className="w-3.5 h-3.5" />
-                            <span className="hidden lg:inline">History</span>
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleOpenHistory(s)}
+                                className="h-9 px-2 text-xs gap-1 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                aria-label={`View execution history for ${s.name}`}
+                              >
+                                <History className="w-3.5 h-3.5" />
+                                <span className="hidden lg:inline">History</span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Execution history</TooltipContent>
+                          </Tooltip>
 
                           {/* Delete */}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={isRowPending}
-                            onClick={() => setDeleteScheduleTarget(s)}
-                            className="h-8 px-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
-                            aria-label={`Delete schedule ${s.name}`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isRowPending}
+                                onClick={() => setDeleteScheduleTarget(s)}
+                                className="h-9 w-9 p-0 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40"
+                                aria-label={`Delete schedule ${s.name}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete schedule</TooltipContent>
+                          </Tooltip>
                         </div>
                       </td>
                     </tr>

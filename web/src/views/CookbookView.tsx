@@ -6,6 +6,7 @@ import { CookbookToc } from '@/components/markdown/CookbookToc'
 import { extractHeadings } from '@/lib/markdown-utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 interface CookbookViewProps {
   content?: string
@@ -94,15 +95,20 @@ export const CookbookView: React.FC<CookbookViewProps> = ({ content }) => {
 
       {/* Scroll to top floating button */}
       {showScrollTop && (
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={scrollToTop}
-          aria-label="Scroll back to top"
-          className="fixed bottom-20 right-6 z-40 rounded-full shadow-lg bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 min-h-[44px] min-w-[44px]"
-        >
-          <ChevronUp className="w-5 h-5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={scrollToTop}
+              aria-label="Scroll back to top"
+              className="fixed bottom-20 right-6 z-40 rounded-full shadow-lg bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 min-h-[44px] min-w-[44px]"
+            >
+              <ChevronUp className="w-5 h-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">Scroll back to top</TooltipContent>
+        </Tooltip>
       )}
     </div>
   )

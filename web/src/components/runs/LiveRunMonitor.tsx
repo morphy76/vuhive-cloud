@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { AbortConfirmationDialog } from '@/components/dialogs/AbortConfirmationDialog'
 import { ExecutionLogDialog } from '@/components/dialogs/ExecutionLogDialog'
 import { useAbortRun } from '@/hooks/use-runs'
@@ -188,16 +189,21 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
           )}
 
           {onClose && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-8 w-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-              aria-label="Close Monitor"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClose}
+                  className="h-9 w-9 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  aria-label="Close Monitor"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Close Monitor</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>

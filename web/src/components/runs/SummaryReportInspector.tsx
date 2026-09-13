@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { useRunReport } from '@/hooks/use-runs'
 import { JsonTreeViewer } from '@/components/runs/JsonTreeViewer'
 import { SummaryTableView } from '@/components/runs/SummaryTableView'
@@ -67,6 +68,7 @@ export const SummaryReportInspector: React.FC<SummaryReportInspectorProps> = ({
   return (
     <div className={`space-y-4 ${className}`}>
       {/* Top Header & Toolbar */}
+      <TooltipProvider delayDuration={0}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
           <div className="flex items-center gap-2">
@@ -159,19 +161,25 @@ export const SummaryReportInspector: React.FC<SummaryReportInspectorProps> = ({
           </Button>
 
           {onClose && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-8 w-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-              aria-label="Close inspector"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClose}
+                  className="h-9 w-9 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  aria-label="Close inspector"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Close inspector</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
+      </TooltipProvider>
 
       {/* Global Search Filter */}
       <div className="relative max-w-md">
