@@ -950,8 +950,7 @@ func TestRunHandler_DeleteRun(t *testing.T) {
 		}
 
 		router := rest.SetupRouter(nil, nil, nil, mockUC)
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/runs/run-active/delete", nil) // note: DELETE /api/v1/runs/:id
-		req = httptest.NewRequest(http.MethodDelete, "/api/v1/runs/run-active", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/runs/run-active", nil)
 		resp := httptest.NewRecorder()
 
 		router.ServeHTTP(resp, req)
