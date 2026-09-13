@@ -413,6 +413,7 @@ export const DashboardView: React.FC<{ onNavigate?: (route: RouteId) => void }> 
       <TriggerRunDialog
         open={isRunDialogOpen}
         onOpenChange={setIsRunDialogOpen}
+        onNavigate={onNavigate}
       />
     </div>
   )

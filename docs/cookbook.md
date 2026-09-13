@@ -655,10 +655,13 @@ The control plane:
 Operators can also launch and monitor executions directly in the React 19 web interface:
 1. Navigate to **Test Runs** (`/runs`) or open any active test suite in **Test Suites** (`/suites/:id`).
 2. Click **New Execution** (or **Trigger Run**) to open `<TriggerRunDialog />`.
-3. Select an active test suite, choose an artifact (optionally filtered by target platform architecture `linux/amd64` or `linux/arm64`), select a scenario configuration, and pick a runner profile.
-4. Optionally customize the **Execution Timeout Override** (`activeDeadlineSeconds`) to enforce a custom deadline for runaway workloads.
-5. Click **Trigger Run**. The web application dispatches the execution, transitions directly to the `<LiveRunMonitor />`, and subscribes to real-time Server-Sent Events (`run_status_changed`).
-6. The live monitor presents a phase transition timeline (`QUEUED` $\to$ `RUNNING` $\to$ `COMPLETED` / `FAILED` / `ABORTED`), a 1-second wall-clock execution timer, live performance KPIs, and pod/job metadata.
+3. The dialog organizes execution parameters into four clear sections:
+   - **Test Target**: Select the target active test suite and compiled binary artifact (with architecture filtering for `linux/amd64` and `linux/arm64`).
+   - **Scenario Configuration**: Optionally select an attached `vuhive.yaml` scenario configuration or use embedded defaults.
+   - **Execution Infrastructure**: Choose a registered Runner Profile. Cluster compute resources (CPU request/limit, memory request/limit, worker pods, runner container image, node tolerations, and runtime class) are displayed in a read-only summary card. To customize resources or scheduling rules, use the direct link to the **Profiles** tab.
+   - **Execution Safeguards**: Optionally customize the **Execution Timeout Override** (`activeDeadlineSeconds`) to enforce a custom deadline for runaway workloads.
+4. Click **Trigger Run**. The web application dispatches the execution, transitions directly to the `<LiveRunMonitor />`, and subscribes to real-time Server-Sent Events (`run_status_changed`).
+5. The live monitor presents a phase transition timeline (`QUEUED` $\to$ `RUNNING` $\to$ `COMPLETED` / `FAILED` / `ABORTED`), a 1-second wall-clock execution timer, live performance KPIs, and pod/job metadata.
 
 #### 3. Dispatching from a Configured Schedule Template:
 
