@@ -114,6 +114,9 @@ curl -i http://localhost:8080/api/version
 > [!NOTE]
 > **Stateful Health Probe Logging**:
 > Health probe endpoints (`/healthz`, `/api/v1/health`) use stateful logging to prevent log pollution from periodic Kubernetes liveness and readiness probes. Probes emit log entries only upon status change (`Info` on good status, `Warn` on bad status). Consecutive evaluations with unchanged status remain silent.
+>
+> **Go Runtime Container Ergonomics & Rapid Pod Readiness (Issue #209)**:
+> All Go workloads (`server`, `bff`, `runner-wrapper`, `runner-init`) automatically configure `GOMAXPROCS` based on cgroup quotas via `go.uber.org/automaxprocs` to prevent CFS CPU quota scheduler thrashing. In addition, `GOMEMLIMIT` is automatically injected into Deployments via the Kubernetes Downward API and into test runner pods via `RunnerJobGenerator` (tuned to 85% of memory ceiling), preventing container `OOMKilled` terminations before GC reclamation. Deployments utilize a fast `startupProbe` (polling every 1s) coupled with sub-second `readinessProbe` activation once cold start completes.
 
 Example `/api/version` response:
 ```json
@@ -835,6 +838,23 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `service.type` | Service type | `ClusterIP` |
 | `service.port` | Service port | `8080` |
 | `ingress.enabled` | Enable Ingress | `false` |
+| `resources.requests.cpu` | CPU request for control plane server | `100m` |
+| `resources.requests.memory` | Memory request for control plane server | `128Mi` |
+| `resources.limits.cpu` | CPU limit for control plane server | `500m` |
+| `resources.limits.memory` | Memory limit for control plane server | `512Mi` |
+| `startupProbe.httpGet.path` | Startup probe HTTP path | `/healthz` |
+| `startupProbe.initialDelaySeconds` | Startup probe initial delay before polling begins | `1` |
+| `startupProbe.periodSeconds` | Startup probe poll interval | `1` |
+| `startupProbe.timeoutSeconds` | Startup probe request timeout | `2` |
+| `startupProbe.failureThreshold` | Startup probe maximum failure attempts before pod restart | `30` |
+| `livenessProbe.initialDelaySeconds` | Liveness probe initial delay once startup succeeds | `0` |
+| `livenessProbe.periodSeconds` | Liveness probe steady-state check frequency | `15` |
+| `livenessProbe.timeoutSeconds` | Liveness probe request timeout | `5` |
+| `livenessProbe.failureThreshold` | Liveness probe failure threshold | `3` |
+| `readinessProbe.initialDelaySeconds` | Readiness probe initial delay once startup succeeds | `0` |
+| `readinessProbe.periodSeconds` | Readiness probe poll frequency | `2` |
+| `readinessProbe.timeoutSeconds` | Readiness probe request timeout | `5` |
+| `readinessProbe.failureThreshold` | Readiness probe failure threshold | `2` |
 | `database.host` | PostgreSQL host | `vuhive-infra-postgresql` |
 | `database.port` | PostgreSQL port | `5432` |
 | `database.name` | PostgreSQL database name | `vuhive` |
@@ -843,6 +863,10 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `database.sslmode` | PostgreSQL SSL mode | `disable` |
 | `database.existingSecret` | Existing Secret name for `DATABASE_URL` | `""` |
 | `database.autoMigrate` | Run database migrations via Helm pre-install / pre-upgrade hook job | `true` |
+| `database.migration.resources.requests.cpu` | Migration hook Job CPU request | `50m` |
+| `database.migration.resources.requests.memory` | Migration hook Job memory request | `64Mi` |
+| `database.migration.resources.limits.cpu` | Migration hook Job CPU limit | `200m` |
+| `database.migration.resources.limits.memory` | Migration hook Job memory limit | `256Mi` |
 | `s3.endpoint` | S3 endpoint URL | `http://vuhive-infra-minio:9000` |
 | `s3.region` | S3 region | `us-east-1` |
 | `s3.bucket` | S3 bucket name | `vuhive-artifacts` |
@@ -866,6 +890,10 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `builder.namespace` | Namespace where test builder jobs run | `vuhive-system` |
 | `builder.createNamespace` | Automatically create `builder.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release/runner namespace) | `true` |
 | `builder.image` | Builder container image | `golang:1.26-alpine` |
+| `builder.resources.requests.cpu` | Ephemeral compilation Job CPU request | `1000m` |
+| `builder.resources.requests.memory` | Ephemeral compilation Job memory request | `1Gi` |
+| `builder.resources.limits.cpu` | Ephemeral compilation Job CPU limit | `2000m` |
+| `builder.resources.limits.memory` | Ephemeral compilation Job memory limit | `2Gi` |
 | `builder.proxy.httpProxy` | `HTTP_PROXY` injected into builder container (corporate HTTP proxy URL) | `""` |
 | `builder.proxy.httpsProxy` | `HTTPS_PROXY` injected into builder container (corporate HTTPS proxy URL) | `""` |
 | `builder.proxy.noProxy` | `NO_PROXY` — comma-separated hosts/CIDRs that bypass the proxy | `""` |
@@ -901,6 +929,23 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `bff.image.pullPolicy` | BFF image pull policy | `IfNotPresent` |
 | `bff.service.type` | BFF Service type | `ClusterIP` |
 | `bff.service.port` | BFF Service port | `8081` |
+| `bff.resources.requests.cpu` | CPU request for BFF container | `50m` |
+| `bff.resources.requests.memory` | Memory request for BFF container | `64Mi` |
+| `bff.resources.limits.cpu` | CPU limit for BFF container | `250m` |
+| `bff.resources.limits.memory` | Memory limit for BFF container | `256Mi` |
+| `bff.startupProbe.httpGet.path` | BFF startup probe HTTP path | `/healthz` |
+| `bff.startupProbe.initialDelaySeconds` | BFF startup probe initial delay before polling begins | `1` |
+| `bff.startupProbe.periodSeconds` | BFF startup probe poll interval | `1` |
+| `bff.startupProbe.timeoutSeconds` | BFF startup probe request timeout | `2` |
+| `bff.startupProbe.failureThreshold` | BFF startup probe maximum failure attempts before pod restart | `30` |
+| `bff.livenessProbe.initialDelaySeconds` | BFF liveness probe initial delay once startup succeeds | `0` |
+| `bff.livenessProbe.periodSeconds` | BFF liveness probe steady-state check frequency | `15` |
+| `bff.livenessProbe.timeoutSeconds` | BFF liveness probe request timeout | `5` |
+| `bff.livenessProbe.failureThreshold` | BFF liveness probe failure threshold | `3` |
+| `bff.readinessProbe.initialDelaySeconds` | BFF readiness probe initial delay once startup succeeds | `0` |
+| `bff.readinessProbe.periodSeconds` | BFF readiness probe poll frequency | `2` |
+| `bff.readinessProbe.timeoutSeconds` | BFF readiness probe request timeout | `5` |
+| `bff.readinessProbe.failureThreshold` | BFF readiness probe failure threshold | `2` |
 | `bff.controlPlaneUrl` | Upstream control plane URL override (defaults to `http://<fullname>:8080`) | `""` |
 | `bff.controlPlaneToken` | Bearer token for control plane if required | `""` |
 | `bff.ssePollInterval` | Polling frequency for upstream run/build status transitions | `2s` |

@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	_ "go.uber.org/automaxprocs"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/morphy76/vuhive-cloud/internal/adapters/inbound/rest"
@@ -70,6 +72,26 @@ func runMigrations(ctx context.Context, dbURL string) error {
 	return nil
 }
 
+func initGoMemoryLimit() {
+	rawLimit := strings.TrimSpace(os.Getenv("GOMEMLIMIT"))
+	if rawLimit == "" {
+		return
+	}
+	// If set as integer (e.g. from Downward API divisor 1Mi or raw bytes)
+	// without unit suffix, normalize to bytes and enforce 85% headroom.
+	val, err := strconv.ParseInt(rawLimit, 10, 64)
+	if err == nil && val > 0 {
+		var limitBytes int64
+		if val < 1048576 { // Integer megabytes (e.g. divisor 1Mi in Downward API)
+			limitBytes = int64(float64(val*1024*1024) * 0.85)
+		} else { // Raw bytes
+			limitBytes = int64(float64(val) * 0.85)
+		}
+		debug.SetMemoryLimit(limitBytes)
+		log.Debug().Int64("gomemlimit_bytes", limitBytes).Msg("configured Go runtime memory limit")
+	}
+}
+
 func main() {
 	showVersion := flag.Bool("version", false, "Print version information and exit")
 	migrateOnly := flag.Bool("migrate-only", false, "Run database migrations and exit")
@@ -84,6 +106,8 @@ func main() {
 	// Configure structured logging with zerolog
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+
+	initGoMemoryLimit()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -223,6 +247,18 @@ func main() {
 			}
 			if builderImg := os.Getenv("BUILDER_IMAGE"); builderImg != "" {
 				k8sCfg.BuilderImage = builderImg
+			}
+			if builderCPUReq := os.Getenv("BUILDER_CPU_REQUEST"); builderCPUReq != "" {
+				k8sCfg.CPURequest = builderCPUReq
+			}
+			if builderCPULim := os.Getenv("BUILDER_CPU_LIMIT"); builderCPULim != "" {
+				k8sCfg.CPULimit = builderCPULim
+			}
+			if builderMemReq := os.Getenv("BUILDER_MEMORY_REQUEST"); builderMemReq != "" {
+				k8sCfg.MemoryRequest = builderMemReq
+			}
+			if builderMemLim := os.Getenv("BUILDER_MEMORY_LIMIT"); builderMemLim != "" {
+				k8sCfg.MemoryLimit = builderMemLim
 			}
 			if runnerInitImg := os.Getenv("RUNNER_INIT_IMAGE"); runnerInitImg != "" {
 				k8sCfg.RunnerInitImage = runnerInitImg

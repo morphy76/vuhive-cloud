@@ -607,3 +607,172 @@ func TestHelmChart_Infra_KeycloakHealthProbes(t *testing.T) {
 		})
 	}
 }
+
+func TestHelmChart_GoRuntimeAndProbeOptimizations(t *testing.T) {
+	rendered := runHelmTemplate(t)
+	docs := splitManifests(rendered)
+
+	// 1. Server Deployment probe timing and GOMEMLIMIT
+	serverDep := findResource(docs, "Deployment", "vuhive-vuhive-cloud")
+	require.NotNil(t, serverDep, "server Deployment should exist")
+
+	serverSpec := serverDep["spec"].(map[string]interface{})
+	serverTmpl := serverSpec["template"].(map[string]interface{})
+	serverPodSpec := serverTmpl["spec"].(map[string]interface{})
+	serverContainers := serverPodSpec["containers"].([]interface{})
+	require.NotEmpty(t, serverContainers)
+	serverC := serverContainers[0].(map[string]interface{})
+
+	// Startup probe
+	serverStartup, ok := serverC["startupProbe"].(map[string]interface{})
+	require.True(t, ok, "server startupProbe must be defined")
+	serverStartupHTTP := serverStartup["httpGet"].(map[string]interface{})
+	assert.Equal(t, "/healthz", serverStartupHTTP["path"])
+	assert.Equal(t, 1, serverStartup["initialDelaySeconds"])
+	assert.Equal(t, 1, serverStartup["periodSeconds"])
+	assert.Equal(t, 2, serverStartup["timeoutSeconds"])
+	assert.Equal(t, 30, serverStartup["failureThreshold"])
+
+	// Liveness probe
+	serverLive, ok := serverC["livenessProbe"].(map[string]interface{})
+	require.True(t, ok, "server livenessProbe must be defined")
+	assert.Equal(t, 0, serverLive["initialDelaySeconds"])
+	assert.Equal(t, 15, serverLive["periodSeconds"])
+	assert.Equal(t, 3, serverLive["failureThreshold"])
+
+	// Readiness probe
+	serverReady, ok := serverC["readinessProbe"].(map[string]interface{})
+	require.True(t, ok, "server readinessProbe must be defined")
+	assert.Equal(t, 0, serverReady["initialDelaySeconds"])
+	assert.Equal(t, 2, serverReady["periodSeconds"])
+	assert.Equal(t, 2, serverReady["failureThreshold"])
+
+	// Server GOMEMLIMIT env
+	serverEnvs := serverC["env"].([]interface{})
+	var serverGomemlimit map[string]interface{}
+	for _, e := range serverEnvs {
+		envMap := e.(map[string]interface{})
+		if envMap["name"] == "GOMEMLIMIT" {
+			serverGomemlimit = envMap
+			break
+		}
+	}
+	require.NotNil(t, serverGomemlimit, "server GOMEMLIMIT env must be defined")
+	valFrom := serverGomemlimit["valueFrom"].(map[string]interface{})
+	resRef := valFrom["resourceFieldRef"].(map[string]interface{})
+	assert.Equal(t, "limits.memory", resRef["resource"])
+
+	// 2. BFF Deployment probe timing and GOMEMLIMIT
+	bffDep := findResource(docs, "Deployment", "vuhive-vuhive-cloud-bff")
+	require.NotNil(t, bffDep, "bff Deployment should exist")
+
+	bffSpec := bffDep["spec"].(map[string]interface{})
+	bffTmpl := bffSpec["template"].(map[string]interface{})
+	bffPodSpec := bffTmpl["spec"].(map[string]interface{})
+	bffContainers := bffPodSpec["containers"].([]interface{})
+	require.NotEmpty(t, bffContainers)
+	bffC := bffContainers[0].(map[string]interface{})
+
+	// Startup probe
+	bffStartup, ok := bffC["startupProbe"].(map[string]interface{})
+	require.True(t, ok, "bff startupProbe must be defined")
+	bffStartupHTTP := bffStartup["httpGet"].(map[string]interface{})
+	assert.Equal(t, "/healthz", bffStartupHTTP["path"])
+	assert.Equal(t, 1, bffStartup["initialDelaySeconds"])
+	assert.Equal(t, 1, bffStartup["periodSeconds"])
+	assert.Equal(t, 2, bffStartup["timeoutSeconds"])
+	assert.Equal(t, 30, bffStartup["failureThreshold"])
+
+	// Liveness probe
+	bffLive, ok := bffC["livenessProbe"].(map[string]interface{})
+	require.True(t, ok, "bff livenessProbe must be defined")
+	assert.Equal(t, 0, bffLive["initialDelaySeconds"])
+	assert.Equal(t, 15, bffLive["periodSeconds"])
+	assert.Equal(t, 3, bffLive["failureThreshold"])
+
+	// Readiness probe
+	bffReady, ok := bffC["readinessProbe"].(map[string]interface{})
+	require.True(t, ok, "bff readinessProbe must be defined")
+	assert.Equal(t, 0, bffReady["initialDelaySeconds"])
+	assert.Equal(t, 2, bffReady["periodSeconds"])
+	assert.Equal(t, 2, bffReady["failureThreshold"])
+
+	// BFF GOMEMLIMIT env
+	bffEnvs := bffC["env"].([]interface{})
+	var bffGomemlimit map[string]interface{}
+	for _, e := range bffEnvs {
+		envMap := e.(map[string]interface{})
+		if envMap["name"] == "GOMEMLIMIT" {
+			bffGomemlimit = envMap
+			break
+		}
+	}
+	require.NotNil(t, bffGomemlimit, "bff GOMEMLIMIT env must be defined")
+	bffValFrom := bffGomemlimit["valueFrom"].(map[string]interface{})
+	bffResRef := bffValFrom["resourceFieldRef"].(map[string]interface{})
+	assert.Equal(t, "limits.memory", bffResRef["resource"])
+
+	// 3. Builder resources in ConfigMap
+	cm := findResource(docs, "ConfigMap", "vuhive-vuhive-cloud")
+	require.NotNil(t, cm, "ConfigMap should exist")
+	cmData := cm["data"].(map[string]interface{})
+	assert.Equal(t, "1000m", cmData["BUILDER_CPU_REQUEST"])
+	assert.Equal(t, "2000m", cmData["BUILDER_CPU_LIMIT"])
+	assert.Equal(t, "1Gi", cmData["BUILDER_MEMORY_REQUEST"])
+	assert.Equal(t, "2Gi", cmData["BUILDER_MEMORY_LIMIT"])
+
+	// 4. Migration Job resources defaults
+	migJob := findResource(docs, "Job", "vuhive-vuhive-cloud-migration")
+	require.NotNil(t, migJob, "migration Job should exist")
+	migSpec := migJob["spec"].(map[string]interface{})
+	migTmpl := migSpec["template"].(map[string]interface{})
+	migPodSpec := migTmpl["spec"].(map[string]interface{})
+	migContainers := migPodSpec["containers"].([]interface{})
+	require.NotEmpty(t, migContainers)
+	migC := migContainers[0].(map[string]interface{})
+	migRes := migC["resources"].(map[string]interface{})
+	migReq := migRes["requests"].(map[string]interface{})
+	migLim := migRes["limits"].(map[string]interface{})
+	assert.Equal(t, "50m", migReq["cpu"])
+	assert.Equal(t, "64Mi", migReq["memory"])
+	assert.Equal(t, "200m", migLim["cpu"])
+	assert.Equal(t, "256Mi", migLim["memory"])
+}
+
+func TestHelmChart_CustomBuilderAndMigrationResources(t *testing.T) {
+	rendered := runHelmTemplate(t,
+		"--set", "builder.resources.requests.cpu=500m",
+		"--set", "builder.resources.requests.memory=512Mi",
+		"--set", "builder.resources.limits.cpu=1500m",
+		"--set", "builder.resources.limits.memory=1536Mi",
+		"--set", "database.migration.resources.requests.cpu=100m",
+		"--set", "database.migration.resources.requests.memory=128Mi",
+		"--set", "database.migration.resources.limits.cpu=400m",
+		"--set", "database.migration.resources.limits.memory=512Mi",
+	)
+	docs := splitManifests(rendered)
+
+	cm := findResource(docs, "ConfigMap", "vuhive-vuhive-cloud")
+	require.NotNil(t, cm)
+	cmData := cm["data"].(map[string]interface{})
+	assert.Equal(t, "500m", cmData["BUILDER_CPU_REQUEST"])
+	assert.Equal(t, "1500m", cmData["BUILDER_CPU_LIMIT"])
+	assert.Equal(t, "512Mi", cmData["BUILDER_MEMORY_REQUEST"])
+	assert.Equal(t, "1536Mi", cmData["BUILDER_MEMORY_LIMIT"])
+
+	migJob := findResource(docs, "Job", "vuhive-vuhive-cloud-migration")
+	require.NotNil(t, migJob)
+	migSpec := migJob["spec"].(map[string]interface{})
+	migTmpl := migSpec["template"].(map[string]interface{})
+	migPodSpec := migTmpl["spec"].(map[string]interface{})
+	migContainers := migPodSpec["containers"].([]interface{})
+	migC := migContainers[0].(map[string]interface{})
+	migRes := migC["resources"].(map[string]interface{})
+	migReq := migRes["requests"].(map[string]interface{})
+	migLim := migRes["limits"].(map[string]interface{})
+	assert.Equal(t, "100m", migReq["cpu"])
+	assert.Equal(t, "128Mi", migReq["memory"])
+	assert.Equal(t, "400m", migLim["cpu"])
+	assert.Equal(t, "512Mi", migLim["memory"])
+}
+

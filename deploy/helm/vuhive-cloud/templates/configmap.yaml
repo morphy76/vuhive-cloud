@@ -17,6 +17,10 @@ data:
   RUNNER_DEFAULT_IMAGE: {{ .Values.runner.defaultImage | quote }}
   BUILDER_NAMESPACE: {{ .Values.builder.namespace | quote }}
   BUILDER_IMAGE: {{ .Values.builder.image | quote }}
+  BUILDER_CPU_REQUEST: {{ (default (dict) (default (dict) (default (dict) .Values.builder).resources).requests).cpu | default "1000m" | quote }}
+  BUILDER_CPU_LIMIT: {{ (default (dict) (default (dict) (default (dict) .Values.builder).resources).limits).cpu | default "2000m" | quote }}
+  BUILDER_MEMORY_REQUEST: {{ (default (dict) (default (dict) (default (dict) .Values.builder).resources).requests).memory | default "1Gi" | quote }}
+  BUILDER_MEMORY_LIMIT: {{ (default (dict) (default (dict) (default (dict) .Values.builder).resources).limits).memory | default "2Gi" | quote }}
   # Builder proxy & Go module network configuration (Issue #187)
   BUILDER_HTTP_PROXY: {{ (default (dict) .Values.builder.proxy).httpProxy | default "" | quote }}
   BUILDER_HTTPS_PROXY: {{ (default (dict) .Values.builder.proxy).httpsProxy | default "" | quote }}
