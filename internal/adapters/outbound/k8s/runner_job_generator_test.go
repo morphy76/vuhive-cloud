@@ -155,6 +155,12 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		assert.Equal(t, "tmp-volume", initC.VolumeMounts[1].Name)
 		assert.Equal(t, "/tmp", initC.VolumeMounts[1].MountPath)
 
+		// Init Container Resources
+		assert.Equal(t, "50m", initC.Resources.Requests.Cpu().String())
+		assert.Equal(t, "64Mi", initC.Resources.Requests.Memory().String())
+		assert.Equal(t, "200m", initC.Resources.Limits.Cpu().String())
+		assert.Equal(t, "256Mi", initC.Resources.Limits.Memory().String())
+
 		// Main Container
 		require.Len(t, podSpec.Containers, 1)
 		runnerC := podSpec.Containers[0]
@@ -176,6 +182,8 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		for _, e := range runnerC.Env {
 			runnerEnvMap[e.Name] = e.Value
 		}
+		assert.Equal(t, "4", runnerEnvMap["GOMAXPROCS"])
+		assert.Equal(t, "3650722201B", runnerEnvMap["GOMEMLIMIT"])
 		expectedReportKey, err := s3adapter.KeySummaryReport(run.ID())
 		require.NoError(t, err)
 		expectedLogsKey, err := s3adapter.KeyExecutionLogs(run.ID())

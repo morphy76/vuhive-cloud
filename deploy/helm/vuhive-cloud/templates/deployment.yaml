@@ -76,9 +76,21 @@ spec:
                   name: {{ default (include "vuhive-cloud.fullname" .) (default (dict) .Values.auth.runner).existingSecret }}
                   key: {{ default "RUNNER_CLIENT_SECRET" (default (dict) .Values.auth.runner).existingSecretKey }}
             {{- end }}
+            {{- if and .Values.resources .Values.resources.limits .Values.resources.limits.memory }}
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  containerName: {{ .Chart.Name }}
+                  resource: limits.memory
+                  divisor: "1Mi"
+            {{- end }}
             {{- with .Values.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
           readinessProbe:

@@ -11,10 +11,13 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	_ "go.uber.org/automaxprocs"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/inbound/rest"
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/cache"
@@ -31,6 +34,24 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+func initGoMemoryLimit() {
+	rawLimit := strings.TrimSpace(os.Getenv("GOMEMLIMIT"))
+	if rawLimit == "" {
+		return
+	}
+	val, err := strconv.ParseInt(rawLimit, 10, 64)
+	if err == nil && val > 0 {
+		var limitBytes int64
+		if val < 1048576 {
+			limitBytes = int64(float64(val*1024*1024) * 0.85)
+		} else {
+			limitBytes = int64(float64(val) * 0.85)
+		}
+		debug.SetMemoryLimit(limitBytes)
+		log.Debug().Int64("gomemlimit_bytes", limitBytes).Msg("configured Go runtime memory limit")
+	}
+}
 
 func main() {
 	showVersion := flag.Bool("version", false, "Print version information and exit")
@@ -70,6 +91,8 @@ func main() {
 	// Configure structured logging with zerolog
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+
+	initGoMemoryLimit()
 
 	port := *portFlag
 	if port == "" {
