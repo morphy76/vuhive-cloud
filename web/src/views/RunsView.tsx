@@ -15,6 +15,7 @@ import { useRuns, useRunLogs } from '@/hooks/use-runs'
 import { useSuites } from '@/hooks/use-suites'
 import { useRunEvents } from '@/hooks/use-events'
 import type { HistoricalRun } from '@/types/suite'
+import type { RouteId } from '@/types/navigation'
 
 function formatDurationMs(ms?: number): string {
   if (!ms || ms <= 0) return '-'
@@ -24,7 +25,11 @@ function formatDurationMs(ms?: number): string {
   return `${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
 }
 
-export const RunsView: React.FC = () => {
+export interface RunsViewProps {
+  onNavigate?: (route: RouteId) => void
+}
+
+export const RunsView: React.FC<RunsViewProps> = ({ onNavigate }) => {
   const [isRunDialogOpen, setIsRunDialogOpen] = useState(false)
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const { openRecipe } = useRecipe()
@@ -414,6 +419,7 @@ export const RunsView: React.FC = () => {
         open={isRunDialogOpen}
         onOpenChange={setIsRunDialogOpen}
         onRunTriggered={handleRunTriggered}
+        onNavigate={onNavigate}
       />
     </div>
   )

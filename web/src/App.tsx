@@ -23,7 +23,7 @@ export const AppContent: React.FC = () => {
       <Shell currentRoute={currentRoute} onSelectRoute={setCurrentRoute}>
         {currentRoute === 'dashboard' && <DashboardView onNavigate={setCurrentRoute} />}
         {currentRoute === 'suites' && <SuitesView />}
-        {currentRoute === 'runs' && <RunsView />}
+        {currentRoute === 'runs' && <RunsView onNavigate={setCurrentRoute} />}
         {currentRoute === 'schedules' && <SchedulesView />}
         {currentRoute === 'profiles' && <ProfilesView />}
         {currentRoute === 'cookbook' && (
