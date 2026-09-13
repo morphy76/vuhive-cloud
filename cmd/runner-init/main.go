@@ -13,6 +13,7 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/version"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	_ "go.uber.org/automaxprocs"
 )
 
 func main() {

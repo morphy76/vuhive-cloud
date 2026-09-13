@@ -81,9 +81,21 @@ spec:
             - name: CONTROL_PLANE_TOKEN
               value: {{ .Values.bff.controlPlaneToken | quote }}
             {{- end }}
+            {{- if and .Values.bff.resources .Values.bff.resources.limits .Values.bff.resources.limits.memory }}
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  containerName: bff
+                  resource: limits.memory
+                  divisor: "1Mi"
+            {{- end }}
             {{- with .Values.bff.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- with .Values.bff.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             {{- toYaml .Values.bff.livenessProbe | nindent 12 }}
           readinessProbe:

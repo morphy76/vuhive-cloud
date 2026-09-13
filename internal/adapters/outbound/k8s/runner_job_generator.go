@@ -214,6 +214,19 @@ func (g *RunnerJobGenerator) GenerateJob(
 		corev1.EnvVar{Name: "S3_REPORT_KEY", Value: reportKey},
 		corev1.EnvVar{Name: "S3_LOGS_KEY", Value: logsKey},
 	)
+
+	// Compute Go runtime container ergonomics (Issue #209)
+	// GOMEMLIMIT tuned to 85% of memory ceiling to prevent Linux cgroup OOMKilled terminations before GC triggers
+	gomemlimitBytes := int64(float64(memLim.Value()) * 0.85)
+	// GOMAXPROCS matched to container CPU limit cores to prevent CFS CPU quota scheduler thrashing
+	maxProcs := int(cpuLim.MilliValue() / 1000)
+	if maxProcs < 1 {
+		maxProcs = 1
+	}
+	runnerEnvs = append(runnerEnvs,
+		corev1.EnvVar{Name: "GOMAXPROCS", Value: strconv.Itoa(maxProcs)},
+		corev1.EnvVar{Name: "GOMEMLIMIT", Value: fmt.Sprintf("%dB", gomemlimitBytes)},
+	)
 	if g.cfg.APICallbackURL != "" {
 		runnerEnvs = append(runnerEnvs, corev1.EnvVar{Name: "API_CALLBACK_URL", Value: g.cfg.APICallbackURL})
 	}
@@ -340,6 +353,16 @@ func (g *RunnerJobGenerator) GenerateJob(
 								},
 							},
 							Env: initEnvs,
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("50m"),
+									corev1.ResourceMemory: resource.MustParse("64Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("200m"),
+									corev1.ResourceMemory: resource.MustParse("256Mi"),
+								},
+							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "shared-workspace",

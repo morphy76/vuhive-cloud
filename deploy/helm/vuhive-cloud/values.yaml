@@ -72,12 +72,21 @@ resources:
     cpu: 500m
     memory: 512Mi
 
+startupProbe:
+  httpGet:
+    path: /healthz
+    port: http
+  initialDelaySeconds: 1
+  periodSeconds: 1
+  timeoutSeconds: 2
+  failureThreshold: 30
+
 livenessProbe:
   httpGet:
     path: /healthz
     port: http
-  initialDelaySeconds: 5
-  periodSeconds: 10
+  initialDelaySeconds: 0
+  periodSeconds: 15
   timeoutSeconds: 5
   failureThreshold: 3
 
@@ -85,10 +94,10 @@ readinessProbe:
   httpGet:
     path: /healthz
     port: http
-  initialDelaySeconds: 5
-  periodSeconds: 10
+  initialDelaySeconds: 0
+  periodSeconds: 2
   timeoutSeconds: 5
-  failureThreshold: 3
+  failureThreshold: 2
 
 # ── Infrastructure Bindings: PostgreSQL ─────────────────────────────────
 # Points to an existing PostgreSQL deployment (e.g. from vuhive-cloud-infra).
@@ -106,6 +115,14 @@ database:
   existingSecretKey: "DATABASE_URL"
   # Run database migrations via Helm pre-install / pre-upgrade hook job.
   autoMigrate: true
+  migration:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
 
 # ── Infrastructure Bindings: S3 / MinIO ─────────────────────────────────
 # Points to an existing S3/MinIO deployment (e.g. from vuhive-cloud-infra).
@@ -155,6 +172,13 @@ builder:
   # The namespace is created with "helm.sh/resource-policy: keep" so it is NOT deleted on helm uninstall.
   createNamespace: true
   image: "golang:1.26-alpine"
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
 
   # ── Network & Proxy Settings (Issue #187) ───────────────────────────────
   # Configure these when builder pods run in corporate, air-gapped, or otherwise
@@ -300,12 +324,21 @@ bff:
       drop:
         - ALL
 
+  startupProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 1
+    periodSeconds: 1
+    timeoutSeconds: 2
+    failureThreshold: 30
+
   livenessProbe:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 5
-    periodSeconds: 10
+    initialDelaySeconds: 0
+    periodSeconds: 15
     timeoutSeconds: 5
     failureThreshold: 3
 
@@ -313,10 +346,10 @@ bff:
     httpGet:
       path: /healthz
       port: http
-    initialDelaySeconds: 5
-    periodSeconds: 10
+    initialDelaySeconds: 0
+    periodSeconds: 2
     timeoutSeconds: 5
-    failureThreshold: 3
+    failureThreshold: 2
 
   # Polling & SSE stream tuneables
   ssePollInterval: "2s"
