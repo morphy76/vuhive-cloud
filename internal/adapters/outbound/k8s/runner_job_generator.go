@@ -347,6 +347,8 @@ func (g *RunnerJobGenerator) GenerateJob(
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy: corev1.RestartPolicyNever,
+					DNSPolicy:     corev1.DNSPolicy(g.cfg.RunnerDNSPolicy),
+					DNSConfig:     buildRunnerPodDNSConfig(g.cfg),
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: &runAsNonRoot,
 						RunAsUser:    &runAsUser,
@@ -488,3 +490,57 @@ func formatRunnerJobName(runID string, suffix string) string {
 	}
 	return strings.TrimRight(name, "-")
 }
+
+// buildRunnerPodDNSConfig constructs the corev1.PodDNSConfig for runner pods (Issue #217).
+// Defaults to options: [ndots: "2"] unless explicitly disabled or overridden.
+func buildRunnerPodDNSConfig(cfg Config) *corev1.PodDNSConfig {
+	if cfg.DisableRunnerDNSConfig {
+		return nil
+	}
+
+	ndots := strings.TrimSpace(cfg.RunnerDNSNdots)
+	if ndots == "" {
+		ndots = "2"
+	}
+
+	if cfg.RunnerDNSConfig != nil {
+		podDNS := &corev1.PodDNSConfig{}
+		if len(cfg.RunnerDNSConfig.Nameservers) > 0 {
+			podDNS.Nameservers = append([]string(nil), cfg.RunnerDNSConfig.Nameservers...)
+		}
+		if len(cfg.RunnerDNSConfig.Searches) > 0 {
+			podDNS.Searches = append([]string(nil), cfg.RunnerDNSConfig.Searches...)
+		}
+		hasNdots := false
+		for _, opt := range cfg.RunnerDNSConfig.Options {
+			if opt.Name == "ndots" {
+				hasNdots = true
+			}
+			podDNS.Options = append(podDNS.Options, corev1.PodDNSConfigOption{
+				Name:  opt.Name,
+				Value: opt.Value,
+			})
+		}
+		if !hasNdots && ndots != "none" {
+			podDNS.Options = append(podDNS.Options, corev1.PodDNSConfigOption{
+				Name:  "ndots",
+				Value: &ndots,
+			})
+		}
+		return podDNS
+	}
+
+	if ndots == "none" {
+		return nil
+	}
+
+	return &corev1.PodDNSConfig{
+		Options: []corev1.PodDNSConfigOption{
+			{
+				Name:  "ndots",
+				Value: &ndots,
+			},
+		},
+	}
+}
+

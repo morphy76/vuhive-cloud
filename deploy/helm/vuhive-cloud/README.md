@@ -622,6 +622,7 @@ Runner containers upload execution artifacts (`run.log` and `summary.json`) to S
 To ensure callback requests succeed across different Kubernetes network setups:
 - **Same Namespace (`runner.namespace == Release.Namespace`)**: The chart automatically configures `apiCallbackUrl` as `http://<fullname>:<port>/api/v1/runs/complete`. With 0 dots, standard Kubernetes pods resolve the service name directly via the local namespace search domain without traversing upstream search lists.
 - **Cross-Namespace (`runner.namespace != Release.Namespace`)**: Standard Kubernetes pods have `ndots:5` in `/etc/resolv.conf`. Because `<service>.<namespace>.svc.cluster.local` has 4 dots, standard resolvers query host/DHCP upstream search domains first, which can cause connection failures if upstream wildcard DNS returns `127.0.0.1`. The chart mitigates this by generating a fully qualified domain name with a **trailing dot** (`http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete`), bypassing search lists and directing the query straight to CoreDNS.
+- **Runner Pod `dnsConfig` Optimization (`ndots: "2"`)**: Runner pods (both ad-hoc Jobs and scheduled CronJobs) are automatically configured with `dnsConfig.options: [{name: "ndots", value: "2"}]` (Issue #217). Any domain name with 2 or more dots (such as cross-namespace `*.svc.cluster.local` with 4 dots, or external targets like `api.example.com` with 2 dots) is treated as an absolute domain on the very first query, completely bypassing failing upstream search domain queries. Single-label names (`minio`) and two-label names (`minio.vuhive-system`) retain cluster search domain expansion.
 - **Custom Override**: You can override `apiCallbackUrl` explicitly with `--set apiCallbackUrl=...` if you route runner callbacks through custom gateways or ingresses.
 
 ### Ad-Hoc Test Run Dispatching
@@ -884,6 +885,9 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `runner.initResources.limits.cpu` | Init container CPU limit for bootstrap downloader | `200m` |
 | `runner.initResources.limits.memory` | Init container memory limit for bootstrap downloader | `256Mi` |
 | `runner.defaultImage` | Default runner base image | `alpine:3.20` |
+| `runner.ndots` | DNS ndots threshold for runner pods to prevent 5-dot upstream search leaks | `"2"` |
+| `runner.dnsPolicy` | DNS policy applied to runner pods (`ClusterFirst`, `Default`, `None`, etc.). Empty preserves cluster default. | `""` |
+| `runner.dnsConfig` | Custom DNS configuration (`nameservers`, `searches`, `options`) applied to runner pods | `{}` |
 | `runner.activeDeadlineSeconds` | Default active deadline timeout (seconds) injected into runner Jobs if unspecified on profile | `3600` |
 | `networkPolicy.enabled` | Enable egress NetworkPolicy for runner pods in `runner.namespace` | `false` |
 | `networkPolicy.denyMetadata` | Block egress access to cloud provider instance metadata (`169.254.169.254/32`) | `true` |

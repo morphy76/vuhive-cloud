@@ -128,6 +128,13 @@ func TestCronJobGenerator_GenerateCronJob(t *testing.T) {
 		assert.Len(t, podSpec.Tolerations, 1)
 		assert.Equal(t, "dedicated", podSpec.Tolerations[0].Key)
 
+		// DNS config (Issue #217)
+		require.NotNil(t, podSpec.DNSConfig)
+		require.Len(t, podSpec.DNSConfig.Options, 1)
+		assert.Equal(t, "ndots", podSpec.DNSConfig.Options[0].Name)
+		require.NotNil(t, podSpec.DNSConfig.Options[0].Value)
+		assert.Equal(t, "2", *podSpec.DNSConfig.Options[0].Value)
+
 		// Init container
 		require.Len(t, podSpec.InitContainers, 1)
 		initC := podSpec.InitContainers[0]
@@ -240,5 +247,69 @@ func TestCronJobGenerator_GenerateCronJob(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, cronJob2.Spec.JobTemplate.Spec.ActiveDeadlineSeconds)
 		assert.Equal(t, int64(450), *cronJob2.Spec.JobTemplate.Spec.ActiveDeadlineSeconds)
+	})
+}
+
+func TestCronJobGenerator_DNSConfig(t *testing.T) {
+	res, err := model.NewResourceRequirements("500m", "1000m", "256Mi", "512Mi")
+	require.NoError(t, err)
+
+	profile, err := model.NewRunnerProfile(
+		"test-profile",
+		"Test profile",
+		"alpine:3.20",
+		res,
+		nil,
+		model.Affinity{},
+		nil,
+	)
+	require.NoError(t, err)
+
+	schedule, err := model.NewSchedule(
+		"suite-1",
+		"art-1",
+		nil,
+		profile.ID(),
+		"daily-test",
+		"0 0 * * *",
+	)
+	require.NoError(t, err)
+
+	opts := outbound.RunnerJobOptions{S3BinaryKey: "key"}
+
+	t.Run("defaults to ndots 2", func(t *testing.T) {
+		gen := k8s.NewCronJobGenerator(k8s.DefaultConfig())
+		cronJob, err := gen.GenerateCronJob(schedule, profile, opts)
+		require.NoError(t, err)
+		podSpec := cronJob.Spec.JobTemplate.Spec.Template.Spec
+		require.NotNil(t, podSpec.DNSConfig)
+		require.Len(t, podSpec.DNSConfig.Options, 1)
+		assert.Equal(t, "ndots", podSpec.DNSConfig.Options[0].Name)
+		require.NotNil(t, podSpec.DNSConfig.Options[0].Value)
+		assert.Equal(t, "2", *podSpec.DNSConfig.Options[0].Value)
+	})
+
+	t.Run("custom runner dns policy and ndots", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerDNSNdots = "3"
+		cfg.RunnerDNSPolicy = "ClusterFirstWithHostNet"
+		gen := k8s.NewCronJobGenerator(cfg)
+		cronJob, err := gen.GenerateCronJob(schedule, profile, opts)
+		require.NoError(t, err)
+		podSpec := cronJob.Spec.JobTemplate.Spec.Template.Spec
+		assert.Equal(t, corev1.DNSClusterFirstWithHostNet, podSpec.DNSPolicy)
+		require.NotNil(t, podSpec.DNSConfig)
+		require.Len(t, podSpec.DNSConfig.Options, 1)
+		assert.Equal(t, "ndots", podSpec.DNSConfig.Options[0].Name)
+		assert.Equal(t, "3", *podSpec.DNSConfig.Options[0].Value)
+	})
+
+	t.Run("disable runner dns config", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.DisableRunnerDNSConfig = true
+		gen := k8s.NewCronJobGenerator(cfg)
+		cronJob, err := gen.GenerateCronJob(schedule, profile, opts)
+		require.NoError(t, err)
+		assert.Nil(t, cronJob.Spec.JobTemplate.Spec.Template.Spec.DNSConfig)
 	})
 }

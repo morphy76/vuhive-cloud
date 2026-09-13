@@ -30,6 +30,20 @@ type BuilderDNSConfig struct {
 	Searches []string
 }
 
+// RunnerDNSOption represents a DNS resolver option (e.g. ndots: "2") for runner pods.
+type RunnerDNSOption struct {
+	Name  string
+	Value *string
+}
+
+// RunnerDNSConfig encapsulates custom DNS nameservers, search domains, and resolver options
+// applied to runner pods.
+type RunnerDNSConfig struct {
+	Nameservers []string
+	Searches    []string
+	Options     []RunnerDNSOption
+}
+
 // Config encapsulates configuration parameters for Kubernetes job management and orchestration.
 type Config struct {
 	Namespace               string
@@ -64,6 +78,17 @@ type Config struct {
 	RunnerActiveDeadlineSeconds   int64
 	RunnerTTLSecondsAfterFinished int32
 	RunnerBackoffLimit            int32
+	// RunnerDNSNdots specifies the ndots DNS option for runner pods (defaults to "2").
+	// When "2", queries with >= 2 dots resolve as absolute domains first, preventing
+	// upstream search path iteration and DNS leaks. Set to "none" to disable.
+	RunnerDNSNdots string
+	// RunnerDNSPolicy optionally overrides the runner pod's dnsPolicy
+	// (e.g. "ClusterFirst", "Default", "None"). Empty string preserves default ("ClusterFirst").
+	RunnerDNSPolicy string
+	// RunnerDNSConfig provides custom DNS nameservers, search domains, and options for runner pods.
+	RunnerDNSConfig *RunnerDNSConfig
+	// DisableRunnerDNSConfig explicitly disables custom PodDNSConfig injection on runner pods.
+	DisableRunnerDNSConfig bool
 	S3Endpoint                    string
 	S3Region                      string
 	S3Bucket                      string
@@ -104,5 +129,6 @@ func DefaultConfig() Config {
 		RunnerActiveDeadlineSeconds:   3600,
 		RunnerTTLSecondsAfterFinished: 86400,
 		RunnerBackoffLimit:            0,
+		RunnerDNSNdots:                "2",
 	}
 }
