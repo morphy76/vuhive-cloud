@@ -265,6 +265,8 @@ func (g *CronJobGenerator) GenerateCronJob(
 						},
 						Spec: corev1.PodSpec{
 							RestartPolicy: corev1.RestartPolicyNever,
+							DNSPolicy:     corev1.DNSPolicy(g.cfg.RunnerDNSPolicy),
+							DNSConfig:     buildRunnerPodDNSConfig(g.cfg),
 							SecurityContext: &corev1.PodSecurityContext{
 								RunAsNonRoot: &runAsNonRoot,
 								RunAsUser:    &runAsUser,

@@ -301,6 +301,38 @@ func main() {
 				k8sCfg.RunnerTokenURL = strings.TrimRight(os.Getenv("OIDC_ISSUER_URL"), "/") + "/protocol/openid-connect/token"
 			}
 
+			// Runner DNS configuration (Issue #217).
+			if runnerDNSNdots := os.Getenv("RUNNER_DNS_NDOTS"); runnerDNSNdots != "" {
+				k8sCfg.RunnerDNSNdots = runnerDNSNdots
+			} else if runnerNdots := os.Getenv("RUNNER_NDOTS"); runnerNdots != "" {
+				k8sCfg.RunnerDNSNdots = runnerNdots
+			}
+			if runnerDNSPolicy := os.Getenv("RUNNER_DNS_POLICY"); runnerDNSPolicy != "" {
+				k8sCfg.RunnerDNSPolicy = runnerDNSPolicy
+			}
+			var runnerNameservers []string
+			if ns := os.Getenv("RUNNER_DNS_NAMESERVERS"); ns != "" {
+				for _, s := range strings.Split(ns, ",") {
+					if trimmed := strings.TrimSpace(s); trimmed != "" {
+						runnerNameservers = append(runnerNameservers, trimmed)
+					}
+				}
+			}
+			var runnerSearches []string
+			if s := os.Getenv("RUNNER_DNS_SEARCHES"); s != "" {
+				for _, item := range strings.Split(s, ",") {
+					if trimmed := strings.TrimSpace(item); trimmed != "" {
+						runnerSearches = append(runnerSearches, trimmed)
+					}
+				}
+			}
+			if len(runnerNameservers) > 0 || len(runnerSearches) > 0 {
+				k8sCfg.RunnerDNSConfig = &k8sadapter.RunnerDNSConfig{
+					Nameservers: runnerNameservers,
+					Searches:    runnerSearches,
+				}
+			}
+
 			// Builder proxy & Go module network configuration (Issue #187).
 			k8sCfg.BuilderProxy = k8sadapter.BuilderProxyConfig{
 				HTTPProxy:    os.Getenv("BUILDER_HTTP_PROXY"),

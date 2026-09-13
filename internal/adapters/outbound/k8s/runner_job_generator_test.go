@@ -103,6 +103,13 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 		require.NotNil(t, podSpec.SecurityContext.SeccompProfile)
 		assert.Equal(t, corev1.SeccompProfileTypeRuntimeDefault, podSpec.SecurityContext.SeccompProfile.Type)
 
+		// DNS Config (Issue #217)
+		require.NotNil(t, podSpec.DNSConfig)
+		require.Len(t, podSpec.DNSConfig.Options, 1)
+		assert.Equal(t, "ndots", podSpec.DNSConfig.Options[0].Name)
+		require.NotNil(t, podSpec.DNSConfig.Options[0].Value)
+		assert.Equal(t, "2", *podSpec.DNSConfig.Options[0].Value)
+
 		// NodeSelector, Affinity, Tolerations
 		assert.Equal(t, "ssd", podSpec.NodeSelector["disktype"])
 
@@ -446,6 +453,119 @@ func TestRunnerJobGenerator_CustomInitResources(t *testing.T) {
 	assert.Equal(t, "128Mi", initC.Resources.Requests.Memory().String())
 	assert.Equal(t, "400m", initC.Resources.Limits.Cpu().String())
 	assert.Equal(t, "512Mi", initC.Resources.Limits.Memory().String())
+}
+
+func TestRunnerJobGenerator_DNSConfig(t *testing.T) {
+	res, err := model.NewResourceRequirements("100m", "200m", "128Mi", "256Mi")
+	require.NoError(t, err)
+
+	profile, err := model.NewRunnerProfile(
+		"test-profile",
+		"Test profile",
+		"alpine:3.20",
+		res,
+		nil,
+		model.Affinity{},
+		nil,
+	)
+	require.NoError(t, err)
+
+	run, err := model.NewTestRun("suite-1", "art-1", nil, profile.ID(), nil)
+	require.NoError(t, err)
+
+	opts := outbound.RunnerJobOptions{S3BinaryKey: "key"}
+
+	t.Run("defaults to ndots 2", func(t *testing.T) {
+		gen := k8s.NewRunnerJobGenerator(k8s.DefaultConfig())
+		job, err := gen.GenerateJob(run, profile, opts)
+		require.NoError(t, err)
+		require.NotNil(t, job.Spec.Template.Spec.DNSConfig)
+		require.Len(t, job.Spec.Template.Spec.DNSConfig.Options, 1)
+		assert.Equal(t, "ndots", job.Spec.Template.Spec.DNSConfig.Options[0].Name)
+		require.NotNil(t, job.Spec.Template.Spec.DNSConfig.Options[0].Value)
+		assert.Equal(t, "2", *job.Spec.Template.Spec.DNSConfig.Options[0].Value)
+	})
+
+	t.Run("custom ndots threshold", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerDNSNdots = "3"
+		gen := k8s.NewRunnerJobGenerator(cfg)
+		job, err := gen.GenerateJob(run, profile, opts)
+		require.NoError(t, err)
+		require.NotNil(t, job.Spec.Template.Spec.DNSConfig)
+		require.Len(t, job.Spec.Template.Spec.DNSConfig.Options, 1)
+		assert.Equal(t, "ndots", job.Spec.Template.Spec.DNSConfig.Options[0].Name)
+		require.NotNil(t, job.Spec.Template.Spec.DNSConfig.Options[0].Value)
+		assert.Equal(t, "3", *job.Spec.Template.Spec.DNSConfig.Options[0].Value)
+	})
+
+	t.Run("custom DNS nameservers and searches preserves ndots", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerDNSConfig = &k8s.RunnerDNSConfig{
+			Nameservers: []string{"1.1.1.1", "8.8.8.8"},
+			Searches:    []string{"custom.svc.cluster.local"},
+		}
+		gen := k8s.NewRunnerJobGenerator(cfg)
+		job, err := gen.GenerateJob(run, profile, opts)
+		require.NoError(t, err)
+		dns := job.Spec.Template.Spec.DNSConfig
+		require.NotNil(t, dns)
+		assert.Equal(t, []string{"1.1.1.1", "8.8.8.8"}, dns.Nameservers)
+		assert.Equal(t, []string{"custom.svc.cluster.local"}, dns.Searches)
+		require.Len(t, dns.Options, 1)
+		assert.Equal(t, "ndots", dns.Options[0].Name)
+		require.NotNil(t, dns.Options[0].Value)
+		assert.Equal(t, "2", *dns.Options[0].Value)
+	})
+
+	t.Run("custom DNS options overriding ndots", func(t *testing.T) {
+		customVal := "4"
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerDNSConfig = &k8s.RunnerDNSConfig{
+			Options: []k8s.RunnerDNSOption{
+				{Name: "ndots", Value: &customVal},
+				{Name: "timeout", Value: nil},
+			},
+		}
+		gen := k8s.NewRunnerJobGenerator(cfg)
+		job, err := gen.GenerateJob(run, profile, opts)
+		require.NoError(t, err)
+		dns := job.Spec.Template.Spec.DNSConfig
+		require.NotNil(t, dns)
+		require.Len(t, dns.Options, 2)
+		assert.Equal(t, "ndots", dns.Options[0].Name)
+		require.NotNil(t, dns.Options[0].Value)
+		assert.Equal(t, "4", *dns.Options[0].Value)
+		assert.Equal(t, "timeout", dns.Options[1].Name)
+		assert.Nil(t, dns.Options[1].Value)
+	})
+
+	t.Run("ndots none disables dns config", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerDNSNdots = "none"
+		gen := k8s.NewRunnerJobGenerator(cfg)
+		job, err := gen.GenerateJob(run, profile, opts)
+		require.NoError(t, err)
+		assert.Nil(t, job.Spec.Template.Spec.DNSConfig)
+	})
+
+	t.Run("explicit DisableRunnerDNSConfig disables dns config", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.DisableRunnerDNSConfig = true
+		gen := k8s.NewRunnerJobGenerator(cfg)
+		job, err := gen.GenerateJob(run, profile, opts)
+		require.NoError(t, err)
+		assert.Nil(t, job.Spec.Template.Spec.DNSConfig)
+	})
+
+	t.Run("custom runner dns policy", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerDNSPolicy = "ClusterFirstWithHostNet"
+		gen := k8s.NewRunnerJobGenerator(cfg)
+		job, err := gen.GenerateJob(run, profile, opts)
+		require.NoError(t, err)
+		assert.Equal(t, corev1.DNSClusterFirstWithHostNet, job.Spec.Template.Spec.DNSPolicy)
+	})
 }
 
 

@@ -19,6 +19,11 @@ data:
   RUNNER_INIT_MEMORY_REQUEST: {{ (default (dict) (default (dict) (default (dict) .Values.runner).initResources).requests).memory | default "64Mi" | quote }}
   RUNNER_INIT_MEMORY_LIMIT: {{ (default (dict) (default (dict) (default (dict) .Values.runner).initResources).limits).memory | default "256Mi" | quote }}
   RUNNER_DEFAULT_IMAGE: {{ .Values.runner.defaultImage | quote }}
+  # Runner DNS configuration (Issue #217)
+  RUNNER_DNS_NDOTS: {{ (default "2" (default (dict) .Values.runner).ndots) | toString | quote }}
+  RUNNER_DNS_POLICY: {{ (default (dict) .Values.runner).dnsPolicy | default "" | quote }}
+  RUNNER_DNS_NAMESERVERS: {{ (default (dict) (default (dict) .Values.runner).dnsConfig).nameservers | default (list) | join "," | quote }}
+  RUNNER_DNS_SEARCHES: {{ (default (dict) (default (dict) .Values.runner).dnsConfig).searches | default (list) | join "," | quote }}
   BUILDER_NAMESPACE: {{ .Values.builder.namespace | quote }}
   BUILDER_IMAGE: {{ .Values.builder.image | quote }}
   BUILDER_CPU_REQUEST: {{ (default (dict) (default (dict) (default (dict) .Values.builder).resources).requests).cpu | default "1000m" | quote }}
