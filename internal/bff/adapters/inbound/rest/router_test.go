@@ -370,6 +370,31 @@ func TestRouter_TransparentProxy(t *testing.T) {
 				Body:       io.NopCloser(bytes.NewBufferString(`{"suite_name":"Ecommerce Checkout Suite","status":"PASS"}`)),
 				Request:    req,
 			}, nil
+		case "/api/v1/runs/run-spawned/cleanup":
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(bytes.NewBufferString(`{"id":"run-spawned","status":"ABORTED"}`)),
+				Request:    req,
+			}, nil
+		case "/api/v1/runs/run-spawned":
+			if req.Method == http.MethodDelete {
+				return &http.Response{
+					StatusCode: http.StatusNoContent,
+					Status:     "204 No Content",
+					Header:     make(http.Header),
+					Body:       io.NopCloser(bytes.NewBuffer(nil)),
+					Request:    req,
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusNotFound,
+				Status:     "404 Not Found",
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(`{"error":"not found"}`)),
+				Request:    req,
+			}, nil
 		default:
 			return &http.Response{
 				StatusCode: http.StatusNotFound,
@@ -436,6 +461,23 @@ func TestRouter_TransparentProxy(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Contains(t, rec.Body.String(), "Ecommerce Checkout Suite")
+	})
+
+	t.Run("proxies POST /api/bff/v1/runs/:id/cleanup to /api/v1/runs/:id/cleanup", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodPost, "/api/bff/v1/runs/run-spawned/cleanup", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), "ABORTED")
+	})
+
+	t.Run("proxies DELETE /api/bff/v1/runs/:id to /api/v1/runs/:id", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, "/api/bff/v1/runs/run-spawned", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNoContent, rec.Code)
 	})
 }
 

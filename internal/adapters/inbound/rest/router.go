@@ -213,6 +213,8 @@ func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 				runs.GET("/:id/report", roleGuard(model.RoleViewer), runHandler.GetRunReport)
 				runs.GET("/:id/logs", roleGuard(model.RoleViewer), runHandler.GetRunLogs)
 				runs.POST("/:id/abort", roleGuard(model.RoleDeployer, model.RoleAdmin), runHandler.AbortRun)
+				runs.POST("/:id/cleanup", roleGuard(model.RoleDeployer, model.RoleAdmin), runHandler.CleanupRun)
+				runs.DELETE("/:id", roleGuard(model.RoleDeployer, model.RoleAdmin), runHandler.DeleteRun)
 				runs.POST("/:id/complete", roleGuard(model.RoleRunner, model.RoleAdmin), runHandler.CompleteRun)
 				runs.POST("/complete", roleGuard(model.RoleRunner, model.RoleAdmin), runHandler.CompleteRun)
 			}

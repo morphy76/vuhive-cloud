@@ -12,6 +12,7 @@ import (
 
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/runner"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -199,3 +200,26 @@ func TestRunnerInitializer_StorageDownloadFailure(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to download runner binary")
 }
+
+func TestRunnerInitializer_ComponentTaggingInLogs(t *testing.T) {
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf)
+	ctx := logger.WithContext(context.Background())
+
+	mockStorage := &mockStoragePort{
+		downloadFunc: func(ctx context.Context, key string) (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader([]byte("binary content"))), nil
+		},
+	}
+
+	initializer := runner.NewRunnerInitializer(mockStorage)
+	cfg := runner.InitConfig{
+		SharedDir: t.TempDir(),
+		BinaryKey: "binary-key",
+	}
+
+	err := initializer.Init(ctx, cfg)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), `"component":"runner-init"`)
+}
+

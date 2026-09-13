@@ -28,6 +28,8 @@ type mockRunsUseCase struct {
 	getRunReportURLFunc func(ctx context.Context, id string, lifetime time.Duration) (string, error)
 	getRunLogsFunc      func(ctx context.Context, id string) (io.ReadCloser, error)
 	getRunLogsURLFunc   func(ctx context.Context, id string, lifetime time.Duration) (string, error)
+	cleanupRunFunc      func(ctx context.Context, id string) (*model.TestRun, error)
+	deleteRunFunc       func(ctx context.Context, id string) error
 }
 
 func (m *mockRunsUseCase) TriggerRun(ctx context.Context, cmd inbound.TriggerRunCommand) (*model.TestRun, error) {
@@ -53,6 +55,18 @@ func (m *mockRunsUseCase) AbortRun(ctx context.Context, id string, reason string
 		return m.abortRunFunc(ctx, id, reason)
 	}
 	return nil, nil
+}
+func (m *mockRunsUseCase) CleanupRun(ctx context.Context, id string) (*model.TestRun, error) {
+	if m.cleanupRunFunc != nil {
+		return m.cleanupRunFunc(ctx, id)
+	}
+	return nil, nil
+}
+func (m *mockRunsUseCase) DeleteRun(ctx context.Context, id string) error {
+	if m.deleteRunFunc != nil {
+		return m.deleteRunFunc(ctx, id)
+	}
+	return nil
 }
 func (m *mockRunsUseCase) CompleteRun(ctx context.Context, cmd inbound.CompleteRunCommand) (*model.TestRun, error) {
 	if m.completeRunFunc != nil {
@@ -857,4 +871,109 @@ func TestRunHandler_TriggerRun(t *testing.T) {
 		assert.Equal(t, http.StatusConflict, resp.Code)
 	})
 }
+
+func TestRunHandler_CleanupRun(t *testing.T) {
+	now := time.Now().UTC()
+	cleanedRun, err := model.NewTestRunWithID(
+		"run-cleanup-1", "suite-1", "art-1", nil, "prof-1", nil,
+		model.RunStatusAborted, "vuhive-job", "vuhive-runners",
+		&now, &now, nil, nil,
+		model.RunMetrics{}, "", "",
+		nil, "runtime resource cleanup", now,
+	)
+	require.NoError(t, err)
+
+	t.Run("success returns 200 with RunResponse", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			cleanupRunFunc: func(ctx context.Context, id string) (*model.TestRun, error) {
+				assert.Equal(t, "run-cleanup-1", id)
+				return cleanedRun, nil
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs/run-cleanup-1/cleanup", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusOK, resp.Code)
+		var res rest.RunResponse
+		require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &res))
+		assert.Equal(t, "run-cleanup-1", res.ID)
+		assert.Equal(t, "ABORTED", res.Status)
+	})
+
+	t.Run("run not found returns 404", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			cleanupRunFunc: func(ctx context.Context, id string) (*model.TestRun, error) {
+				return nil, model.ErrNotFound
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/runs/missing/cleanup", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusNotFound, resp.Code)
+	})
+}
+
+func TestRunHandler_DeleteRun(t *testing.T) {
+	t.Run("success returns 204 no content", func(t *testing.T) {
+		called := false
+		mockUC := &mockRunsUseCase{
+			deleteRunFunc: func(ctx context.Context, id string) error {
+				assert.Equal(t, "run-delete-1", id)
+				called = true
+				return nil
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/runs/run-delete-1", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusNoContent, resp.Code)
+		assert.True(t, called)
+	})
+
+	t.Run("active run returns 409 conflict", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			deleteRunFunc: func(ctx context.Context, id string) error {
+				return model.ErrConflict
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/runs/run-active/delete", nil) // note: DELETE /api/v1/runs/:id
+		req = httptest.NewRequest(http.MethodDelete, "/api/v1/runs/run-active", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusConflict, resp.Code)
+	})
+
+	t.Run("run not found returns 404", func(t *testing.T) {
+		mockUC := &mockRunsUseCase{
+			deleteRunFunc: func(ctx context.Context, id string) error {
+				return model.ErrNotFound
+			},
+		}
+
+		router := rest.SetupRouter(nil, nil, nil, mockUC)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/runs/missing", nil)
+		resp := httptest.NewRecorder()
+
+		router.ServeHTTP(resp, req)
+
+		assert.Equal(t, http.StatusNotFound, resp.Code)
+	})
+}
+
 

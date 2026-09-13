@@ -96,3 +96,42 @@ export function useAbortRun() {
     queryClient
   )
 }
+
+export function useCleanupRun() {
+  const queryClient = useSafeQueryClient()
+
+  return useMutation(
+    {
+      mutationFn: (id: string) => api.cleanupRun(id),
+      onSuccess: (cleanedRun) => {
+        queryClient.setQueryData<HistoricalRun>(['runs', cleanedRun.id], cleanedRun)
+        queryClient.setQueryData<HistoricalRun[]>(['runs', undefined], (old = []) =>
+          old.map((r) => (r.id === cleanedRun.id ? cleanedRun : r))
+        )
+        queryClient.invalidateQueries({ queryKey: ['runs'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      },
+    },
+    queryClient
+  )
+}
+
+export function useDeleteRun() {
+  const queryClient = useSafeQueryClient()
+
+  return useMutation(
+    {
+      mutationFn: (id: string) => api.deleteRun(id),
+      onSuccess: (_, deletedId) => {
+        queryClient.removeQueries({ queryKey: ['runs', deletedId] })
+        queryClient.setQueryData<HistoricalRun[]>(['runs', undefined], (old = []) =>
+          old.filter((r) => r.id !== deletedId)
+        )
+        queryClient.invalidateQueries({ queryKey: ['runs'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      },
+    },
+    queryClient
+  )
+}
+

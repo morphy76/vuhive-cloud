@@ -748,6 +748,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Permanently delete a test run
+      description: |
+        Deletes the underlying Kubernetes Job (if still present), removes associated storage assets
+        (summary.json and run.log), and removes the run record from PostgreSQL.
+        Rejects deletion of active runs (QUEUED, RUNNING) with 409 Conflict.
+      operationId: deleteRun
+      tags:
+        - Runs
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique identifier of the test run to delete
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Test run successfully deleted
+        '400':
+          description: Malformed or missing run id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test run not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Cannot delete an active test run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/runs/{id}/report:
     get:
@@ -887,6 +924,43 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Run is already in a terminal status (COMPLETED, FAILED, or ABORTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/runs/{id}/cleanup:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Unique TestRun UUID whose runtime resources should be cleaned up
+        schema:
+          type: string
+    post:
+      summary: Clean up runtime resources for a test run
+      description: |
+        Deletes lingering Kubernetes batch/v1 Job and Pods for the specified test run.
+        If the run was in an active state (QUEUED, RUNNING), transitions it to ABORTED.
+        Useful for manually cleaning up resources after runner failures, Init:Error states, or manual interventions.
+      operationId: cleanupRun
+      tags:
+        - Runs
+      responses:
+        '200':
+          description: Runtime resources successfully cleaned up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResponse'
+        '400':
+          description: Malformed or missing run id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test run not found
           content:
             application/json:
               schema:

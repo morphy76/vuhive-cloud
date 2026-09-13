@@ -412,5 +412,74 @@ func (h *RunHandler) GetRunLogs(c *gin.Context) {
 	_, _ = io.Copy(c.Writer, rc)
 }
 
+// CleanupRun handles POST /api/v1/runs/:id/cleanup.
+// Deletes underlying Kubernetes Job and Pods, and marks in-flight runs as ABORTED.
+func (h *RunHandler) CleanupRun(c *gin.Context) {
+	start := time.Now()
+	ctx := c.Request.Context()
+	runID := strings.TrimSpace(c.Param("id"))
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunHandler.CleanupRun").
+		Str("run_id", runID).
+		Logger()
+	log.Debug().Msg("handling test run runtime cleanup request")
+
+	if runID == "" {
+		log.Warn().Msg("missing run id parameter")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "run id cannot be empty"})
+		return
+	}
+
+	run, err := h.runsUC.CleanupRun(ctx, runID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed cleaning up test run runtime")
+		HandleError(c, err)
+		return
+	}
+
+	log.Info().
+		Str("run_id", run.ID()).
+		Str("status", string(run.Status())).
+		Dur("duration_ms", time.Since(start)).
+		Msg("successfully cleaned up test run runtime")
+
+	c.JSON(http.StatusOK, ToRunResponse(run))
+}
+
+// DeleteRun handles DELETE /api/v1/runs/:id.
+// Deletes underlying Kubernetes Job, storage assets (reports, logs), and the database run record.
+func (h *RunHandler) DeleteRun(c *gin.Context) {
+	start := time.Now()
+	ctx := c.Request.Context()
+	runID := strings.TrimSpace(c.Param("id"))
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunHandler.DeleteRun").
+		Str("run_id", runID).
+		Logger()
+	log.Debug().Msg("handling delete test run request")
+
+	if runID == "" {
+		log.Warn().Msg("missing run id parameter")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "run id cannot be empty"})
+		return
+	}
+
+	if err := h.runsUC.DeleteRun(ctx, runID); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed deleting test run")
+		HandleError(c, err)
+		return
+	}
+
+	log.Info().
+		Str("run_id", runID).
+		Dur("duration_ms", time.Since(start)).
+		Msg("successfully deleted test run")
+
+	c.Status(http.StatusNoContent)
+}
+
 // Compile-time assertion
 var _ = (*RunHandler)(nil)
+

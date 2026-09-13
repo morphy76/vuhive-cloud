@@ -146,6 +146,13 @@ runner:
   # The namespace is created with "helm.sh/resource-policy: keep" so it is NOT deleted on helm uninstall.
   createNamespace: true
   initImage: "ghcr.io/morphy76/vuhive-cloud/runner-init:latest"
+  initResources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
   defaultImage: "alpine:3.20"
 
 # ── Network Policy Hardening ──────────────────────────────────────────

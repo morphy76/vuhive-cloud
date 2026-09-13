@@ -82,6 +82,8 @@ type RunsUseCase interface {
 	GetRunReportURL(ctx context.Context, id string, lifetime time.Duration) (string, error)
 	GetRunLogs(ctx context.Context, id string) (io.ReadCloser, error)
 	GetRunLogsURL(ctx context.Context, id string, lifetime time.Duration) (string, error)
+	CleanupRun(ctx context.Context, id string) (*model.TestRun, error)
+	DeleteRun(ctx context.Context, id string) error
 }
 
 // SchedulesUseCase defines driving use cases for managing recurring TestSchedule aggregates.

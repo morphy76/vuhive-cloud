@@ -28,6 +28,7 @@ func NewRunnerInitializer(storage outbound.StoragePort) *RunnerInitializer {
 func (r *RunnerInitializer) Init(ctx context.Context, cfg InitConfig) error {
 	start := time.Now()
 	log := zerolog.Ctx(ctx).With().
+		Str("component", "runner-init").
 		Str("op", "RunnerInitializer.Init").
 		Str("shared_dir", cfg.SharedDir).
 		Str("binary_key", cfg.BinaryKey).

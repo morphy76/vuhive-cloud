@@ -263,6 +263,18 @@ func main() {
 			if runnerInitImg := os.Getenv("RUNNER_INIT_IMAGE"); runnerInitImg != "" {
 				k8sCfg.RunnerInitImage = runnerInitImg
 			}
+			if runnerInitCPUReq := os.Getenv("RUNNER_INIT_CPU_REQUEST"); runnerInitCPUReq != "" {
+				k8sCfg.RunnerInitCPURequest = runnerInitCPUReq
+			}
+			if runnerInitCPULim := os.Getenv("RUNNER_INIT_CPU_LIMIT"); runnerInitCPULim != "" {
+				k8sCfg.RunnerInitCPULimit = runnerInitCPULim
+			}
+			if runnerInitMemReq := os.Getenv("RUNNER_INIT_MEMORY_REQUEST"); runnerInitMemReq != "" {
+				k8sCfg.RunnerInitMemoryRequest = runnerInitMemReq
+			}
+			if runnerInitMemLim := os.Getenv("RUNNER_INIT_MEMORY_LIMIT"); runnerInitMemLim != "" {
+				k8sCfg.RunnerInitMemoryLimit = runnerInitMemLim
+			}
 			if runnerDefaultImg := os.Getenv("RUNNER_DEFAULT_IMAGE"); runnerDefaultImg != "" {
 				k8sCfg.RunnerDefaultImage = runnerDefaultImg
 			}

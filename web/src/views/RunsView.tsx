@@ -1,17 +1,20 @@
 import React, { useState } from 'react'
-import { PlayCircle, Play, BookOpen, Clock, AlertTriangle, AlertOctagon, CheckCircle2 } from 'lucide-react'
+import { PlayCircle, Play, BookOpen, Clock, AlertTriangle, AlertOctagon, CheckCircle2, Sparkles, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
+import { CleanRuntimeDialog } from '@/components/dialogs/CleanRuntimeDialog'
+import { DeleteRunDialog } from '@/components/dialogs/DeleteRunDialog'
 import { LiveRunMonitor } from '@/components/runs/LiveRunMonitor'
 import { RunSummaryDashboard } from '@/components/runs/RunSummaryDashboard'
 import { SummaryReportInspector } from '@/components/runs/SummaryReportInspector'
 import { VirtualizedLogViewer } from '@/components/logs/VirtualizedLogViewer'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
 import { useRecipe } from '@/context/RecipeContext'
-import { useRuns, useRunLogs } from '@/hooks/use-runs'
+import { useRuns, useRunLogs, useCleanupRun, useDeleteRun } from '@/hooks/use-runs'
 import { useSuites } from '@/hooks/use-suites'
 import { useRunEvents } from '@/hooks/use-events'
 import type { HistoricalRun } from '@/types/suite'
@@ -52,6 +55,50 @@ export const RunsView: React.FC<RunsViewProps> = ({ onNavigate }) => {
   }, [runs, selectedRunId])
 
   const [inspectorTab, setInspectorTab] = useState<'summary' | 'monitor' | 'logs' | 'report'>('summary')
+  const [runToClean, setRunToClean] = useState<HistoricalRun | null>(null)
+  const [runToDelete, setRunToDelete] = useState<HistoricalRun | null>(null)
+  const [isCleanDialogOpen, setIsCleanDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+
+  const cleanupRunMutation = useCleanupRun()
+  const deleteRunMutation = useDeleteRun()
+
+  const handleCleanRuntime = (run: HistoricalRun, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setRunToClean(run)
+    setIsCleanDialogOpen(true)
+  }
+
+  const handleDeleteRun = (run: HistoricalRun, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setRunToDelete(run)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleConfirmClean = async () => {
+    if (!runToClean) return
+    try {
+      await cleanupRunMutation.mutateAsync(runToClean.id)
+      setIsCleanDialogOpen(false)
+      setRunToClean(null)
+    } catch (err) {
+      console.error('Failed to cleanup run:', err)
+    }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!runToDelete) return
+    try {
+      await deleteRunMutation.mutateAsync(runToDelete.id)
+      setIsDeleteDialogOpen(false)
+      if (selectedRunId === runToDelete.id) {
+        setSelectedRunId(null)
+      }
+      setRunToDelete(null)
+    } catch (err) {
+      console.error('Failed to delete run:', err)
+    }
+  }
 
   const isActive = selectedRun?.status === 'RUNNING' || selectedRun?.status === 'QUEUED'
   const { data: runLogs = '', isLoading: isLogsLoading } = useRunLogs(
@@ -322,18 +369,19 @@ export const RunsView: React.FC<RunsViewProps> = ({ onNavigate }) => {
                     />
                   </div>
                 </th>
+                <th scope="col" className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-xs text-slate-500">
+                  <td colSpan={8} className="px-6 py-8 text-center text-xs text-slate-500">
                     Loading execution runs...
                   </td>
                 </tr>
               ) : isError ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center">
+                  <td colSpan={8} className="px-6 py-8 text-center">
                     <div className="flex flex-col items-center justify-center gap-2 text-red-600 dark:text-red-400">
                       <AlertTriangle className="w-6 h-6" />
                       <p className="text-sm font-semibold">Failed to load execution runs</p>
@@ -346,7 +394,7 @@ export const RunsView: React.FC<RunsViewProps> = ({ onNavigate }) => {
                 </tr>
               ) : runs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <PlayCircle className="w-8 h-8 text-slate-300 dark:text-slate-600" />
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -406,6 +454,43 @@ export const RunsView: React.FC<RunsViewProps> = ({ onNavigate }) => {
                           ? `${(r.metrics.errorRatePct * 100).toFixed(2)}%`
                           : '-'}
                       </td>
+                      <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleCleanRuntime(r, e)}
+                                className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/50"
+                                aria-label="Clean Runtime"
+                              >
+                                <Sparkles className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Clean Kubernetes runtime (Job & Pods)</TooltipContent>
+                          </Tooltip>
+
+                          {r.status !== 'RUNNING' && r.status !== 'QUEUED' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => handleDeleteRun(r, e)}
+                                  className="h-8 w-8 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/50"
+                                  aria-label="Delete Run"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete run record and storage assets</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   )
                 })
@@ -420,6 +505,22 @@ export const RunsView: React.FC<RunsViewProps> = ({ onNavigate }) => {
         onOpenChange={setIsRunDialogOpen}
         onRunTriggered={handleRunTriggered}
         onNavigate={onNavigate}
+      />
+
+      <CleanRuntimeDialog
+        open={isCleanDialogOpen}
+        onOpenChange={setIsCleanDialogOpen}
+        run={runToClean}
+        onConfirm={handleConfirmClean}
+        isCleaning={cleanupRunMutation.isPending}
+      />
+
+      <DeleteRunDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        run={runToDelete}
+        onConfirm={handleConfirmDelete}
+        isDeleting={deleteRunMutation.isPending}
       />
     </div>
   )

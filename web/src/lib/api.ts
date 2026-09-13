@@ -760,6 +760,20 @@ export const api = {
     return mapRunResponse(res)
   },
 
+  async cleanupRun(id: string): Promise<HistoricalRun> {
+    const res = await apiRequest<any>(`/runs/${encodeURIComponent(id)}/cleanup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    return mapRunResponse(res)
+  },
+
+  async deleteRun(id: string): Promise<void> {
+    await apiRequest<void>(`/runs/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  },
+
   async getSuiteRuns(suiteId: string): Promise<HistoricalRun[]> {
     return this.getRuns({ suiteId })
   },

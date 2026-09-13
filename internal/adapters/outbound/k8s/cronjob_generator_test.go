@@ -133,6 +133,10 @@ func TestCronJobGenerator_GenerateCronJob(t *testing.T) {
 		initC := podSpec.InitContainers[0]
 		assert.Equal(t, "fetch-artifacts", initC.Name)
 		assert.Equal(t, "ghcr.io/morphy76/vuhive-cloud/runner-init:v1.0", initC.Image)
+		assert.Equal(t, "50m", initC.Resources.Requests.Cpu().String())
+		assert.Equal(t, "64Mi", initC.Resources.Requests.Memory().String())
+		assert.Equal(t, "200m", initC.Resources.Limits.Cpu().String())
+		assert.Equal(t, "256Mi", initC.Resources.Limits.Memory().String())
 
 		findEnv := func(envs []corev1.EnvVar, name string) *corev1.EnvVar {
 			for _, e := range envs {

@@ -879,6 +879,10 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `runner.namespace` | Target namespace where runner Jobs and CronJobs are spawned | `vuhive-runners` |
 | `runner.createNamespace` | Automatically create `runner.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release namespace) | `true` |
 | `runner.initImage` | Init container image fetching binaries from S3 | `ghcr.io/morphy76/vuhive-cloud/runner-init:latest` |
+| `runner.initResources.requests.cpu` | Init container CPU request for bootstrap downloader | `50m` |
+| `runner.initResources.requests.memory` | Init container memory request for bootstrap downloader | `64Mi` |
+| `runner.initResources.limits.cpu` | Init container CPU limit for bootstrap downloader | `200m` |
+| `runner.initResources.limits.memory` | Init container memory limit for bootstrap downloader | `256Mi` |
 | `runner.defaultImage` | Default runner base image | `alpine:3.20` |
 | `runner.activeDeadlineSeconds` | Default active deadline timeout (seconds) injected into runner Jobs if unspecified on profile | `3600` |
 | `networkPolicy.enabled` | Enable egress NetworkPolicy for runner pods in `runner.namespace` | `false` |

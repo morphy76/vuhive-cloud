@@ -253,4 +253,42 @@ func TestRouter_RBACProtection(t *testing.T) {
 		router.ServeHTTP(wVD, reqViewerDel)
 		assert.Equal(t, http.StatusForbidden, wVD.Code)
 	})
+
+	t.Run("deployer and admin can cleanup and delete runs, viewer cannot", func(t *testing.T) {
+		testRun, _ := model.NewTestRun("suite-1", "art-1", nil, "prof-1", nil)
+		mockRuns.cleanupRunFunc = func(ctx context.Context, id string) (*model.TestRun, error) {
+			return testRun, nil
+		}
+		mockRuns.deleteRunFunc = func(ctx context.Context, id string) error {
+			return nil
+		}
+
+		// Deployer cleanup -> 200
+		reqClean, _ := http.NewRequest(http.MethodPost, "/api/v1/runs/run-1/cleanup", nil)
+		reqClean.Header.Set("Authorization", "Bearer dep-token")
+		wClean := httptest.NewRecorder()
+		router.ServeHTTP(wClean, reqClean)
+		assert.Equal(t, http.StatusOK, wClean.Code)
+
+		// Deployer delete -> 204
+		reqDel, _ := http.NewRequest(http.MethodDelete, "/api/v1/runs/run-1", nil)
+		reqDel.Header.Set("Authorization", "Bearer dep-token")
+		wDel := httptest.NewRecorder()
+		router.ServeHTTP(wDel, reqDel)
+		assert.Equal(t, http.StatusNoContent, wDel.Code)
+
+		// Viewer cleanup -> 403 Forbidden
+		reqViewerClean, _ := http.NewRequest(http.MethodPost, "/api/v1/runs/run-1/cleanup", nil)
+		reqViewerClean.Header.Set("Authorization", "Bearer viewer-token")
+		wVC := httptest.NewRecorder()
+		router.ServeHTTP(wVC, reqViewerClean)
+		assert.Equal(t, http.StatusForbidden, wVC.Code)
+
+		// Viewer delete -> 403 Forbidden
+		reqViewerDel, _ := http.NewRequest(http.MethodDelete, "/api/v1/runs/run-1", nil)
+		reqViewerDel.Header.Set("Authorization", "Bearer viewer-token")
+		wVD := httptest.NewRecorder()
+		router.ServeHTTP(wVD, reqViewerDel)
+		assert.Equal(t, http.StatusForbidden, wVD.Code)
+	})
 }

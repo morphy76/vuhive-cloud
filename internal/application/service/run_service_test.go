@@ -1186,3 +1186,119 @@ func TestRunService_CompleteRun_JobNameFallback(t *testing.T) {
 	assert.Equal(t, run.ID(), completed.ID())
 	assert.Equal(t, model.RunStatusCompleted, completed.Status())
 }
+
+func TestRunService_CleanupRun(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, _, _, runRepo, orchestrator, suite, artifact, profile := setupTestRunService(t)
+
+	t.Run("empty id returns validation error", func(t *testing.T) {
+		_, err := svc.CleanupRun(ctx, "   ")
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("non-existent run returns ErrNotFound", func(t *testing.T) {
+		_, err := svc.CleanupRun(ctx, "missing-id")
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("failed run with k8s job cleans runtime successfully", func(t *testing.T) {
+		run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-failed-cleanup", time.Now().UTC()))
+		require.NoError(t, run.Fail(1, "runs/"+run.ID()+"/run.log", time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		cleaned, err := svc.CleanupRun(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, run.ID(), cleaned.ID())
+		assert.Equal(t, model.RunStatusFailed, cleaned.Status())
+	})
+
+	t.Run("active running run cleans runtime and transitions to ABORTED", func(t *testing.T) {
+		run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-active-cleanup", time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		cleaned, err := svc.CleanupRun(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusAborted, cleaned.Status())
+		assert.Equal(t, "runtime cleaned", cleaned.AbortReason())
+	})
+
+	t.Run("cleanup succeeds even if orchestrator returns not found or error", func(t *testing.T) {
+		run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-missing-cleanup", time.Now().UTC()))
+		require.NoError(t, run.Abort("failed early", time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		orchestrator.abortErr = errors.New("k8s job not found")
+		defer func() { orchestrator.abortErr = nil }()
+
+		cleaned, err := svc.CleanupRun(ctx, run.ID())
+		require.NoError(t, err)
+		assert.Equal(t, model.RunStatusAborted, cleaned.Status())
+	})
+}
+
+func TestRunService_DeleteRun(t *testing.T) {
+	ctx := context.Background()
+	svc, _, _, _, _, runRepo, orchestrator, storage, suite, artifact, profile := setupTestRunServiceWithStorage(t)
+
+	t.Run("empty id returns validation error", func(t *testing.T) {
+		err := svc.DeleteRun(ctx, "   ")
+		assert.ErrorIs(t, err, model.ErrValidation)
+	})
+
+	t.Run("non-existent run returns ErrNotFound", func(t *testing.T) {
+		err := svc.DeleteRun(ctx, "missing-id")
+		assert.ErrorIs(t, err, model.ErrNotFound)
+	})
+
+	t.Run("active running run cannot be deleted and returns ErrConflict", func(t *testing.T) {
+		run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-active-del", time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		err = svc.DeleteRun(ctx, run.ID())
+		assert.ErrorIs(t, err, model.ErrConflict)
+
+		// Still exists in repo
+		persisted, err := runRepo.FindByID(ctx, run.ID())
+		require.NoError(t, err)
+		assert.NotNil(t, persisted)
+	})
+
+	t.Run("terminal run deletes k8s job, storage keys, and removes record", func(t *testing.T) {
+		run, err := model.NewTestRun(suite.ID(), artifact.ID(), nil, profile.ID(), nil)
+		require.NoError(t, err)
+		require.NoError(t, run.Start("job-terminal-del", time.Now().UTC()))
+
+		reportKey := "runs/" + run.ID() + "/summary.json"
+		logsKey := "runs/" + run.ID() + "/run.log"
+		require.NoError(t, storage.Upload(ctx, reportKey, bytes.NewReader([]byte("{}")), 2, "application/json"))
+		require.NoError(t, storage.Upload(ctx, logsKey, bytes.NewReader([]byte("logs")), 4, "text/plain"))
+
+		require.NoError(t, run.Complete(model.RunMetrics{}, reportKey, logsKey, nil, true, time.Now().UTC()))
+		require.NoError(t, runRepo.Save(ctx, run))
+
+		err = svc.DeleteRun(ctx, run.ID())
+		require.NoError(t, err)
+
+		// Verify cluster job abort was invoked
+		assert.Contains(t, orchestrator.abortedJobs, "job-terminal-del")
+
+		// Verify removed from repository
+		_, err = runRepo.FindByID(ctx, run.ID())
+		assert.ErrorIs(t, err, model.ErrNotFound)
+
+		// Verify purged from storage
+		reportExists, _ := storage.Exists(ctx, reportKey)
+		assert.False(t, reportExists)
+		logsExists, _ := storage.Exists(ctx, logsKey)
+		assert.False(t, logsExists)
+	})
+}
+

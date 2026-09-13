@@ -183,6 +183,8 @@ vuhive-cloud/
    - **Egress NetworkPolicy:** Applied to the runner namespace, allowing egress only to S3/MinIO, the control plane callback endpoint, and explicit target IP/CIDRs defined for the load test, while blocking internal cluster IPs (e.g., `10.96.0.1:443`) and cloud instance metadata (`169.254.169.254`).
 3. **Init Container Execution:**
    - Pod starts with init container `vuhive-cloud/runner-init:latest`.
+   - Resource requests and limits for the init container are configurable via `RUNNER_INIT_*` environment variables (Helm `runner.initResources`), decoupled from the main runner workload profile.
+   - Structured logs are tagged with `component: runner-init`, and `automaxprocs` logs are directed to debug-level logging.
    - Fetches the compiled binary and selected `vuhive.yaml` from S3 into an `emptyDir` shared volume (`/shared`).
    - Sets executable permissions (`chmod +x /shared/runner`).
 4. **Runner Execution:**
@@ -194,6 +196,9 @@ vuhive-cloud/
      - `s3://vuhive-reports/{run_id}/run.log`
    - Wrapper posts completion callback to `POST /api/v1/runs/complete` (with `run_id` in request body) or `POST /api/v1/runs/{id}/complete`.
    - Control plane parses `summary.json`, verifies the deterministic `vuhive` report schema, extracts SLA pass/fail status, latency percentiles (`p50`, `p90`, `p95`, `p99`), total iterations, throughput TPS, and updates the `test_runs` record in PostgreSQL. Runs with invalid or missing summary reports are flagged as `FAILED`.
+6. **Runtime Resource Cleanup & Permanent Deletion:**
+   - **Runtime Cleanup:** `POST /api/v1/runs/{id}/cleanup` cleans up ephemeral Kubernetes `Job` and Pod resources in the cluster without deleting historical database records or S3 reports/logs. If invoked while a run is active (`PENDING` or `RUNNING`), it marks the run as `ABORTED`.
+   - **Permanent Deletion:** `DELETE /api/v1/runs/{id}` permanently deletes non-active runs (`COMPLETED`, `FAILED`, `ABORTED`), purging the record from PostgreSQL, associated summary reports and logs from S3, and any lingering Kubernetes Job resources. Active runs are rejected with `409 Conflict`.
 
 ### 4.3 Native K8s CronJob Workflow (Scheduled Runs)
 1. **Creation:** User issues `POST /api/v1/schedules` specifying cron expression (e.g. `0 2 * * *`), `suite_id`, `build_id`, `config_id`, and `runner_profile_id`.
@@ -367,6 +372,8 @@ All endpoints require Header `Authorization: Bearer <token>` or `X-API-Key: <key
 | `GET` | `/api/v1/runs` | List test runs (filterable by suite, status, date) |
 | `GET` | `/api/v1/runs/{id}` | Get run details, status, and parsed summary metrics |
 | `POST` | `/api/v1/runs/{id}/abort` | Cancel/abort running K8s Job |
+| `POST` | `/api/v1/runs/{id}/cleanup` | Clean runtime Kubernetes Job and Pod resources for a run |
+| `DELETE` | `/api/v1/runs/{id}` | Permanently delete non-active run, its S3 reports/logs, and runtime Job |
 | `GET` | `/api/v1/runs/{id}/report` | Fetch full `summary.json` report |
 | `GET` | `/api/v1/runs/{id}/logs` | Fetch test execution logs |
 | `POST` | `/api/v1/runs/{id}/complete` | Internal runner callback to finalize report (path ID) |
@@ -432,6 +439,13 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
           env:
             - name: S3_ENDPOINT
               value: "minio.storage.svc:9000"
