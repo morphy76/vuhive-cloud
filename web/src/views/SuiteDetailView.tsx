@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TriggerRunDialog } from '@/components/dialogs/TriggerRunDialog'
 import { ConfigEditorDialog } from '@/components/dialogs/ConfigEditorDialog'
@@ -163,14 +164,19 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
     <div className="space-y-6">
       {/* Header with Navigation and Quick Actions */}
       <div className="space-y-4">
-        <Button
-          variant="outline"
-          onClick={onBack}
-          className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Suites</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              onClick={onBack}
+              className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Suites</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Back to test suites catalog</TooltipContent>
+        </Tooltip>
 
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
@@ -200,41 +206,64 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setEditingConfig(null)
-                setIsConfigEditorOpen(true)
-              }}
-              className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800"
-            >
-              <FileCode className="w-4 h-4" />
-              <span>Attach Config</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsUploadBuildOpen(true)}
-              className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800"
-            >
-              <Upload className="w-4 h-4" />
-              <span>Upload Build</span>
-            </Button>
-            <Button
-              onClick={() => setIsTriggerRunOpen(true)}
-              className="min-h-[44px] gap-2"
-            >
-              <Play className="w-4 h-4 fill-current" />
-              <span>Trigger Run</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setIsDeleteDialogOpen(true)}
-              className="min-h-[44px] gap-2 border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300"
-              aria-label={`Delete suite ${suite.name}`}
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete Suite</span>
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEditingConfig(null)
+                    setIsConfigEditorOpen(true)
+                  }}
+                  className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800"
+                >
+                  <FileCode className="w-4 h-4" />
+                  <span>Attach Config</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Attach scenario configuration</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsUploadBuildOpen(true)}
+                  className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Upload Build</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Upload load test source package</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => setIsTriggerRunOpen(true)}
+                  className="min-h-[44px] gap-2"
+                >
+                  <Play className="w-4 h-4 fill-current" />
+                  <span>Trigger Run</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Trigger load test execution</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDeleteDialogOpen(true)}
+                  className="min-h-[44px] gap-2 border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300"
+                  aria-label={`Delete suite ${suite.name}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete Suite</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete suite {suite.name}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -270,32 +299,42 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
               </div>
               <div className="flex items-center gap-2">
                 {configs.length >= 2 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setDiffBaseId(configs[0].id)
-                      setDiffComparisonId(configs[1].id)
-                      setIsDiffDialogOpen(true)
-                    }}
-                    className="gap-1.5 min-h-[36px]"
-                  >
-                    <Split className="w-3.5 h-3.5" />
-                    <span>Compare Versions</span>
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDiffBaseId(configs[0].id)
+                          setDiffComparisonId(configs[1].id)
+                          setIsDiffDialogOpen(true)
+                        }}
+                        className="gap-1.5 min-h-[36px]"
+                      >
+                        <Split className="w-3.5 h-3.5" />
+                        <span>Compare Versions</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Compare scenario configurations</TooltipContent>
+                  </Tooltip>
                 )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEditingConfig(null)
-                    setIsConfigEditorOpen(true)
-                  }}
-                  className="gap-1.5 min-h-[36px]"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>New Config</span>
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingConfig(null)
+                        setIsConfigEditorOpen(true)
+                      }}
+                      className="gap-1.5 min-h-[36px]"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>New Config</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Attach new scenario configuration</TooltipContent>
+                </Tooltip>
               </div>
             </div>
 
@@ -341,45 +380,62 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditingConfig(cfg)
-                          setIsConfigEditorOpen(true)
-                        }}
-                        className="gap-1 text-slate-600 dark:text-slate-400 min-h-[36px]"
-                        aria-label={`Edit and view YAML for ${cfg.name}`}
-                      >
-                        <FileEdit className="w-4 h-4" />
-                        <span>Edit / Tune</span>
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditingConfig(cfg)
+                              setIsConfigEditorOpen(true)
+                            }}
+                            className="gap-1 text-slate-600 dark:text-slate-400 min-h-[36px]"
+                            aria-label={`Edit and view YAML for ${cfg.name}`}
+                          >
+                            <FileEdit className="w-4 h-4" />
+                            <span>Edit / Tune</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Edit configuration</TooltipContent>
+                      </Tooltip>
+
                       {configs.length >= 2 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setDiffBaseId(cfg.id)
-                            const other = configs.find((c) => c.id !== cfg.id)
-                            setDiffComparisonId(other?.id)
-                            setIsDiffDialogOpen(true)
-                          }}
-                          className="gap-1 text-slate-600 dark:text-slate-400 min-h-[36px]"
-                          aria-label={`Compare configuration ${cfg.name}`}
-                        >
-                          <Split className="w-4 h-4" />
-                          <span>Diff</span>
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setDiffBaseId(cfg.id)
+                                const other = configs.find((c) => c.id !== cfg.id)
+                                setDiffComparisonId(other?.id)
+                                setIsDiffDialogOpen(true)
+                              }}
+                              className="gap-1 text-slate-600 dark:text-slate-400 min-h-[36px]"
+                              aria-label={`Compare configuration ${cfg.name}`}
+                            >
+                              <Split className="w-4 h-4" />
+                              <span>Diff</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Compare configuration</TooltipContent>
+                        </Tooltip>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteConfig(cfg.id)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 min-h-[36px]"
-                        aria-label={`Delete configuration ${cfg.name}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteConfig(cfg.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 min-h-[36px] min-w-[36px] p-0 flex items-center justify-center"
+                            aria-label={`Delete configuration ${cfg.name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete configuration</TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 ))}
@@ -400,15 +456,20 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                   Cross-compiled Go binaries packaged in S3 object store for container execution.
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsUploadBuildOpen(true)}
-                className="gap-1.5 min-h-[36px]"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Upload Source</span>
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsUploadBuildOpen(true)}
+                    className="gap-1.5 min-h-[36px]"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Source</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Upload scenario source package</TooltipContent>
+              </Tooltip>
             </div>
 
             {isLoadingArtifacts ? (
@@ -479,60 +540,80 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
 
                         <div className="flex items-center gap-2">
                           {(art.status === 'BUILDING' || art.status === 'PENDING') && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleCancelBuild(art.id)}
-                              disabled={cancelBuildMutation.isPending}
-                              className="gap-1 min-h-[36px] text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/60"
-                              aria-label={`Cancel build for ${art.id}`}
-                            >
-                              <Ban className="w-3.5 h-3.5" />
-                              <span>Cancel</span>
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCancelBuild(art.id)}
+                                  disabled={cancelBuildMutation.isPending}
+                                  className="gap-1 min-h-[36px] text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border-rose-200 dark:border-rose-900/60"
+                                  aria-label={`Cancel build for ${art.id}`}
+                                >
+                                  <Ban className="w-3.5 h-3.5" />
+                                  <span>Cancel</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Cancel build</TooltipContent>
+                            </Tooltip>
                           )}
                           {(art.status === 'FAILED' || art.status === 'CANCELLED') && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRetryBuild(art.id)}
-                              disabled={retryBuildMutation.isPending}
-                              className="gap-1 min-h-[36px] text-xs text-slate-700 dark:text-slate-300"
-                              aria-label={`Retry build for ${art.id}`}
-                            >
-                              <RotateCw className={cn('w-3.5 h-3.5', retryBuildMutation.isPending && 'animate-spin')} />
-                              <span>Retry</span>
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRetryBuild(art.id)}
+                                  disabled={retryBuildMutation.isPending}
+                                  className="gap-1 min-h-[36px] text-xs text-slate-700 dark:text-slate-300"
+                                  aria-label={`Retry build for ${art.id}`}
+                                >
+                                  <RotateCw className={cn('w-3.5 h-3.5', retryBuildMutation.isPending && 'animate-spin')} />
+                                  <span>Retry</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Retry build</TooltipContent>
+                            </Tooltip>
                           )}
                           {hasLogs && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setExpandedArtifactLogs((prev) => ({
-                                  ...prev,
-                                  [art.id]: !prev[art.id],
-                                }))
-                              }
-                              className="gap-1.5 min-h-[36px] text-xs"
-                            >
-                              <Terminal className="w-3.5 h-3.5" />
-                              <span>{isLogExpanded ? 'Hide Logs' : 'View Logs'}</span>
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    setExpandedArtifactLogs((prev) => ({
+                                      ...prev,
+                                      [art.id]: !prev[art.id],
+                                    }))
+                                  }
+                                  className="gap-1.5 min-h-[36px] text-xs"
+                                >
+                                  <Terminal className="w-3.5 h-3.5" />
+                                  <span>{isLogExpanded ? 'Hide Logs' : 'View Logs'}</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{isLogExpanded ? 'Hide build logs' : 'View build logs'}</TooltipContent>
+                            </Tooltip>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedArtifactForDelete(art)
-                              setIsDeleteArtifactOpen(true)
-                            }}
-                            disabled={art.status === 'BUILDING' || art.status === 'PENDING'}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 min-h-[36px]"
-                            aria-label={`Delete artifact ${art.id}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedArtifactForDelete(art)
+                                  setIsDeleteArtifactOpen(true)
+                                }}
+                                disabled={art.status === 'BUILDING' || art.status === 'PENDING'}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 min-h-[36px] min-w-[36px] p-0 flex items-center justify-center"
+                                aria-label={`Delete artifact ${art.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete artifact</TooltipContent>
+                          </Tooltip>
                           <div className="text-xs text-slate-400 font-mono hidden sm:block">
                             {new Date(art.createdAt).toLocaleDateString()}
                           </div>
@@ -566,15 +647,20 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                   Distributed load runs and indexed performance telemetry for this scenario.
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsTriggerRunOpen(true)}
-                className="gap-1.5 min-h-[36px]"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Execute Run</span>
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsTriggerRunOpen(true)}
+                    className="gap-1.5 min-h-[36px]"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Execute Run</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Execute load test run</TooltipContent>
+              </Tooltip>
             </div>
 
             {isLoadingRuns ? (
@@ -651,20 +737,25 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                     </div>
 
                     <div className="flex items-center gap-3">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedRunForSummary(r)
-                          setIsRunSummaryOpen(true)
-                        }}
-                        className="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 min-h-[36px]"
-                        aria-label={`View summary for run ${r.id}`}
-                      >
-                        View Summary
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedRunForSummary(r)
+                              setIsRunSummaryOpen(true)
+                            }}
+                            className="text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 min-h-[36px]"
+                            aria-label={`View summary for run ${r.id}`}
+                          >
+                            View Summary
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>View run summary</TooltipContent>
+                      </Tooltip>
                       <div className="text-xs text-slate-400 font-mono">
                         {new Date(r.createdAt).toLocaleDateString()}
                       </div>

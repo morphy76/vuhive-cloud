@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { parseAnsi, stripAnsi } from '@/lib/ansi'
 import { cn } from '@/lib/utils'
 
@@ -264,7 +265,7 @@ export const VirtualizedLogViewer: React.FC<VirtualizedLogViewerProps> = ({
     <div
       data-high-contrast={highContrast}
       className={cn(
-        'flex flex-col rounded-2xl border shadow-lg overflow-hidden transition-colors',
+        'rounded-2xl border flex flex-col overflow-hidden select-none font-sans',
         highContrast
           ? 'bg-black border-slate-700 text-white'
           : 'bg-slate-950 border-slate-800 text-slate-100',
@@ -272,6 +273,7 @@ export const VirtualizedLogViewer: React.FC<VirtualizedLogViewerProps> = ({
       )}
     >
       {/* 1. Header Toolbar */}
+      <TooltipProvider delayDuration={0}>
       <div
         className={cn(
           'flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b',
@@ -337,24 +339,34 @@ export const VirtualizedLogViewer: React.FC<VirtualizedLogViewerProps> = ({
                     ? `${currentMatchIndex + 1} of ${matchingLineIndices.length}`
                     : '0 matches'}
                 </span>
-                <button
-                  type="button"
-                  onClick={handlePrevMatch}
-                  disabled={matchingLineIndices.length === 0}
-                  className="p-1 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
-                  aria-label="Previous match"
-                >
-                  <ChevronUp className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNextMatch}
-                  disabled={matchingLineIndices.length === 0}
-                  className="p-1 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
-                  aria-label="Next match"
-                >
-                  <ChevronDown className="w-3 h-3" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={handlePrevMatch}
+                      disabled={matchingLineIndices.length === 0}
+                      className="p-1 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                      aria-label="Previous match"
+                    >
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Previous match</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={handleNextMatch}
+                      disabled={matchingLineIndices.length === 0}
+                      className="p-1 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                      aria-label="Next match"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Next match</TooltipContent>
+                </Tooltip>
               </div>
             )}
           </div>
@@ -402,22 +414,27 @@ export const VirtualizedLogViewer: React.FC<VirtualizedLogViewerProps> = ({
           </Button>
 
           {/* Toggle Dark / High-Contrast Mode Button */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setHighContrast(!highContrast)}
-            aria-pressed={highContrast}
-            aria-label="Toggle high-contrast mode"
-            className={cn(
-              'h-8 px-2 text-xs border transition-colors',
-              highContrast
-                ? 'bg-amber-400 text-black border-amber-400 font-bold'
-                : 'bg-transparent text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800/60'
-            )}
-          >
-            <SunMoon className="w-3.5 h-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setHighContrast(!highContrast)}
+                aria-pressed={highContrast}
+                aria-label="Toggle high-contrast mode"
+                className={cn(
+                  'h-8 px-2 text-xs border transition-colors',
+                  highContrast
+                    ? 'bg-amber-400 text-black border-amber-400 font-bold'
+                    : 'bg-transparent text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-800/60'
+                )}
+              >
+                <SunMoon className="w-3.5 h-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Toggle high-contrast mode</TooltipContent>
+          </Tooltip>
 
           {/* Copy Logs Button */}
           <Button
@@ -455,19 +472,25 @@ export const VirtualizedLogViewer: React.FC<VirtualizedLogViewerProps> = ({
           </Button>
 
           {onClose && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-8 w-8 text-slate-400 hover:text-white"
-              aria-label="Close log viewer"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClose}
+                  className="h-9 w-9 text-slate-400 hover:text-white"
+                  aria-label="Close log viewer"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Close log viewer</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>
+      </TooltipProvider>
 
       {/* 2. Virtualized Log Content Viewport */}
       <div

@@ -6,6 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { SummaryReportInspector } from '@/components/runs/SummaryReportInspector'
 import type { HistoricalRun } from '@/types/suite'
 
@@ -35,10 +36,12 @@ export const ReportInspectorDialog: React.FC<ReportInspectorDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <SummaryReportInspector
-          runId={run.id}
-          onClose={() => onOpenChange(false)}
-        />
+        <TooltipProvider>
+          <SummaryReportInspector
+            runId={run.id}
+            onClose={() => onOpenChange(false)}
+          />
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
   )

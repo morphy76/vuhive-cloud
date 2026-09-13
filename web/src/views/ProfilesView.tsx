@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { OfflinePreviewBadge } from '@/components/ui/offline-preview-badge'
@@ -344,37 +345,54 @@ export const ProfilesView: React.FC = () => {
                       </td>
 
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDuplicate(p)}
-                            aria-label={`Duplicate profile ${p.name}`}
-                            className="h-8 w-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(p)}
-                            aria-label={`Edit profile ${p.name}`}
-                            className="h-8 w-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(p)}
-                            aria-label={`Delete profile ${p.name}`}
-                            className="h-8 w-8 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDuplicate(p)}
+                                aria-label={`Duplicate profile ${p.name}`}
+                                className="h-9 w-9 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Duplicate profile</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(p)}
+                                aria-label={`Edit profile ${p.name}`}
+                                className="h-9 w-9 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit profile</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(p)}
+                                aria-label={`Delete profile ${p.name}`}
+                                className="h-9 w-9 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete profile</TooltipContent>
+                          </Tooltip>
                         </div>
                       </td>
                     </tr>

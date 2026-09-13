@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
 import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { CreateSuiteDialog } from '@/components/dialogs/CreateSuiteDialog'
@@ -169,14 +170,19 @@ export const SuitesView: React.FC<SuitesViewProps> = ({ initialSuites }) => {
               className="w-full pl-10 pr-9 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 min-h-[44px]"
             />
             {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                aria-label="Clear search input"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search input"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Clear search</TooltipContent>
+              </Tooltip>
             )}
           </div>
 
@@ -350,32 +356,43 @@ export const SuitesView: React.FC<SuitesViewProps> = ({ initialSuites }) => {
                         {new Date(s.updatedAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setSelectedSuiteId(s.id)
-                            }}
-                            className="min-h-[36px] text-brand-600 dark:text-brand-400"
-                            aria-label={`View details for ${s.name}`}
-                          >
-                            <span>Inspect</span>
-                            <ChevronRight className="w-4 h-4 ml-1" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setSuiteToDelete(s)
-                            }}
-                            className="min-h-[36px] text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
-                            aria-label={`Delete suite ${s.name}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedSuiteId(s.id)
+                                }}
+                                className="min-h-[36px] text-brand-600 dark:text-brand-400"
+                                aria-label={`View details for ${s.name}`}
+                              >
+                                <span>Inspect</span>
+                                <ChevronRight className="w-4 h-4 ml-1" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>View details</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSuiteToDelete(s)
+                                }}
+                                className="min-h-[36px] text-slate-400 hover:text-rose-600 dark:hover:text-rose-400"
+                                aria-label={`Delete suite ${s.name}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete suite</TooltipContent>
+                          </Tooltip>
                         </div>
                       </td>
                     </tr>
@@ -430,18 +447,23 @@ export const SuitesView: React.FC<SuitesViewProps> = ({ initialSuites }) => {
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSuiteToDelete(s)
-                      }}
-                      className="min-h-[44px] text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 px-2"
-                      aria-label={`Delete suite ${s.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSuiteToDelete(s)
+                          }}
+                          className="min-h-[44px] text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 px-2"
+                          aria-label={`Delete suite ${s.name}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Delete suite</TooltipContent>
+                    </Tooltip>
                     <div className="flex items-center text-brand-600 dark:text-brand-400 font-medium min-h-[44px]">
                       <span>View details</span>
                       <ChevronRight className="w-4 h-4 ml-0.5" />

@@ -1888,6 +1888,24 @@ To bridge these API recipes directly into operator and developer workflows, the 
 - **One-Click Clipboard Export**: Each step features a **Copy as cURL** button copying the exact executable terminal command to the system clipboard with an accessible toast confirmation.
 - **Accessibility & Dismissal**: Built with Radix UI Dialog primitives conforming to **WCAG 2.1 AA** with accessible focus trapping, keyboard `Esc` dismissal, backdrop light-dismiss, and mobile touch swipe-to-close gestures.
 
+#### 4. Action Button Tooltips & WCAG 2.1 AA Touch Target Guidance
+
+To provide micro-guidance and disambiguate actions on compact or icon-only controls, all icon-only buttons across catalog tables, detail pages, monitors, and drawers are wrapped with Radix UI `Tooltip`:
+
+- **Universal Tooltip Coverage**:
+  - **Suites View**: Search input clear (`<X>`), desktop table `Inspect` and `Delete suite` buttons, and mobile card action triggers.
+  - **Profiles View**: Table action buttons (`Duplicate profile`, `Edit profile`, `Delete profile`) elevated with `gap-1.5` and `h-9 w-9` sizing.
+  - **Schedules View**: Copy ID, `Run Now`, `Pause/Resume`, `History`, and `Delete schedule` buttons.
+  - **Suite Detail View**: Back navigation, header action buttons (`Attach Config`, `Upload Build`, `Trigger Run`, `Delete Suite`), scenario configuration version comparison and editing actions, compiled artifact log toggling and deletion, and run execution triggers.
+  - **Live Execution Monitor**: Close monitor trigger (`h-9 w-9`).
+  - **Run Summary Dashboard**: Close dashboard trigger and one-click SHA256 checksum copy trigger.
+  - **Summary Report Inspector**: Close inspector trigger (`h-9 w-9`).
+  - **Virtualized Log Viewer**: High-contrast dark mode toggle, search match navigation (`Previous match`, `Next match`), and close viewer trigger (`h-9 w-9`).
+  - **App Shell & Navigation**: Collapsible sidebar toggle (`Expand sidebar` / `Collapse sidebar`) and floating scroll-to-top button.
+- **Accessible Keyboard & Focus Behavior**: Tooltips trigger on both mouse hover and keyboard focus (`Tab`). Focus outlines are clearly visible with `focus-visible:ring-2`.
+- **Screen Reader Announcements**: Every interactive icon-only control maintains a full, explicit `aria-label` attribute (e.g. `aria-label="Delete profile standard-single-node"`), ensuring screen reader users receive complete auditory context independently of tooltip popover rendering.
+- **Touch Target Sizing**: Desktop and compact action buttons are sized to at least `36×36px` (`h-9 w-9`), and mobile drawer/action buttons meet or exceed `44×44px` (`min-h-[44px] min-w-[44px]`) to comply with **WCAG 2.1 AA Target Size (Minimum)** recommendations.
+
 ---
 
 ### Recipe 16: Adopting the Developer CLI (`vuhive`) & Keycloak OIDC Authentication
