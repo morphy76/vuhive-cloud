@@ -107,13 +107,13 @@ describe('Contextual Documentation Dialogs', () => {
     unmount()
   })
 
-  it('TriggerRunDialog provides runner resource sizing and barrier sync guidance', () => {
+  it('TriggerRunDialog provides runner resource sizing and execution infrastructure guidance', () => {
     const { unmount, rerender } = renderWithProvider(
       <TriggerRunDialog open={true} onOpenChange={() => {}} />
     )
 
     expect(screen.getByText('Execute Test Run')).toBeInTheDocument()
-    expect(screen.getByLabelText(/^runner pods count$/i)).toBeInTheDocument()
+    expect(screen.getByText(/Execution Infrastructure/i)).toBeInTheDocument()
 
     // Resource guidance badge
     expect(screen.getByText(/Kubernetes Runner Resource Allocation/i)).toBeInTheDocument()
@@ -124,7 +124,6 @@ describe('Contextual Documentation Dialogs', () => {
     expect(screen.getByRole('button', { name: /^help for cpu allocation$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^help for memory allocation$/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^help for node tolerations$/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^help for start barrier$/i })).toBeInTheDocument()
 
     rerender(<TriggerRunDialog open={false} onOpenChange={() => {}} />)
     unmount()

@@ -52,6 +52,23 @@ const mockProfiles: RunnerProfile[] = [
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   },
+  {
+    id: 'profile-2',
+    name: 'high-perf-runner',
+    description: 'High performance runner (4 vCPU, 8Gi RAM)',
+    runner_image: 'custom-perf-image:v1',
+    cpu_request: '2000m',
+    cpu_limit: '4000m',
+    memory_request: '4Gi',
+    memory_limit: '8Gi',
+    node_selector: { 'node.kubernetes.io/instance-type': 'c5.2xlarge' },
+    affinity: { node_selector_terms: [] },
+    tolerations: [],
+    active_deadline_seconds: 7200,
+    runtime_class_name: 'kata-containers',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
 ]
 
 const mockArtifacts = [
@@ -138,24 +155,98 @@ describe('Ad-Hoc Load Test Execution Dispatcher & Live Monitor', () => {
   })
 
   describe('TriggerRunDialog', () => {
-    it('renders all required selection dropdowns and technical inputs', async () => {
+    it('renders clean 4-section visual hierarchy with read-only runner profile resource specs', async () => {
       renderWithProviders(<TriggerRunDialog open={true} onOpenChange={() => {}} />)
 
       expect(screen.getByText('Execute Test Run')).toBeInTheDocument()
+
+      // 1. Test Target section
+      expect(screen.getByRole('heading', { name: /^Test Target$/i })).toBeInTheDocument()
       expect(screen.getByLabelText(/^test suite$/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/^compiled artifact$/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/^scenario configuration$/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/^runner profile$/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/^execution timeout/i)).toBeInTheDocument()
 
-      // Backwards-compatible labels & tooltips required by help-components tests
-      expect(screen.getByLabelText(/^runner pods count$/i)).toBeInTheDocument()
-      expect(screen.getByText(/Kubernetes Runner Resource Allocation/i)).toBeInTheDocument()
+      // 2. Scenario Configuration section
+      expect(screen.getByRole('heading', { name: /^Scenario Configuration$/i })).toBeInTheDocument()
+      expect(screen.getByLabelText(/^scenario configuration$/i)).toBeInTheDocument()
+
+      // 3. Execution Infrastructure section
+      expect(screen.getByRole('heading', { name: /^Execution Infrastructure$/i })).toBeInTheDocument()
+      expect(screen.getByLabelText(/^runner profile$/i)).toBeInTheDocument()
+
+      // Wait for profiles to load and assert read-only profile resource specs
+      await waitFor(() => {
+        expect(screen.getByText(/500m \/ 1000m/i)).toBeInTheDocument()
+        expect(screen.getByText(/512Mi \/ 1Gi/i)).toBeInTheDocument()
+        expect(screen.getByText(/alpine:3\.20/i)).toBeInTheDocument()
+        expect(screen.getByText(/1 Worker Pod/i)).toBeInTheDocument()
+        expect(screen.getByText(/dedicated=loadgen:NoSchedule/i)).toBeInTheDocument()
+      })
+
+      // Ensure misleading interactive inputs are REMOVED
+      expect(screen.queryByRole('spinbutton', { name: /runner pods count/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /cpu millicores/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /memory units/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /node tolerations/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('switch', { name: /start barrier/i })).not.toBeInTheDocument()
+
+      // Contextual help tooltips on read-only specs
       expect(screen.getByRole('button', { name: /^help for runner pods count$/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /^help for cpu allocation$/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /^help for memory allocation$/i })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /^help for node tolerations$/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /^help for start barrier$/i })).toBeInTheDocument()
+
+      // Guidance link / hint to Profiles tab
+      expect(screen.getByText(/To modify resources or create new configurations/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Profiles tab/i })).toBeInTheDocument()
+
+      // Resource allocation guidance badge
+      expect(screen.getByText(/Kubernetes Runner Resource Allocation/i)).toBeInTheDocument()
+
+      // 4. Execution Safeguards section
+      expect(screen.getByRole('heading', { name: /^Execution Safeguards$/i })).toBeInTheDocument()
+      expect(screen.getByLabelText(/^execution timeout/i)).toBeInTheDocument()
+    })
+
+    it('dynamically updates read-only resource specifications when profile changes', async () => {
+      renderWithProviders(<TriggerRunDialog open={true} onOpenChange={() => {}} />)
+
+      // Wait for profiles to load in the select dropdown and initial profile specs to display
+      await waitFor(() => {
+        expect(screen.getByRole('option', { name: /high-perf-runner/i })).toBeInTheDocument()
+        expect(screen.getByText(/500m \/ 1000m/i)).toBeInTheDocument()
+        expect(screen.getByText(/alpine:3\.20/i)).toBeInTheDocument()
+      })
+
+      // Switch to profile-2
+      const profileSelect = screen.getByLabelText(/^runner profile$/i)
+      fireEvent.change(profileSelect, { target: { value: 'profile-2' } })
+
+      // New profile specs rendered
+      await waitFor(() => {
+        expect(screen.getByText(/2000m \/ 4000m/i)).toBeInTheDocument()
+        expect(screen.getByText(/4Gi \/ 8Gi/i)).toBeInTheDocument()
+        expect(screen.getByText(/custom-perf-image:v1/i)).toBeInTheDocument()
+        expect(screen.getByText(/kata-containers/i)).toBeInTheDocument()
+      })
+    })
+
+    it('navigates to Profiles view when clicking the Profiles tab guidance link', async () => {
+      const handleNavigateProfiles = vi.fn()
+      const handleOpenChange = vi.fn()
+
+      renderWithProviders(
+        <TriggerRunDialog
+          open={true}
+          onOpenChange={handleOpenChange}
+          onNavigateProfiles={handleNavigateProfiles}
+        />
+      )
+
+      const profilesBtn = screen.getByRole('button', { name: /Profiles tab/i })
+      fireEvent.click(profilesBtn)
+
+      expect(handleNavigateProfiles).toHaveBeenCalledTimes(1)
+      expect(handleOpenChange).toHaveBeenCalledWith(false)
     })
 
     it('filters compiled artifacts by platform selector', async () => {
