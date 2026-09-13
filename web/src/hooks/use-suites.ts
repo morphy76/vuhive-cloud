@@ -59,6 +59,9 @@ export function useUpdateSuite(id: string) {
         api.updateSuite(id, data),
       onSuccess: (updatedSuite) => {
         queryClient.setQueryData<TestSuite>(['suites', id], updatedSuite)
+        queryClient.setQueryData<TestSuite[]>(['suites'], (old = []) =>
+          old.map((s) => (s.id === id ? { ...s, ...updatedSuite } : s))
+        )
         queryClient.invalidateQueries({ queryKey: ['suites'] })
       },
     },

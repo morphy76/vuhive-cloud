@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, AlertCircle, CheckCircle2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import { useProfiles } from '@/hooks/use-profiles'
 import { useTriggerRun } from '@/hooks/use-runs'
 import { api } from '@/lib/api'
 import { queryClient as fallbackQueryClient } from '@/lib/query-client'
-import type { HistoricalRun } from '@/types/suite'
+import type { HistoricalRun, TestSuite } from '@/types/suite'
 import type { RouteId } from '@/types/navigation'
 
 function useSafeQueryClient() {
@@ -56,6 +56,19 @@ export const TriggerRunDialog: React.FC<TriggerRunDialogProps> = ({
   const [selectedProfileId, setSelectedProfileId] = React.useState<string>('')
   const [activeDeadlineSeconds, setActiveDeadlineSeconds] = React.useState<string>('3600')
   const [errorAlert, setErrorAlert] = React.useState<string | null>(null)
+  const [isActivatingSuite, setIsActivatingSuite] = React.useState(false)
+  const [activatedSuiteIds, setActivatedSuiteIds] = React.useState<Set<string>>(new Set())
+
+  // Resolve target suite object and effective state
+  const targetSuite = React.useMemo(() => {
+    return suites.find((s) => s.id === selectedSuiteId) || null
+  }, [suites, selectedSuiteId])
+
+  const targetSuiteState = React.useMemo(() => {
+    if (!targetSuite) return undefined
+    if (activatedSuiteIds.has(targetSuite.id)) return 'ACTIVE'
+    return targetSuite.state
+  }, [targetSuite, activatedSuiteIds])
 
   // Set default suite when opened
   React.useEffect(() => {
@@ -165,10 +178,86 @@ export const TriggerRunDialog: React.FC<TriggerRunDialogProps> = ({
     }
   }
 
+  const handleActivateTargetSuite = async () => {
+    if (!targetSuite) return
+    setIsActivatingSuite(true)
+    setErrorAlert(null)
+    try {
+      const updated = await api.updateSuite(targetSuite.id, {
+        name: targetSuite.name,
+        description: targetSuite.description,
+        state: 'ACTIVE',
+      })
+      setActivatedSuiteIds((prev) => new Set(prev).add(targetSuite.id))
+      queryClient.setQueryData<TestSuite>(['suites', targetSuite.id], updated)
+      queryClient.setQueryData<TestSuite[]>(['suites'], (old = []) =>
+        old.map((s) => (s.id === targetSuite.id ? { ...s, ...updated } : s))
+      )
+      queryClient.invalidateQueries({ queryKey: ['suites'] })
+    } catch (err: any) {
+      setErrorAlert(err.message || 'Failed to activate test suite.')
+    } finally {
+      setIsActivatingSuite(false)
+    }
+  }
+
+  const handleActivateAndDispatch = async () => {
+    setErrorAlert(null)
+    if (!selectedSuiteId) {
+      setErrorAlert('Please select a target test suite.')
+      return
+    }
+    if (!selectedArtifactId) {
+      setErrorAlert('Please select a compiled artifact.')
+      return
+    }
+    if (!selectedProfileId) {
+      setErrorAlert('Please select a runner profile.')
+      return
+    }
+
+    setIsActivatingSuite(true)
+    try {
+      if (targetSuite && targetSuiteState !== 'ACTIVE') {
+        const updated = await api.updateSuite(targetSuite.id, {
+          name: targetSuite.name,
+          description: targetSuite.description,
+          state: 'ACTIVE',
+        })
+        setActivatedSuiteIds((prev) => new Set(prev).add(targetSuite.id))
+        queryClient.setQueryData<TestSuite>(['suites', targetSuite.id], updated)
+        queryClient.setQueryData<TestSuite[]>(['suites'], (old = []) =>
+          old.map((s) => (s.id === targetSuite.id ? { ...s, ...updated } : s))
+        )
+        queryClient.invalidateQueries({ queryKey: ['suites'] })
+      }
+
+      const timeoutVal = parseInt(activeDeadlineSeconds, 10)
+      const newRun = await triggerRunMutation.mutateAsync({
+        suite_id: selectedSuiteId,
+        artifact_id: selectedArtifactId,
+        runner_profile_id: selectedProfileId,
+        configuration_id: selectedConfigId || undefined,
+        active_deadline_seconds: !isNaN(timeoutVal) && timeoutVal > 0 ? timeoutVal : undefined,
+      })
+
+      onRunTriggered?.(newRun)
+      onOpenChange(false)
+    } catch (err: any) {
+      setErrorAlert(err.message || 'Failed to activate suite and dispatch load test run.')
+    } finally {
+      setIsActivatingSuite(false)
+    }
+  }
+
   const handleDispatch = async () => {
     setErrorAlert(null)
     if (!selectedSuiteId) {
       setErrorAlert('Please select a target test suite.')
+      return
+    }
+    if (targetSuiteState === 'DRAFT') {
+      setErrorAlert('Test suite is currently in DRAFT state. Activating the suite is required before dispatching.')
       return
     }
     if (!selectedArtifactId) {
@@ -217,6 +306,38 @@ export const TriggerRunDialog: React.FC<TriggerRunDialogProps> = ({
             </div>
           )}
 
+          {/* DRAFT Suite Warning Banner */}
+          {targetSuiteState === 'DRAFT' && (
+            <div
+              data-testid="trigger-run-draft-warning"
+              className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-xs text-amber-900 dark:text-amber-100">
+                    Test suite is currently in DRAFT state
+                  </p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                    Activating the suite is required before dispatching load test runs.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleActivateTargetSuite}
+                disabled={isActivatingSuite}
+                className="text-xs min-h-[32px] sm:min-h-[36px] gap-1 shrink-0 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                aria-label="Activate Suite"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{isActivatingSuite ? 'Activating...' : 'Activate Suite'}</span>
+              </Button>
+            </div>
+          )}
+
           {/* Section 1: Test Target */}
           <div className="space-y-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-3.5">
             <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800/80 pb-2">
@@ -252,11 +373,14 @@ export const TriggerRunDialog: React.FC<TriggerRunDialogProps> = ({
                 aria-label="Test Suite"
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2 text-xs font-medium text-slate-900 dark:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
               >
-                {suites.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.state})
-                  </option>
-                ))}
+                {suites.map((s) => {
+                  const state = activatedSuiteIds.has(s.id) ? 'ACTIVE' : s.state
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({state})
+                    </option>
+                  )
+                })}
               </select>
             </div>
 
@@ -592,19 +716,35 @@ export const TriggerRunDialog: React.FC<TriggerRunDialogProps> = ({
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={triggerRunMutation.isPending}
+            disabled={triggerRunMutation.isPending || isActivatingSuite}
             className="min-h-[40px]"
           >
             Cancel
           </Button>
-          <Button
-            type="button"
-            onClick={handleDispatch}
-            disabled={triggerRunMutation.isPending}
-            className="min-h-[40px]"
-          >
-            {triggerRunMutation.isPending ? 'Dispatching...' : 'Dispatch Run'}
-          </Button>
+          {targetSuiteState === 'DRAFT' ? (
+            <Button
+              type="button"
+              onClick={handleActivateAndDispatch}
+              disabled={triggerRunMutation.isPending || isActivatingSuite}
+              className="min-h-[40px] gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-medium"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>
+                {isActivatingSuite || triggerRunMutation.isPending
+                  ? 'Activating & Dispatching...'
+                  : 'Activate & Dispatch'}
+              </span>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              onClick={handleDispatch}
+              disabled={triggerRunMutation.isPending}
+              className="min-h-[40px]"
+            >
+              {triggerRunMutation.isPending ? 'Dispatching...' : 'Dispatch Run'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

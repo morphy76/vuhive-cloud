@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   ArrowLeft,
   Play,
@@ -14,6 +14,8 @@ import {
   FileEdit,
   RotateCw,
   Ban,
+  CheckCircle2,
+  Archive,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -31,6 +33,7 @@ import {
   useSuiteArtifacts,
   useSuiteRuns,
   useDeleteSuite,
+  useUpdateSuite,
   useCancelSuiteBuild,
   useRetrySuiteBuild,
   useDeleteSuiteArtifact,
@@ -48,6 +51,7 @@ export interface SuiteDetailViewProps {
 }
 
 export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack }) => {
+  const [currentSuite, setCurrentSuite] = useState<TestSuite>(suite)
   const [activeTab, setActiveTab] = useState('configs')
   const [isTriggerRunOpen, setIsTriggerRunOpen] = useState(false)
   const [isUploadBuildOpen, setIsUploadBuildOpen] = useState(false)
@@ -63,19 +67,74 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   const [selectedArtifactForDelete, setSelectedArtifactForDelete] = useState<CompiledArtifact | null>(null)
   const [isDeleteArtifactOpen, setIsDeleteArtifactOpen] = useState(false)
 
-  // Subscribe to live SSE build status changes for reactive artifact updates
-  useBuildEvents(suite.id)
-
-  const { data: configs = [], isLoading: isLoadingConfigs } = useSuiteConfigs(suite.id)
-  const deleteConfigMutation = useDeleteSuiteConfig(suite.id)
-
-  const { data: artifacts = [], isLoading: isLoadingArtifacts } = useSuiteArtifacts(suite.id)
-  const { data: runs = [], isLoading: isLoadingRuns } = useSuiteRuns(suite.id)
-  const deleteSuiteMutation = useDeleteSuite()
-  const cancelBuildMutation = useCancelSuiteBuild(suite.id)
-  const retryBuildMutation = useRetrySuiteBuild(suite.id)
-  const deleteArtifactMutation = useDeleteSuiteArtifact(suite.id)
   const { toast } = useToast()
+  const updateSuiteMutation = useUpdateSuite(currentSuite.id)
+
+  useEffect(() => {
+    setCurrentSuite(suite)
+  }, [suite])
+
+  // Subscribe to live SSE build status changes for reactive artifact updates
+  useBuildEvents(currentSuite.id, (event) => {
+    if (event.status === 'READY' && currentSuite.state === 'DRAFT') {
+      toast({
+        title: 'Build Artifact Ready',
+        description: `Artifact ${event.artifact_id} (${event.platform}) compiled successfully. You can now activate the suite.`,
+      })
+    }
+  })
+
+  const handleActivateSuite = async () => {
+    try {
+      const updated = await updateSuiteMutation.mutateAsync({
+        name: currentSuite.name,
+        description: currentSuite.description,
+        state: 'ACTIVE',
+      })
+      setCurrentSuite(updated)
+      toast({
+        title: 'Test Suite Activated',
+        description: `Suite "${updated.name}" is now ACTIVE and ready for execution.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Failed to activate test suite',
+        description: err.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleStateTransition = async (targetState: 'ACTIVE' | 'DRAFT' | 'ARCHIVED') => {
+    try {
+      const updated = await updateSuiteMutation.mutateAsync({
+        name: currentSuite.name,
+        description: currentSuite.description,
+        state: targetState,
+      })
+      setCurrentSuite(updated)
+      toast({
+        title: `Suite Status Updated: ${targetState}`,
+        description: `Suite "${updated.name}" transitioned to ${targetState}.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Failed to update suite status',
+        description: err.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const { data: configs = [], isLoading: isLoadingConfigs } = useSuiteConfigs(currentSuite.id)
+  const deleteConfigMutation = useDeleteSuiteConfig(currentSuite.id)
+
+  const { data: artifacts = [], isLoading: isLoadingArtifacts } = useSuiteArtifacts(currentSuite.id)
+  const { data: runs = [], isLoading: isLoadingRuns } = useSuiteRuns(currentSuite.id)
+  const deleteSuiteMutation = useDeleteSuite()
+  const cancelBuildMutation = useCancelSuiteBuild(currentSuite.id)
+  const retryBuildMutation = useRetrySuiteBuild(currentSuite.id)
+  const deleteArtifactMutation = useDeleteSuiteArtifact(currentSuite.id)
 
   const handleCancelBuild = async (artifactId: string) => {
     try {
@@ -129,15 +188,15 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   }
 
   const hasActiveBuilds =
-    suite.buildStatus === 'BUILDING' || artifacts.some((a) => a.status === 'BUILDING')
+    currentSuite.buildStatus === 'BUILDING' || artifacts.some((a) => a.status === 'BUILDING')
   const hasActiveRuns = runs.some((r) => r.status === 'RUNNING' || r.status === 'QUEUED')
 
   const handleDeleteSuite = async () => {
     try {
-      await deleteSuiteMutation.mutateAsync(suite.id)
+      await deleteSuiteMutation.mutateAsync(currentSuite.id)
       toast({
         title: 'Test Suite Deleted',
-        description: `Suite "${suite.name}" was permanently deleted.`,
+        description: `Suite "${currentSuite.name}" was permanently deleted.`,
       })
       setIsDeleteDialogOpen(false)
       onBack()
@@ -186,26 +245,104 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-                  {suite.name}
+                  {currentSuite.name}
                 </h1>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                    {suite.id}
+                    {currentSuite.id}
                   </span>
-                  <Badge variant={suite.state === 'ACTIVE' ? 'success' : 'default'}>
-                    {suite.state}
+                  <Badge
+                    variant={
+                      currentSuite.state === 'ACTIVE'
+                        ? 'success'
+                        : currentSuite.state === 'ARCHIVED'
+                        ? 'warning'
+                        : 'default'
+                    }
+                  >
+                    {currentSuite.state}
                   </Badge>
                 </div>
               </div>
             </div>
-            {suite.description && (
+            {currentSuite.description && (
               <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-2xl">
-                {suite.description}
+                {currentSuite.description}
               </p>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            {currentSuite.state === 'DRAFT' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleActivateSuite}
+                    disabled={updateSuiteMutation.isPending}
+                    className="min-h-[44px] gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    aria-label={`Activate suite ${currentSuite.name}`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{updateSuiteMutation.isPending ? 'Activating...' : 'Activate Suite'}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Activate test suite to enable execution</TooltipContent>
+              </Tooltip>
+            )}
+
+            {currentSuite.state === 'ACTIVE' && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleStateTransition('DRAFT')}
+                      disabled={updateSuiteMutation.isPending}
+                      className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                      aria-label={`Deactivate suite ${currentSuite.name}`}
+                    >
+                      <FileEdit className="w-4 h-4" />
+                      <span>Deactivate</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Set test suite to DRAFT</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleStateTransition('ARCHIVED')}
+                      disabled={updateSuiteMutation.isPending}
+                      className="min-h-[44px] gap-2 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400"
+                      aria-label={`Archive suite ${currentSuite.name}`}
+                    >
+                      <Archive className="w-4 h-4" />
+                      <span>Archive</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Archive test suite</TooltipContent>
+                </Tooltip>
+              </>
+            )}
+
+            {currentSuite.state === 'ARCHIVED' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleActivateSuite}
+                    disabled={updateSuiteMutation.isPending}
+                    className="min-h-[44px] gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    aria-label={`Re-activate suite ${currentSuite.name}`}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{updateSuiteMutation.isPending ? 'Activating...' : 'Re-activate Suite'}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Re-activate archived test suite</TooltipContent>
+              </Tooltip>
+            )}
+
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -256,17 +393,76 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                   variant="outline"
                   onClick={() => setIsDeleteDialogOpen(true)}
                   className="min-h-[44px] gap-2 border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:border-rose-300"
-                  aria-label={`Delete suite ${suite.name}`}
+                  aria-label={`Delete suite ${currentSuite.name}`}
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>Delete Suite</span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Delete suite {suite.name}</TooltipContent>
+              <TooltipContent>Delete suite {currentSuite.name}</TooltipContent>
             </Tooltip>
           </div>
         </div>
       </div>
+
+      {/* Informative Lifecycle State Banners */}
+      {currentSuite.state === 'DRAFT' && (
+        <div
+          data-testid="draft-suite-banner"
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 shadow-2xs"
+        >
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div className="space-y-1 text-xs sm:text-sm">
+              <p className="font-semibold text-amber-900 dark:text-amber-100">
+                This test suite is currently in DRAFT state.
+              </p>
+              <p className="text-amber-700 dark:text-amber-300">
+                Attach a scenario configuration and upload a build package, then activate the suite to enable test execution and scheduled runs.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={handleActivateSuite}
+            disabled={updateSuiteMutation.isPending}
+            className="min-h-[38px] sm:min-h-[40px] gap-1.5 shrink-0 bg-amber-600 hover:bg-amber-700 text-white font-medium"
+            aria-label="Activate Suite from banner"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>{updateSuiteMutation.isPending ? 'Activating...' : 'Activate Suite'}</span>
+          </Button>
+        </div>
+      )}
+
+      {currentSuite.state === 'ARCHIVED' && (
+        <div
+          data-testid="archived-suite-banner"
+          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-800/40 text-slate-800 dark:text-slate-200 shadow-2xs"
+        >
+          <div className="flex items-start gap-3">
+            <Archive className="w-5 h-5 text-slate-500 mt-0.5 shrink-0" />
+            <div className="space-y-1 text-xs sm:text-sm">
+              <p className="font-semibold text-slate-900 dark:text-white">
+                This test suite is ARCHIVED.
+              </p>
+              <p className="text-slate-600 dark:text-slate-400">
+                Execution is disabled for archived suites. Re-activate the suite to enable running load tests.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={handleActivateSuite}
+            disabled={updateSuiteMutation.isPending}
+            className="min-h-[38px] sm:min-h-[40px] gap-1.5 shrink-0 bg-brand-600 hover:bg-brand-700 text-white font-medium"
+            aria-label="Re-activate Suite from banner"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>{updateSuiteMutation.isPending ? 'Activating...' : 'Re-activate Suite'}</span>
+          </Button>
+        </div>
+      )}
 
       {/* Tabbed Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -777,15 +973,15 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
       <TriggerRunDialog
         open={isTriggerRunOpen}
         onOpenChange={setIsTriggerRunOpen}
-        initialSuiteId={suite.id}
+        initialSuiteId={currentSuite.id}
       />
       <UploadBuildDialog
-        suiteId={suite.id}
+        suiteId={currentSuite.id}
         open={isUploadBuildOpen}
         onOpenChange={setIsUploadBuildOpen}
       />
       <ConfigEditorDialog
-        suiteId={suite.id}
+        suiteId={currentSuite.id}
         open={isConfigEditorOpen}
         onOpenChange={setIsConfigEditorOpen}
         initialConfig={editingConfig}
@@ -801,7 +997,7 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
       <DeleteSuiteDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
-        suite={suite}
+        suite={currentSuite}
         onConfirm={handleDeleteSuite}
         isDeleting={deleteSuiteMutation.isPending}
         hasActiveBuilds={hasActiveBuilds}

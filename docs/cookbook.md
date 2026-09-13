@@ -207,6 +207,8 @@ curl -i -X POST http://localhost:8080/api/v1/suites \
 
 > [!TIP]
 > You can retrieve or update the test suite at any time via `GET /api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97` or transition its state via `PUT /api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97` (`{"name":"suite-auth-checkout","state":"ACTIVE"}`).
+>
+> In the **Web Console**, newly created test suites are created in `DRAFT` state. Once you attach a scenario configuration and compile an artifact, you can transition the suite to `ACTIVE` by clicking **Activate Suite** in the header or the guidance banner, or by using 1-click **Activate & Dispatch** inside the **Trigger Run** dialog.
 
 #### Step 2: Attach Scenario Configurations (`vuhive.yaml`)
 
@@ -1469,9 +1471,12 @@ The Test Suite catalog view (`web/src/views/SuitesView.tsx`) provides high-densi
 - **Flexible Sorting & Pagination**: Sort by creation date (newest/oldest), alphabetical name, or recently updated timestamps, paired with configurable page size limits and pagination controls.
 - **Real-Time Name Uniqueness Validation**: Modal dialog (`CreateSuiteDialog.tsx`) performs live uniqueness validation as users type, preventing naming collisions before submitting requests to `POST /api/v1/suites`.
 - **Comprehensive Detail View (`SuiteDetailView.tsx`)**:
-  - Suite header metadata with state indicators and quick actions ("Trigger Run", "Upload Build", "Attach Config").
-  - **Attached Configurations**: List of attached YAML scenarios with inline YAML viewing and deletion controls.
-  - **Compiled Artifacts**: Cross-compiled binaries by target architecture with SHA256 integrity checksums and build logs.
+  - Suite header metadata with state indicators and lifecycle quick actions: **Activate Suite** for `DRAFT` suites, **Deactivate** / **Archive** for `ACTIVE` suites, **Re-activate Suite** for `ARCHIVED` suites, alongside "Trigger Run", "Upload Build", "Attach Config", and "Delete Suite".
+  - **Lifecycle State Guidance Banners**: Prominent contextual callout banners for `DRAFT` and `ARCHIVED` suites explaining lifecycle status with direct inline activation buttons.
+  - **1-Click Activate & Dispatch (`TriggerRunDialog.tsx`)**: When dispatching from a `DRAFT` suite, provides pre-flight warning feedback and an **Activate & Dispatch** action that activates the suite and initiates execution in a single step, preventing unhandled domain 409 errors.
+  - **Reactive Build Completion Guidance**: Real-time SSE listener automatically prompts operators with a toast notification to activate the suite as soon as an ephemeral compilation Job succeeds (`status: READY`).
+  - **Attached Configurations**: List of attached YAML scenarios with inline YAML viewing, editing, diffing, and deletion controls.
+  - **Compiled Artifacts**: Cross-compiled binaries by target architecture with SHA256 integrity checksums, retry/cancel controls, and build logs.
   - **Historical Runs**: Execution history filtered for the suite, displaying status badges, duration, TPS, and latency percentiles.
 
 #### 8. Automated Testing (Vitest & Testing Library)

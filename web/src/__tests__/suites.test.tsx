@@ -208,6 +208,84 @@ describe('SuiteDetailView & Tab Navigation', () => {
     expect(configTab).toHaveAttribute('data-state', 'active')
   })
 
+  it('displays draft guidance banner and Activate Suite button when suite is in DRAFT state', async () => {
+    const Wrapper = createTestWrapper()
+    render(<SuiteDetailView suite={mockSuites[2]} onBack={() => {}} />, { wrapper: Wrapper })
+
+    // DRAFT banner is present
+    expect(screen.getByTestId('draft-suite-banner')).toBeInTheDocument()
+    expect(
+      screen.getByText(/this test suite is currently in draft state/i)
+    ).toBeInTheDocument()
+
+    // Header Activate Suite button is present
+    const activateButtons = screen.getAllByRole('button', { name: /activate suite/i })
+    expect(activateButtons.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('activates draft suite on Activate Suite click and updates badge and UI state', async () => {
+    const updateSpy = vi.spyOn(api, 'updateSuite').mockResolvedValue({
+      ...mockSuites[2],
+      state: 'ACTIVE',
+    })
+
+    const Wrapper = createTestWrapper()
+    render(<SuiteDetailView suite={mockSuites[2]} onBack={() => {}} />, { wrapper: Wrapper })
+
+    // Initially in DRAFT
+    expect(screen.getByTestId('draft-suite-banner')).toBeInTheDocument()
+    expect(screen.getByText('DRAFT')).toBeInTheDocument()
+
+    // Click Activate Suite
+    const activateBtn = screen.getAllByRole('button', { name: /activate suite/i })[0]
+    fireEvent.click(activateBtn)
+
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith(mockSuites[2].id, {
+        name: mockSuites[2].name,
+        description: mockSuites[2].description,
+        state: 'ACTIVE',
+      })
+      // Badge updates to ACTIVE and banner disappears
+      expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+      expect(screen.queryByTestId('draft-suite-banner')).not.toBeInTheDocument()
+    })
+
+    updateSpy.mockRestore()
+  })
+
+  it('allows deactivating to DRAFT and archiving an ACTIVE suite', async () => {
+    const updateSpy = vi.spyOn(api, 'updateSuite').mockResolvedValue({
+      ...mockSuites[0],
+      state: 'ARCHIVED',
+    })
+
+    const Wrapper = createTestWrapper()
+    render(<SuiteDetailView suite={mockSuites[0]} onBack={() => {}} />, { wrapper: Wrapper })
+
+    // When ACTIVE, Archive and Deactivate buttons exist
+    const archiveBtn = screen.getByRole('button', { name: /archive/i })
+    expect(archiveBtn).toBeInTheDocument()
+
+    const deactivateBtn = screen.getByRole('button', { name: /deactivate/i })
+    expect(deactivateBtn).toBeInTheDocument()
+
+    // Click Archive
+    fireEvent.click(archiveBtn)
+
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith(mockSuites[0].id, {
+        name: mockSuites[0].name,
+        description: mockSuites[0].description,
+        state: 'ARCHIVED',
+      })
+      expect(screen.getByText('ARCHIVED')).toBeInTheDocument()
+      expect(screen.getByTestId('archived-suite-banner')).toBeInTheDocument()
+    })
+
+    updateSpy.mockRestore()
+  })
+
   it('opens delete confirmation dialog when Delete Suite is clicked in detail view', async () => {
     const Wrapper = createTestWrapper()
     render(
@@ -224,9 +302,9 @@ describe('SuiteDetailView & Tab Navigation', () => {
     expect(await screen.findByRole('heading', { name: /delete test suite/i })).toBeInTheDocument()
   })
 
-  it('has no accessibility violations in SuiteDetailView', async () => {
+  it('has no accessibility violations in SuiteDetailView for both ACTIVE and DRAFT states', async () => {
     const Wrapper = createTestWrapper()
-    const { container } = render(
+    const { container: activeContainer } = render(
       <SuiteDetailView
         suite={mockSuites[0]}
         onBack={() => {}}
@@ -234,8 +312,19 @@ describe('SuiteDetailView & Tab Navigation', () => {
       { wrapper: Wrapper }
     )
 
-    const results = await axe(container)
-    expect(results).toHaveNoViolations()
+    const resultsActive = await axe(activeContainer)
+    expect(resultsActive).toHaveNoViolations()
+
+    const { container: draftContainer } = render(
+      <SuiteDetailView
+        suite={mockSuites[2]}
+        onBack={() => {}}
+      />,
+      { wrapper: Wrapper }
+    )
+
+    const resultsDraft = await axe(draftContainer)
+    expect(resultsDraft).toHaveNoViolations()
   })
 })
 

@@ -305,6 +305,90 @@ describe('Ad-Hoc Load Test Execution Dispatcher & Live Monitor', () => {
       })
     })
 
+    it('displays warning banner and Activate & Dispatch button when DRAFT suite is selected', async () => {
+      renderWithProviders(
+        <TriggerRunDialog open={true} onOpenChange={() => {}} initialSuiteId="suite-2" />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByTestId('trigger-run-draft-warning')).toBeInTheDocument()
+        expect(screen.getByText(/test suite is currently in draft state/i)).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /activate & dispatch/i })).toBeInTheDocument()
+      })
+    })
+
+    it('clicking Activate & Dispatch activates the suite and dispatches run', async () => {
+      const updateSuiteSpy = vi.spyOn(api, 'updateSuite').mockResolvedValue({
+        ...mockSuites[1],
+        state: 'ACTIVE',
+      })
+      const handleTriggered = vi.fn()
+      const handleOpenChange = vi.fn()
+
+      renderWithProviders(
+        <TriggerRunDialog
+          open={true}
+          onOpenChange={handleOpenChange}
+          initialSuiteId="suite-2"
+          onRunTriggered={handleTriggered}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /activate & dispatch/i })).toBeInTheDocument()
+      })
+
+      const activateAndDispatchBtn = screen.getByRole('button', { name: /activate & dispatch/i })
+      fireEvent.click(activateAndDispatchBtn)
+
+      await waitFor(() => {
+        expect(updateSuiteSpy).toHaveBeenCalledWith('suite-2', {
+          name: mockSuites[1].name,
+          description: mockSuites[1].description,
+          state: 'ACTIVE',
+        })
+        expect(api.triggerRun).toHaveBeenCalledWith(
+          expect.objectContaining({
+            suite_id: 'suite-2',
+          })
+        )
+        expect(handleTriggered).toHaveBeenCalled()
+        expect(handleOpenChange).toHaveBeenCalledWith(false)
+      })
+
+      updateSuiteSpy.mockRestore()
+    })
+
+    it('clicking Activate Suite in warning banner activates suite and switches button to Dispatch Run', async () => {
+      const updateSuiteSpy = vi.spyOn(api, 'updateSuite').mockResolvedValue({
+        ...mockSuites[1],
+        state: 'ACTIVE',
+      })
+
+      renderWithProviders(
+        <TriggerRunDialog open={true} onOpenChange={() => {}} initialSuiteId="suite-2" />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByTestId('trigger-run-draft-warning')).toBeInTheDocument()
+      })
+
+      const bannerActivateBtn = screen.getByRole('button', { name: /activate suite/i })
+      fireEvent.click(bannerActivateBtn)
+
+      await waitFor(() => {
+        expect(updateSuiteSpy).toHaveBeenCalledWith('suite-2', {
+          name: mockSuites[1].name,
+          description: mockSuites[1].description,
+          state: 'ACTIVE',
+        })
+        expect(screen.queryByTestId('trigger-run-draft-warning')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^dispatch run$/i })).toBeInTheDocument()
+      })
+
+      updateSuiteSpy.mockRestore()
+    })
+
     it('has zero accessibility violations', async () => {
       const { container, unmount } = renderWithProviders(
         <TriggerRunDialog open={true} onOpenChange={() => {}} initialSuiteId="suite-1" />
