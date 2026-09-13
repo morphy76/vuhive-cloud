@@ -417,3 +417,35 @@ func TestRunnerJobGenerator_GenerateJob(t *testing.T) {
 	})
 }
 
+func TestRunnerJobGenerator_CustomInitResources(t *testing.T) {
+	cfg := k8s.DefaultConfig()
+	cfg.RunnerInitCPURequest = "100m"
+	cfg.RunnerInitCPULimit = "400m"
+	cfg.RunnerInitMemoryRequest = "128Mi"
+	cfg.RunnerInitMemoryLimit = "512Mi"
+
+	gen := k8s.NewRunnerJobGenerator(cfg)
+
+	resources, err := model.NewResourceRequirements("200m", "500m", "256Mi", "512Mi")
+	require.NoError(t, err)
+
+	profile, err := model.NewRunnerProfile("test-profile", "test profile", "alpine:3.20", resources, nil, model.Affinity{}, nil)
+	require.NoError(t, err)
+
+	run, err := model.NewTestRun("suite-1", "art-1", nil, profile.ID(), nil)
+	require.NoError(t, err)
+
+	job, err := gen.GenerateJob(run, profile, outbound.RunnerJobOptions{
+		S3BinaryKey: "vuhive-binaries/runner",
+	})
+	require.NoError(t, err)
+
+	require.Len(t, job.Spec.Template.Spec.InitContainers, 1)
+	initC := job.Spec.Template.Spec.InitContainers[0]
+	assert.Equal(t, "100m", initC.Resources.Requests.Cpu().String())
+	assert.Equal(t, "128Mi", initC.Resources.Requests.Memory().String())
+	assert.Equal(t, "400m", initC.Resources.Limits.Cpu().String())
+	assert.Equal(t, "512Mi", initC.Resources.Limits.Memory().String())
+}
+
+

@@ -649,5 +649,124 @@ func (s *RunService) CompleteRun(ctx context.Context, cmd inbound.CompleteRunCom
 	return run, nil
 }
 
+// CleanupRun tears down any active or stranded Kubernetes Job and Pods for a test run,
+// transitioning active runs to ABORTED status while preserving historical test run records.
+func (s *RunService) CleanupRun(ctx context.Context, id string) (*model.TestRun, error) {
+	start := time.Now()
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" {
+		return nil, fmt.Errorf("%w: run id cannot be empty", model.ErrValidation)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunService.CleanupRun").
+		Str("run_id", trimmedID).
+		Logger()
+	log.Debug().Msg("starting test run deployment runtime cleanup")
+
+	run, err := s.runRepo.FindByID(ctx, trimmedID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run for cleanup")
+		return nil, err
+	}
+
+	// Terminate any associated Kubernetes Job and Pods
+	if run.K8sJobName() != "" {
+		if err := s.orchestrator.AbortJob(ctx, run.K8sJobName(), run.K8sNamespace()); err != nil {
+			log.Warn().Err(err).Msg("aborting job in kubernetes reported error during cleanup; continuing")
+		}
+	}
+
+	// If the run is not yet in a terminal state, transition to ABORTED
+	if !run.Status().IsTerminal() {
+		now := time.Now().UTC()
+		if err := run.Abort("runtime cleaned", now); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed transitioning run state to ABORTED during cleanup")
+			return nil, err
+		}
+
+		if err := s.runRepo.Save(ctx, run); err != nil {
+			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed persisting cleaned test run")
+			return nil, err
+		}
+
+		if s.eventPublisher != nil {
+			evt := event.NewRunAborted(run.ID(), run.SuiteID(), "runtime cleaned", now)
+			if err := s.eventPublisher.Publish(ctx, evt); err != nil {
+				log.Warn().Err(err).Msg("failed emitting RunAborted domain event during cleanup")
+			}
+		}
+	}
+
+	log.Info().
+		Str("run_id", run.ID()).
+		Str("status", string(run.Status())).
+		Dur("duration_ms", time.Since(start)).
+		Msg("completed test run deployment runtime cleanup")
+
+	return run, nil
+}
+
+// DeleteRun purges any cluster runtime resources, deletes S3 storage assets,
+// and deletes the TestRun record from persistence. Active runs must be aborted or cleaned first.
+func (s *RunService) DeleteRun(ctx context.Context, id string) error {
+	start := time.Now()
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" {
+		return fmt.Errorf("%w: run id cannot be empty", model.ErrValidation)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunService.DeleteRun").
+		Str("run_id", trimmedID).
+		Logger()
+	log.Debug().Msg("starting test run deletion")
+
+	run, err := s.runRepo.FindByID(ctx, trimmedID)
+	if err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed finding test run for deletion")
+		return err
+	}
+
+	if !run.Status().IsTerminal() {
+		err := fmt.Errorf("%w: cannot delete active test run %s; abort or clean run first", model.ErrConflict, trimmedID)
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("cannot delete run in active state")
+		return err
+	}
+
+	// Purge cluster workloads if job name was tracked
+	if run.K8sJobName() != "" {
+		if err := s.orchestrator.AbortJob(ctx, run.K8sJobName(), run.K8sNamespace()); err != nil {
+			log.Warn().Err(err).Msg("aborting job in kubernetes reported error during deletion; continuing")
+		}
+	}
+
+	// Purge S3 telemetry assets if configured
+	if s.storage != nil {
+		if run.S3ReportKey() != "" {
+			if err := s.storage.Delete(ctx, run.S3ReportKey()); err != nil {
+				log.Warn().Err(err).Str("s3_key", run.S3ReportKey()).Msg("failed deleting run report from storage; continuing")
+			}
+		}
+		if run.S3LogsKey() != "" {
+			if err := s.storage.Delete(ctx, run.S3LogsKey()); err != nil {
+				log.Warn().Err(err).Str("s3_key", run.S3LogsKey()).Msg("failed deleting run logs from storage; continuing")
+			}
+		}
+	}
+
+	if err := s.runRepo.Delete(ctx, trimmedID); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed deleting test run from repository")
+		return err
+	}
+
+	log.Info().
+		Str("run_id", trimmedID).
+		Dur("duration_ms", time.Since(start)).
+		Msg("completed test run deletion")
+
+	return nil
+}
+
 // Compile-time static interface verification
 var _ inbound.RunsUseCase = (*RunService)(nil)

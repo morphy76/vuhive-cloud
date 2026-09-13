@@ -14,6 +14,10 @@ data:
   S3_USE_PATH_STYLE: {{ .Values.s3.usePathStyle | toString | quote }}
   RUNNER_NAMESPACE: {{ .Values.runner.namespace | quote }}
   RUNNER_INIT_IMAGE: {{ .Values.runner.initImage | quote }}
+  RUNNER_INIT_CPU_REQUEST: {{ (default (dict) (default (dict) (default (dict) .Values.runner).initResources).requests).cpu | default "50m" | quote }}
+  RUNNER_INIT_CPU_LIMIT: {{ (default (dict) (default (dict) (default (dict) .Values.runner).initResources).limits).cpu | default "200m" | quote }}
+  RUNNER_INIT_MEMORY_REQUEST: {{ (default (dict) (default (dict) (default (dict) .Values.runner).initResources).requests).memory | default "64Mi" | quote }}
+  RUNNER_INIT_MEMORY_LIMIT: {{ (default (dict) (default (dict) (default (dict) .Values.runner).initResources).limits).memory | default "256Mi" | quote }}
   RUNNER_DEFAULT_IMAGE: {{ .Values.runner.defaultImage | quote }}
   BUILDER_NAMESPACE: {{ .Values.builder.namespace | quote }}
   BUILDER_IMAGE: {{ .Values.builder.image | quote }}

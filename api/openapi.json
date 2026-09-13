@@ -3200,6 +3200,60 @@
       }
     },
     "/api/v1/runs/{id}": {
+      "delete": {
+        "description": "Deletes the underlying Kubernetes Job (if still present), removes associated storage assets\n(summary.json and run.log), and removes the run record from PostgreSQL.\nRejects deletion of active runs (QUEUED, RUNNING) with 409 Conflict.\n",
+        "operationId": "deleteRun",
+        "parameters": [
+          {
+            "description": "Unique identifier of the test run to delete",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Test run successfully deleted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed or missing run id"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Cannot delete an active test run"
+          }
+        },
+        "summary": "Permanently delete a test run",
+        "tags": [
+          "Runs"
+        ]
+      },
       "get": {
         "description": "Returns complete metadata, execution timestamps, duration in milliseconds, exit code,\nSLA compliance, and indexed summary metrics directly from PostgreSQL without reading S3.\n",
         "operationId": "getRun",
@@ -3451,6 +3505,59 @@
         "summary": "Await start barrier rendezvous",
         "tags": [
           "Barrier"
+        ]
+      }
+    },
+    "/api/v1/runs/{id}/cleanup": {
+      "parameters": [
+        {
+          "description": "Unique TestRun UUID whose runtime resources should be cleaned up",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "description": "Deletes lingering Kubernetes batch/v1 Job and Pods for the specified test run.\nIf the run was in an active state (QUEUED, RUNNING), transitions it to ABORTED.\nUseful for manually cleaning up resources after runner failures, Init:Error states, or manual interventions.\n",
+        "operationId": "cleanupRun",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            },
+            "description": "Runtime resources successfully cleaned up."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed or missing run id"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test run not found"
+          }
+        },
+        "summary": "Clean up runtime resources for a test run",
+        "tags": [
+          "Runs"
         ]
       }
     },
@@ -4389,19 +4496,19 @@
                     "description": "Optional override to allow suspicious packages (e.g., syscall, unsafe) if permitted by cluster deployment policy",
                     "type": "boolean"
                   },
-                  "platform": {
-                    "default": "linux/amd64",
-                    "description": "Target architecture (linux/amd64, linux/arm64, or all)",
-                    "type": "string"
-                  },
-                  "go_version": {
-                    "description": "Optional target Go toolchain version (e.g., 1.26, 1.27). Must be >= 1.26. If omitted, auto-detected from go.mod or falls back to cluster default.",
-                    "example": "1.26",
-                    "type": "string"
-                  },
                   "go_image": {
                     "description": "Optional explicit container compiler image override (e.g., golang:1.26-alpine). Takes precedence over go_version.",
                     "example": "golang:1.26-alpine",
+                    "type": "string"
+                  },
+                  "go_version": {
+                    "description": "Optional target Go toolchain version (e.g., 1.26, 1.27). Must be \u003e= 1.26. If omitted, auto-detected from go.mod or falls back to cluster default.",
+                    "example": "1.26",
+                    "type": "string"
+                  },
+                  "platform": {
+                    "default": "linux/amd64",
+                    "description": "Target architecture (linux/amd64, linux/arm64, or all)",
                     "type": "string"
                   },
                   "source": {

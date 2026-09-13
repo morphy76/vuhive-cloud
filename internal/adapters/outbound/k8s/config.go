@@ -56,6 +56,10 @@ type Config struct {
 	// Runner specific configurations
 	RunnerNamespace               string
 	RunnerInitImage               string
+	RunnerInitCPURequest          string
+	RunnerInitCPULimit            string
+	RunnerInitMemoryRequest       string
+	RunnerInitMemoryLimit         string
 	RunnerDefaultImage            string
 	RunnerActiveDeadlineSeconds   int64
 	RunnerTTLSecondsAfterFinished int32
@@ -92,6 +96,10 @@ func DefaultConfig() Config {
 
 		RunnerNamespace:               "vuhive-runners",
 		RunnerInitImage:               "ghcr.io/morphy76/vuhive-cloud/runner-init:latest",
+		RunnerInitCPURequest:          "50m",
+		RunnerInitCPULimit:            "200m",
+		RunnerInitMemoryRequest:       "64Mi",
+		RunnerInitMemoryLimit:         "256Mi",
 		RunnerDefaultImage:            "alpine:3.20",
 		RunnerActiveDeadlineSeconds:   3600,
 		RunnerTTLSecondsAfterFinished: 86400,

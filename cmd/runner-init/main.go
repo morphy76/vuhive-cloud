@@ -13,7 +13,7 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/version"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	_ "go.uber.org/automaxprocs"
+	"go.uber.org/automaxprocs/maxprocs"
 )
 
 func main() {
@@ -31,7 +31,15 @@ func main() {
 	}
 
 	zerolog.TimeFieldFormat = time.RFC3339
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).
+		With().
+		Str("component", "runner-init").
+		Logger()
+
+	// Silence standard automaxprocs logging and route to zerolog Debug level
+	_, _ = maxprocs.Set(maxprocs.Logger(func(format string, args ...interface{}) {
+		log.Debug().Str("component", "runner-init").Msgf(strings.TrimSpace(format), args...)
+	}))
 
 	ctx := log.Logger.WithContext(context.Background())
 

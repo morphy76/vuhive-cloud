@@ -83,6 +83,40 @@ func (g *CronJobGenerator) GenerateCronJob(
 		initImage = "ghcr.io/morphy76/vuhive-cloud/runner-init:latest"
 	}
 
+	initCPUReqStr := strings.TrimSpace(g.cfg.RunnerInitCPURequest)
+	if initCPUReqStr == "" {
+		initCPUReqStr = "50m"
+	}
+	initMemReqStr := strings.TrimSpace(g.cfg.RunnerInitMemoryRequest)
+	if initMemReqStr == "" {
+		initMemReqStr = "64Mi"
+	}
+	initCPULimStr := strings.TrimSpace(g.cfg.RunnerInitCPULimit)
+	if initCPULimStr == "" {
+		initCPULimStr = "200m"
+	}
+	initMemLimStr := strings.TrimSpace(g.cfg.RunnerInitMemoryLimit)
+	if initMemLimStr == "" {
+		initMemLimStr = "256Mi"
+	}
+
+	initCPUReq, err := resource.ParseQuantity(initCPUReqStr)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid runner init cpu request %q: %v", model.ErrValidation, initCPUReqStr, err)
+	}
+	initMemReq, err := resource.ParseQuantity(initMemReqStr)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid runner init memory request %q: %v", model.ErrValidation, initMemReqStr, err)
+	}
+	initCPULim, err := resource.ParseQuantity(initCPULimStr)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid runner init cpu limit %q: %v", model.ErrValidation, initCPULimStr, err)
+	}
+	initMemLim, err := resource.ParseQuantity(initMemLimStr)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid runner init memory limit %q: %v", model.ErrValidation, initMemLimStr, err)
+	}
+
 	runnerImage := strings.TrimSpace(profile.RunnerImage())
 	if runnerImage == "" {
 		runnerImage = strings.TrimSpace(g.cfg.RunnerDefaultImage)
@@ -271,6 +305,16 @@ func (g *CronJobGenerator) GenerateCronJob(
 										},
 									},
 									Env: initEnvs,
+									Resources: corev1.ResourceRequirements{
+										Requests: corev1.ResourceList{
+											corev1.ResourceCPU:    initCPUReq,
+											corev1.ResourceMemory: initMemReq,
+										},
+										Limits: corev1.ResourceList{
+											corev1.ResourceCPU:    initCPULim,
+											corev1.ResourceMemory: initMemLim,
+										},
+									},
 									VolumeMounts: []corev1.VolumeMount{
 										{
 											Name:      "shared-workspace",

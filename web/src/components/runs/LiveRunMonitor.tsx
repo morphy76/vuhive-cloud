@@ -10,13 +10,16 @@ import {
   ShieldAlert,
   Terminal,
   X,
+  Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { AbortConfirmationDialog } from '@/components/dialogs/AbortConfirmationDialog'
+import { CleanRuntimeDialog } from '@/components/dialogs/CleanRuntimeDialog'
 import { ExecutionLogDialog } from '@/components/dialogs/ExecutionLogDialog'
-import { useAbortRun } from '@/hooks/use-runs'
+import { useAbortRun, useCleanupRun } from '@/hooks/use-runs'
+import { useProfile } from '@/hooks/use-profiles'
 import { useRunEvents } from '@/hooks/use-events'
 import type { HistoricalRun, RunExecutionStatus } from '@/types/suite'
 
@@ -52,6 +55,7 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
 }) => {
   const [run, setRun] = React.useState<HistoricalRun>(initialRun)
   const [isAbortDialogOpen, setIsAbortDialogOpen] = React.useState(false)
+  const [isCleanDialogOpen, setIsCleanDialogOpen] = React.useState(false)
   const [isLogDialogOpen, setIsLogDialogOpen] = React.useState(false)
   const [elapsedMs, setElapsedMs] = React.useState<number>(() => {
     if (initialRun.durationMs && initialRun.durationMs > 0) return initialRun.durationMs
@@ -60,6 +64,8 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
   })
 
   const abortRunMutation = useAbortRun()
+  const cleanupRunMutation = useCleanupRun()
+  const { data: profile } = useProfile(run.runnerProfileId || '')
 
   // Sync state if prop changes
   React.useEffect(() => {
@@ -111,6 +117,12 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
   }, [run.status, run.startedAt, run.createdAt, run.durationMs])
 
   const canAbort = run.status === 'QUEUED' || run.status === 'RUNNING'
+  const isFailedOrAborted = run.status === 'FAILED' || run.status === 'ABORTED'
+  const isInitError = run.status === 'FAILED' && (
+    Boolean(run.abortReason?.toLowerCase().includes('init')) ||
+    run.exitCode === 1 ||
+    !run.startedAt
+  )
 
   const handleAbortConfirm = async (reason: string) => {
     try {
@@ -120,6 +132,16 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
       onRunAborted?.(updated)
     } catch (err) {
       console.error('Failed to abort run:', err)
+    }
+  }
+
+  const handleCleanConfirm = async () => {
+    try {
+      const updated = await cleanupRunMutation.mutateAsync(run.id)
+      setRun(updated)
+      setIsCleanDialogOpen(false)
+    } catch (err) {
+      console.error('Failed to clean runtime:', err)
     }
   }
 
@@ -156,6 +178,19 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
             >
               <ShieldAlert className="w-4 h-4" />
               <span>Abort Test</span>
+            </Button>
+          )}
+
+          {isFailedOrAborted && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsCleanDialogOpen(true)}
+              className="text-xs font-semibold min-h-[38px] px-3 gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-950"
+              aria-label="Clean Runtime"
+            >
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              <span>Clean Runtime</span>
             </Button>
           )}
 
@@ -364,8 +399,44 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
           </div>
         )}
 
+        {/* Failure / Init:Error Banner */}
+        {run.status === 'FAILED' && (
+          <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs text-rose-900 dark:text-rose-200 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-sm">
+                    {isInitError ? 'Runner Initialization Failure Detected (Init:Error)' : 'Test Execution Failed'}
+                  </div>
+                  <p className="mt-1 text-[11px] opacity-90 leading-relaxed">
+                    {isInitError ? (
+                      <>
+                        The runner pod encountered a failure during container initialization or artifact staging.
+                        Note: Runner Profile resources (<span className="font-semibold">{profile ? `${profile.cpu_request || '100m'} CPU / ${profile.memory_request || '128Mi'} RAM` : 'configured profile'}</span>)
+                        are dedicated to the load generator container, whereas artifact download executes with lightweight bootstrap init resources (default: 50m CPU / 64Mi RAM).
+                      </>
+                    ) : (
+                      run.abortReason || 'The runner job terminated with non-zero exit code or pod failure.'
+                    )}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setIsCleanDialogOpen(true)}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-xs gap-1.5 flex-shrink-0"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Clean Runtime</span>
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Technical Metadata & Kubernetes Context */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800">
             <div className="text-[11px] text-slate-400 flex items-center gap-1">
               <Layers className="w-3.5 h-3.5" />
@@ -387,6 +458,19 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
           </div>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800">
+            <div className="text-[11px] text-slate-400 flex items-center gap-1">
+              <Cpu className="w-3.5 h-3.5" />
+              <span>Runner Profile</span>
+            </div>
+            <div className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 mt-1 truncate">
+              {profile ? `${profile.name} (${profile.cpu_request || '100m'}/${profile.memory_request || '128Mi'})` : (run.runnerProfileId || 'Default')}
+            </div>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              Init: 50m / 64Mi
+            </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800">
             <div className="text-[11px] text-slate-400">Target Platform</div>
             <div className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 mt-1 truncate">
               {run.artifactId ? 'linux/arm64' : 'linux/amd64'}
@@ -404,6 +488,8 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
                 <Badge variant="warning">Running</Badge>
               ) : run.status === 'ABORTED' ? (
                 <Badge variant="error">Aborted</Badge>
+              ) : run.status === 'FAILED' ? (
+                <Badge variant="error">Failed</Badge>
               ) : (
                 <Badge variant="outline">Queued</Badge>
               )}
@@ -457,6 +543,15 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
         run={run}
         onConfirm={handleAbortConfirm}
         isAborting={abortRunMutation.isPending}
+      />
+
+      {/* Runtime Resource Cleanup Dialog */}
+      <CleanRuntimeDialog
+        open={isCleanDialogOpen}
+        onOpenChange={setIsCleanDialogOpen}
+        run={run}
+        onConfirm={handleCleanConfirm}
+        isCleaning={cleanupRunMutation.isPending}
       />
 
       {/* Interactive Virtualized Execution Log Viewer Dialog */}
