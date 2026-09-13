@@ -64,7 +64,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
 
 To enforce consistent operational behavior, signal handling, and metrics collection across distributed Kubernetes runners, `vuhive-cloud` utilizes an **Inverted Control** architectural model:
 - **`package scenario` Enforcement:** User test code **must** declare `package scenario`. User-defined `package main` and `func main()` are strictly forbidden.
-- **Platform-Managed Driver Injection:** The control plane pre-build analyzer validates the uploaded archive and automatically injects an immutable, trusted `main.go` driver that wires the scenario into `vuhive.NewEngine()`, parsing CLI flags (`--summary-export`, `--config`), capturing OS signals (`SIGINT`, `SIGTERM`), and generating execution telemetry.
+- **Platform-Managed Driver Injection:** The control plane pre-build analyzer validates the uploaded archive and automatically injects an immutable, trusted `main.go` driver that wires the scenario into `vuhive.NewSuite()`, parsing CLI flags (`--summary-export`, `--config`), capturing OS signals (`SIGINT`, `SIGTERM`), and generating execution telemetry.
 - **Direct `go.mod` Dependency:** `go.mod` must explicitly declare a direct `require github.com/morphy76/vuhive <version>` dependency (indirect dependencies are rejected).
 - **Import Blocklist Enforcement:** To prevent crypto-mining, backdoors, or non-load-testing batch workloads, the static analyzer blocks dangerous packages: `os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`, and direct low-level socket creation.
 
@@ -72,7 +72,7 @@ A scenario can implement the contract using any of the supported function or var
 1. `func NewScenario() *vuhive.Scenario` (or returning `(*vuhive.Scenario, error)`)
 2. `func Scenario() *vuhive.Scenario`
 3. `func InitScenario() (*vuhive.Scenario, error)`
-4. `func Register(engine *vuhive.Engine)`
+4. `func Register(suite *vuhive.Suite)`
 5. An exported package-level variable `var Scenario = ...`
 
 #### Example `scenario.go`:
@@ -82,7 +82,6 @@ A scenario can implement the contract using any of the supported function or var
 package scenario
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -93,14 +92,23 @@ import (
 func NewScenario() *vuhive.Scenario {
 	client := &http.Client{Timeout: 5 * time.Second}
 
-	return vuhive.NewScenario("User Checkout Flow").
-		Step("Homepage", func(ctx context.Context) error {
-			resp, err := client.Get("http://target-service.default.svc.cluster.local/healthz")
-			if err != nil || resp.StatusCode != http.StatusOK {
+	return &vuhive.Scenario{
+		RunVU: func(ctx vuhive.VUContext) error {
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://target-service.default.svc.cluster.local/healthz", nil)
+			if err != nil {
+				return err
+			}
+			resp, err := client.Do(req)
+			if err != nil {
 				return fmt.Errorf("homepage check failed: %w", err)
 			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("homepage check failed with status: %d", resp.StatusCode)
+			}
 			return nil
-		})
+		},
+	}
 }
 ```
 

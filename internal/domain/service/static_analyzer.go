@@ -47,11 +47,13 @@ type StaticAnalyzerConfig struct {
 // StaticAnalysisOptions contains request-level analysis options.
 type StaticAnalysisOptions struct {
 	AllowInsecureImports bool
+	SuiteName            string
 }
 
 // AnalysisResult contains metadata extracted and validated from the uploaded Go package.
 type AnalysisResult struct {
 	ModuleName        string
+	SuiteName         string
 	GoVersion         string
 	PackageName       string
 	EntrypointName    string
@@ -193,6 +195,7 @@ func (a *StaticAnalyzer) AnalyzeArchive(r io.Reader, opts StaticAnalysisOptions)
 
 	return &AnalysisResult{
 		ModuleName:        moduleName,
+		SuiteName:         opts.SuiteName,
 		GoVersion:         goVersion,
 		PackageName:       detectedPackageName,
 		EntrypointName:    detectedEntrypoint,
@@ -210,16 +213,20 @@ func (a *StaticAnalyzer) GenerateMainDriver(result *AnalysisResult) ([]byte, err
 		return nil, fmt.Errorf("%w: analysis result cannot be nil", model.ErrValidation)
 	}
 
+	suiteName := result.SuiteName
+	if suiteName == "" {
+		suiteName = result.ModuleName
+	}
+	if suiteName == "" {
+		suiteName = "vuhive-suite"
+	}
+
 	var invocation string
 	switch result.EntrypointKind {
 	case EntrypointKindRegister:
-		invocation = fmt.Sprintf("\tscenario.%s(engine)", result.EntrypointName)
+		invocation = fmt.Sprintf("\tscenario.%s(suite)", result.EntrypointName)
 	case EntrypointKindVariable:
-		invocation = fmt.Sprintf(`	sc := scenario.%s
-	if err := engine.Run(sc); err != nil {
-		fmt.Fprintf(os.Stderr, "scenario execution error: %%v\n", err)
-		os.Exit(1)
-	}`, result.EntrypointName)
+		invocation = fmt.Sprintf("\tregisterTarget(scenario.%s)", result.EntrypointName)
 	case EntrypointKindFunction:
 		if result.ReturnsError {
 			invocation = fmt.Sprintf(`	sc, err := scenario.%s()
@@ -227,16 +234,9 @@ func (a *StaticAnalyzer) GenerateMainDriver(result *AnalysisResult) ([]byte, err
 		fmt.Fprintf(os.Stderr, "scenario initialization error: %%v\n", err)
 		os.Exit(1)
 	}
-	if err := engine.Run(sc); err != nil {
-		fmt.Fprintf(os.Stderr, "scenario execution error: %%v\n", err)
-		os.Exit(1)
-	}`, result.EntrypointName)
+	registerTarget(sc)`, result.EntrypointName)
 		} else {
-			invocation = fmt.Sprintf(`	sc := scenario.%s()
-	if err := engine.Run(sc); err != nil {
-		fmt.Fprintf(os.Stderr, "scenario execution error: %%v\n", err)
-		os.Exit(1)
-	}`, result.EntrypointName)
+			invocation = fmt.Sprintf("\tregisterTarget(scenario.%s())", result.EntrypointName)
 		}
 	default:
 		return nil, fmt.Errorf("%w: unknown entrypoint kind: %s", model.ErrValidation, result.EntrypointKind)
@@ -252,33 +252,121 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/morphy76/vuhive/pkg/vuhive"
+	"gopkg.in/yaml.v3"
 	"%s/scenario"
 )
+
+type scenarioConfig struct {
+	DefaultScenario string                 `+"`yaml:\"default_scenario\"`"+`
+	Scenarios       map[string]interface{} `+"`yaml:\"scenarios\"`"+`
+}
 
 func main() {
 	summaryExport := flag.String("summary-export", "", "Path to export summary report")
 	configPath := flag.String("config", "", "Path to configuration YAML")
+	scenarioFlag := flag.String("scenario", "", "Name of scenario to execute")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg := vuhive.EngineConfig{
-		DefaultDuration: 30 * time.Second,
-		DefaultVUs:      10,
+	var loadedCfg scenarioConfig
+	if *configPath != "" {
+		if data, err := os.ReadFile(*configPath); err == nil {
+			_ = yaml.Unmarshal(data, &loadedCfg)
+		}
+	} else if _, err := os.Stat("vuhive.yaml"); err == nil {
+		*configPath = "vuhive.yaml"
+		if data, err := os.ReadFile(*configPath); err == nil {
+			_ = yaml.Unmarshal(data, &loadedCfg)
+		}
+	} else {
+		defaultYAML := "version: \"1.0\"\ndefault_scenario: \"default\"\nscenarios:\n  default:\n    type: \"constant_vus\"\n    vus: 10\n    run_period: \"30s\"\n"
+		*configPath = "vuhive.yaml"
+		_ = os.WriteFile(*configPath, []byte(defaultYAML), 0644)
+		loadedCfg.DefaultScenario = "default"
+		loadedCfg.Scenarios = map[string]interface{}{"default": nil}
 	}
-	_ = configPath
-	_ = summaryExport
-	_ = ctx
 
-	engine := vuhive.NewEngine(cfg)
+	suite := vuhive.NewSuite("%s")
+
+	registerTarget := func(sc any) {
+		var targetSc vuhive.Scenario
+		switch v := sc.(type) {
+		case *vuhive.Scenario:
+			if v != nil {
+				targetSc = *v
+			}
+		case vuhive.Scenario:
+			targetSc = v
+		default:
+			fmt.Fprintf(os.Stderr, "unsupported scenario type: %%T\n", sc)
+			os.Exit(1)
+		}
+
+		if targetSc.RunVU == nil {
+			targetSc.RunVU = func(ctx vuhive.VUContext) error { return nil }
+		}
+
+		registeredNames := make(map[string]bool)
+		for name := range loadedCfg.Scenarios {
+			suite.RegisterScenario(name, targetSc)
+			registeredNames[name] = true
+		}
+		if loadedCfg.DefaultScenario != "" && !registeredNames[loadedCfg.DefaultScenario] {
+			suite.RegisterScenario(loadedCfg.DefaultScenario, targetSc)
+			registeredNames[loadedCfg.DefaultScenario] = true
+		}
+		if *scenarioFlag != "" && !registeredNames[*scenarioFlag] {
+			suite.RegisterScenario(*scenarioFlag, targetSc)
+			registeredNames[*scenarioFlag] = true
+		}
+		if !registeredNames["default"] {
+			suite.RegisterScenario("default", targetSc)
+			registeredNames["default"] = true
+		}
+		entrypoint := "%s"
+		if !registeredNames[entrypoint] {
+			suite.RegisterScenario(entrypoint, targetSc)
+			registeredNames[entrypoint] = true
+		}
+	}
 
 %s
+
+	var suiteArgs []string
+	if *configPath != "" {
+		suiteArgs = append(suiteArgs, "--config="+*configPath)
+	}
+	if *summaryExport != "" {
+		suiteArgs = append(suiteArgs, "--json-report-out="+*summaryExport)
+	}
+	if *scenarioFlag != "" {
+		suiteArgs = append(suiteArgs, "--scenario="+*scenarioFlag)
+	}
+	suiteArgs = append(suiteArgs, flag.Args()...)
+
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			stop()
+			os.Exit(1)
+		case <-done:
+		}
+	}()
+
+	res := suite.ExecuteWithArgs(suiteArgs, os.Stdout)
+	close(done)
+
+	if res.Error != nil {
+		fmt.Fprintf(os.Stderr, "scenario execution error: %%v\n", res.Error)
+	}
+	os.Exit(res.ExitCode())
 }
-`, result.ModuleName, invocation)
+`, result.ModuleName, suiteName, result.EntrypointName, invocation)
 
 	return []byte(content), nil
 }
@@ -385,10 +473,10 @@ func (a *StaticAnalyzer) findScenarioContract(file *ast.File) (name string, kind
 			continue
 		}
 
-		// Register(engine *vuhive.Engine)
+		// Register(suite *vuhive.Suite) or Register(engine *vuhive.Engine)
 		if fn.Type.Params != nil && len(fn.Type.Params.List) == 1 {
 			paramType := typeString(fn.Type.Params.List[0].Type)
-			if strings.Contains(paramType, "vuhive.Engine") {
+			if strings.Contains(paramType, "vuhive.Suite") || strings.Contains(paramType, "vuhive.Engine") {
 				return fn.Name.Name, EntrypointKindRegister, false
 			}
 		}

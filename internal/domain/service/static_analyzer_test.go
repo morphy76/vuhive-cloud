@@ -7,7 +7,9 @@ import (
 	"compress/gzip"
 	"encoding/hex"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -108,7 +110,6 @@ func validScenarioCode() string {
 	return `package scenario
 
 import (
-	"context"
 	"net/http"
 	"time"
 
@@ -117,14 +118,19 @@ import (
 
 func NewScenario() *vuhive.Scenario {
 	client := &http.Client{Timeout: 5 * time.Second}
-	return vuhive.NewScenario("User Checkout Flow").
-		Step("Homepage", func(ctx context.Context) error {
-			resp, err := client.Get("http://target/healthz")
+	return &vuhive.Scenario{
+		RunVU: func(ctx vuhive.VUContext) error {
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://target/healthz", nil)
+			if err != nil {
+				return err
+			}
+			resp, err := client.Do(req)
 			if err != nil {
 				return err
 			}
 			return resp.Body.Close()
-		})
+		},
+	}
 }
 `
 }
@@ -424,7 +430,7 @@ var Scenario = vuhive.NewScenario("Checkout")
 		assert.Equal(t, service.EntrypointKindVariable, res.EntrypointKind)
 	})
 
-	t.Run("succeeds with Register function", func(t *testing.T) {
+	t.Run("succeeds with Register function accepting Engine", func(t *testing.T) {
 		archive := createTestTarGz(t, map[string]string{
 			"go.mod": validGoMod(),
 			"scenario.go": `package scenario
@@ -432,7 +438,27 @@ var Scenario = vuhive.NewScenario("Checkout")
 import "github.com/morphy76/vuhive"
 
 func Register(engine *vuhive.Engine) {
-	_ = engine.Run(vuhive.NewScenario("Checkout"))
+	_ = engine
+}
+`,
+		})
+		res, err := analyzer.AnalyzeArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, "Register", res.EntrypointName)
+		assert.Equal(t, service.EntrypointKindRegister, res.EntrypointKind)
+	})
+
+	t.Run("succeeds with Register function accepting Suite", func(t *testing.T) {
+		archive := createTestTarGz(t, map[string]string{
+			"go.mod": validGoMod(),
+			"scenario.go": `package scenario
+
+import "github.com/morphy76/vuhive/pkg/vuhive"
+
+func Register(suite *vuhive.Suite) {
+	suite.RegisterScenario("Checkout", vuhive.Scenario{
+		RunVU: func(ctx vuhive.VUContext) error { return nil },
+	})
 }
 `,
 		})
@@ -513,7 +539,9 @@ func TestStaticAnalyzer_PrepareSourceArchive(t *testing.T) {
 			"scenario.go": validScenarioCode(),
 		})
 
-		preparedBytes, res, err := analyzer.PrepareSourceArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{})
+		preparedBytes, res, err := analyzer.PrepareSourceArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{
+			SuiteName: "User Checkout Flow",
+		})
 		require.NoError(t, err)
 		require.NotNil(t, res)
 		assert.Equal(t, "mytest", res.ModuleName)
@@ -547,6 +575,10 @@ func TestStaticAnalyzer_PrepareSourceArchive(t *testing.T) {
 		assert.Contains(t, mainContent, `"summary-export"`)
 		assert.Contains(t, mainContent, `"github.com/morphy76/vuhive/pkg/vuhive"`)
 		assert.NotContains(t, mainContent, "\t\"github.com/morphy76/vuhive\"\n")
+		assert.Contains(t, mainContent, `vuhive.NewSuite("User Checkout Flow")`)
+		assert.NotContains(t, mainContent, "vuhive.EngineConfig")
+		assert.NotContains(t, mainContent, "vuhive.NewEngine")
+		assert.Contains(t, mainContent, "--json-report-out=")
 	})
 
 	t.Run("successfully repackages zip archive into tar.gz with injected main.go", func(t *testing.T) {
@@ -683,4 +715,94 @@ require github.com/morphy76/vuhive v1.1.5
 		detected := service.DetectGoVersionFromArchive(bytes.NewReader(archive))
 		assert.Equal(t, "1.27", detected)
 	})
+}
+
+func TestStaticAnalyzer_GeneratedDriver_CompilesAndRuns(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration compilation test in short mode")
+	}
+
+	analyzer := service.NewStaticAnalyzer(service.StaticAnalyzerConfig{})
+	archive := createTestTarGz(t, map[string]string{
+		"go.mod": validGoMod(),
+		"scenario.go": `package scenario
+
+import (
+	"github.com/morphy76/vuhive/pkg/vuhive"
+)
+
+func NewScenario() *vuhive.Scenario {
+	return &vuhive.Scenario{
+		RunVU: func(ctx vuhive.VUContext) error {
+			return nil
+		},
+	}
+}
+`,
+		"vuhive.yaml": `version: "1.0"
+default_scenario: "smoke"
+scenarios:
+  smoke:
+    type: "constant_vus"
+    vus: 1
+    run_period: "1s"
+`,
+	})
+
+	preparedBytes, res, err := analyzer.PrepareSourceArchive(bytes.NewReader(archive), service.StaticAnalysisOptions{
+		SuiteName: "Integration Smoke Test",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	tmpDir := t.TempDir()
+	gr, err := gzip.NewReader(bytes.NewReader(preparedBytes))
+	require.NoError(t, err)
+	tr := tar.NewReader(gr)
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+
+		targetPath := filepath.Join(tmpDir, hdr.Name)
+		if hdr.Typeflag == tar.TypeDir {
+			require.NoError(t, os.MkdirAll(targetPath, 0755))
+			continue
+		}
+		require.NoError(t, os.MkdirAll(filepath.Dir(targetPath), 0755))
+		f, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, hdr.FileInfo().Mode())
+		require.NoError(t, err)
+		_, err = io.Copy(f, tr)
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+	}
+
+	// Run go mod tidy in tmpDir
+	tidyCmd := exec.Command("go", "mod", "tidy")
+	tidyCmd.Dir = tmpDir
+	tidyOut, err := tidyCmd.CombinedOutput()
+	require.NoError(t, err, "go mod tidy failed: %s", string(tidyOut))
+
+	// Run go build in tmpDir
+	runnerBin := filepath.Join(tmpDir, "runner")
+	buildCmd := exec.Command("go", "build", "-o", runnerBin, ".")
+	buildCmd.Dir = tmpDir
+	buildOut, err := buildCmd.CombinedOutput()
+	require.NoError(t, err, "go build failed: %s", string(buildOut))
+
+	// Execute runner with --summary-export
+	summaryPath := filepath.Join(tmpDir, "summary.json")
+	runCmd := exec.Command(runnerBin, "--summary-export="+summaryPath, "--config="+filepath.Join(tmpDir, "vuhive.yaml"))
+	runCmd.Dir = tmpDir
+	runOut, err := runCmd.CombinedOutput()
+	require.NoError(t, err, "runner execution failed: %s", string(runOut))
+
+	// Verify summary.json was created and has passed status
+	summaryBytes, err := os.ReadFile(summaryPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(summaryBytes), `"suite_name": "Integration Smoke Test"`)
+	assert.Contains(t, string(summaryBytes), `"scenario": "smoke"`)
 }

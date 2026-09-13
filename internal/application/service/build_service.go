@@ -112,10 +112,15 @@ func (s *BuildService) TriggerBuildWithOptions(
 	}
 	resolvedGoImage := strings.TrimSpace(opts.GoImage)
 
+	var suiteName string
 	if s.suiteRepo != nil {
-		if _, err := s.suiteRepo.FindByID(ctx, trimmedSuiteID); err != nil {
+		suite, err := s.suiteRepo.FindByID(ctx, trimmedSuiteID)
+		if err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed verifying test suite")
 			return nil, err
+		}
+		if suite != nil {
+			suiteName = suite.Name()
 		}
 	}
 
@@ -125,6 +130,7 @@ func (s *BuildService) TriggerBuildWithOptions(
 	if s.staticAnalyzer != nil {
 		preparedBytes, analysisResult, err := s.staticAnalyzer.PrepareSourceArchive(source, domainservice.StaticAnalysisOptions{
 			AllowInsecureImports: opts.AllowInsecureImports,
+			SuiteName:            suiteName,
 		})
 		if err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("pre-build static analysis failed")

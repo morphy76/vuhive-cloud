@@ -544,7 +544,7 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
   - Enforce inverted control: validate `package scenario` contract via AST inspection (`go/parser` & `go/ast`) and prohibit `package main` / `func main()`.
   - Enforce package import blocklist (blocking `os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`, raw sockets).
   - Provide deployer-governed insecure import bypass (`ALLOW_INSECURE_IMPORTS`) with `is_dangerous` tagging.
-  - Implement platform-managed `main.go` entrypoint template stitching user scenario into trusted `vuhive.Engine` runner with signal traps and CLI flags.
+  - Implement platform-managed `main.go` entrypoint template stitching user scenario into trusted `vuhive.Suite` runner with signal traps and CLI flags.
 
 #### Epic 1.3: Kubernetes Runner Orchestration, Profiles & Security Isolation
 - [**Issue 1.3.1: Runner Profile Management**](https://github.com/morphy76/vuhive-cloud/issues/6)
