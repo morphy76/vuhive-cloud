@@ -108,10 +108,27 @@ describe('DashboardView Component', () => {
       expect(screen.getByText('5')).toBeInTheDocument()
       // SLA pass rate metric: 98.7%
       expect(screen.getByText('98.7%')).toBeInTheDocument()
+      expect(screen.getByText('Across 32 runs')).toBeInTheDocument()
     })
 
     // Orchestrator status synchronized badge
     expect(screen.getByText('Synchronized')).toBeInTheDocument()
+  })
+
+  it('renders N/A and neutral subtitle for SLA pass rate when zero completed runs exist', async () => {
+    vi.spyOn(api, 'getDashboard').mockResolvedValue({
+      ...mockDashboardData,
+      sla_pass_rate: null,
+      total_runs_count: 0,
+      recent_runs: [],
+    })
+
+    renderWithProviders(<DashboardView />)
+
+    await waitFor(() => {
+      expect(screen.getByText('N/A')).toBeInTheDocument()
+      expect(screen.getByText('No completed runs yet')).toBeInTheDocument()
+    })
   })
 
   it('renders Degraded badge when control_plane_status is DOWN', async () => {
