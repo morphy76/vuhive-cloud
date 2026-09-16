@@ -35,7 +35,7 @@ const currentRun: HistoricalRun = {
     p90DurationMs: 42.1,
     p95DurationMs: 58.7,
     p99DurationMs: 89.2,
-    errorRatePct: 0.015,
+    errorRatePct: 1.5,
   },
 }
 
@@ -58,7 +58,7 @@ const pastRuns: HistoricalRun[] = [
       p90DurationMs: 38.0,
       p95DurationMs: 52.0,
       p99DurationMs: 78.0,
-      errorRatePct: 0.005,
+      errorRatePct: 0.5,
     },
   },
   {
@@ -79,7 +79,7 @@ const pastRuns: HistoricalRun[] = [
       p90DurationMs: 40.0,
       p95DurationMs: 55.0,
       p99DurationMs: 82.0,
-      errorRatePct: 0.008,
+      errorRatePct: 0.8,
     },
   },
   {
@@ -100,7 +100,7 @@ const pastRuns: HistoricalRun[] = [
       p90DurationMs: 140.0,
       p95DurationMs: 210.0,
       p99DurationMs: 450.0,
-      errorRatePct: 0.065,
+      errorRatePct: 6.5,
     },
   },
   currentRun,

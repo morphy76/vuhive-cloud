@@ -17,6 +17,7 @@ import { useRecipe } from '@/context/RecipeContext'
 import { useRuns, useRunLogs, useCleanupRun, useDeleteRun } from '@/hooks/use-runs'
 import { useSuites } from '@/hooks/use-suites'
 import { useRunEvents } from '@/hooks/use-events'
+import { formatErrorRate } from '@/lib/format-utils'
 import type { HistoricalRun } from '@/types/suite'
 import type { RouteId } from '@/types/navigation'
 
@@ -450,9 +451,7 @@ export const RunsView: React.FC<RunsViewProps> = ({ onNavigate }) => {
                         {r.metrics?.p95DurationMs !== undefined ? `${r.metrics.p95DurationMs}ms` : '-'}
                       </td>
                       <td className="px-6 py-4 font-mono text-xs text-emerald-600 dark:text-emerald-400">
-                        {r.metrics?.errorRatePct !== undefined
-                          ? `${(r.metrics.errorRatePct * 100).toFixed(2)}%`
-                          : '-'}
+                        {formatErrorRate(r.metrics?.errorRatePct)}
                       </td>
                       <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">

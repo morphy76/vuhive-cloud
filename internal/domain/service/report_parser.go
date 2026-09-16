@@ -241,6 +241,13 @@ func ParseSummaryReport(raw []byte) (*ParsedReport, error) {
 		errorRatePct = (float64(iterationsFailed) / float64(totalIterations)) * 100.0
 	}
 
+	// Ensure errorRatePct is clamped to valid percentage bounds [0.0, 100.0]
+	if errorRatePct < 0 {
+		errorRatePct = 0
+	} else if errorRatePct > 100.0 {
+		errorRatePct = 100.0
+	}
+
 	metrics := model.RunMetrics{
 		TotalIterations: totalIterations,
 		TotalRequests:   totalRequests,

@@ -1201,7 +1201,8 @@
             "type": "number"
           },
           "error_rate_pct": {
-            "example": 0.02,
+            "description": "Percentage of failed HTTP transactions in range [0.0, 100.0] (5xx status or network timeouts, e.g. 2.5 represents 2.5%)",
+            "example": 2.0,
             "format": "double",
             "type": "number"
           },
@@ -1257,8 +1258,8 @@
             "type": "number"
           },
           "error_rate_pct": {
-            "description": "Percentage of failed HTTP transactions (5xx status or network timeouts)",
-            "example": 0.02,
+            "description": "Percentage of failed HTTP transactions in range [0.0, 100.0] (5xx status or network timeouts, e.g. 2.5 represents 2.5%)",
+            "example": 2.0,
             "format": "double",
             "type": "number"
           },

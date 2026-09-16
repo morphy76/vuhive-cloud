@@ -290,7 +290,7 @@ export const FALLBACK_RUNS: HistoricalRun[] = [
       p90DurationMs: 38,
       p95DurationMs: 42,
       p99DurationMs: 58,
-      errorRatePct: 0.01,
+      errorRatePct: 1.0,
     },
   },
   {

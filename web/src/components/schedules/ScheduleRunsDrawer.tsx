@@ -12,6 +12,7 @@ import { Play, CalendarClock, Clock, CheckCircle2, XCircle, Loader2 } from 'luci
 import { useRuns, useTriggerRun } from '@/hooks/use-runs'
 import type { Schedule } from '@/types/schedule'
 import { describeCron } from '@/lib/cron-utils'
+import { formatErrorRate } from '@/lib/format-utils'
 
 export interface ScheduleRunsDrawerProps {
   schedule: Schedule | null
@@ -173,7 +174,7 @@ export const ScheduleRunsDrawer: React.FC<ScheduleRunsDrawerProps> = ({
                           <span>p95: {r.metrics.p95DurationMs}ms</span>
                         )}
                         {r.metrics.errorRatePct !== undefined && (
-                          <span>err: {(r.metrics.errorRatePct * 100).toFixed(1)}%</span>
+                          <span>err: {formatErrorRate(r.metrics.errorRatePct, 1)}</span>
                         )}
                       </div>
                     )}

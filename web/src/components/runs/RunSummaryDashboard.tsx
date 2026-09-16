@@ -25,6 +25,7 @@ import { useSuiteArtifacts } from '@/hooks/use-suites'
 import { VisualAnalyticsSection } from '@/components/charts/VisualAnalyticsSection'
 import { ExecutionLogDialog } from '@/components/dialogs/ExecutionLogDialog'
 import { ReportInspectorDialog } from '@/components/dialogs/ReportInspectorDialog'
+import { formatErrorRate } from '@/lib/format-utils'
 import type { HistoricalRun } from '@/types/suite'
 
 export interface RunSummaryDashboardProps {
@@ -100,12 +101,10 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
   const exitCode = run.exitCode !== undefined ? run.exitCode : (run.status === 'COMPLETED' ? 0 : 1)
   const isSlaPassed = run.slaPassed !== false && exitCode === 0 && run.status === 'COMPLETED'
 
-  // Normalise error rate %
+  // Normalise error rate % [0.0, 100.0]
   const errorRateVal = React.useMemo(() => {
-    if (run.metrics?.errorRatePct === undefined) return 0
-    return run.metrics.errorRatePct <= 1.0 && run.metrics.errorRatePct > 0
-      ? run.metrics.errorRatePct * 100
-      : run.metrics.errorRatePct
+    if (run.metrics?.errorRatePct === undefined || run.metrics?.errorRatePct === null) return 0
+    return Math.min(100.0, Math.max(0.0, run.metrics.errorRatePct))
   }, [run.metrics?.errorRatePct])
 
   const errorSeverity = React.useMemo(() => {
@@ -419,7 +418,7 @@ export const RunSummaryDashboard: React.FC<RunSummaryDashboardProps> = ({
                   : 'text-rose-600 dark:text-rose-400'
               }`}
             >
-              {errorRateVal.toFixed(2)}%
+              {formatErrorRate(errorRateVal)}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-2">
               {errorSeverity === 'normal'

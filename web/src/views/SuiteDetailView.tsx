@@ -42,6 +42,7 @@ import { useToast } from '@/hooks/use-toast'
 import { DeleteSuiteDialog } from '@/components/dialogs/DeleteSuiteDialog'
 import { DeleteArtifactDialog } from '@/components/dialogs/DeleteArtifactDialog'
 import { useBuildEvents } from '@/hooks/use-events'
+import { formatErrorRate } from '@/lib/format-utils'
 import type { TestSuite, SuiteConfiguration, HistoricalRun, CompiledArtifact } from '@/types/suite'
 import { cn } from '@/lib/utils'
 
@@ -926,7 +927,7 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                             <span>P95: {r.metrics.p95DurationMs}ms</span>
                           )}
                           {r.metrics.errorRatePct !== undefined && (
-                            <span>Error: {r.metrics.errorRatePct}%</span>
+                            <span>Error: {formatErrorRate(r.metrics.errorRatePct)}</span>
                           )}
                         </div>
                       )}

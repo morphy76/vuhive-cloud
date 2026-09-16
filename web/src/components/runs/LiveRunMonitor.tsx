@@ -21,6 +21,7 @@ import { ExecutionLogDialog } from '@/components/dialogs/ExecutionLogDialog'
 import { useAbortRun, useCleanupRun } from '@/hooks/use-runs'
 import { useProfile } from '@/hooks/use-profiles'
 import { useRunEvents } from '@/hooks/use-events'
+import { formatErrorRate } from '@/lib/format-utils'
 import type { HistoricalRun, RunExecutionStatus } from '@/types/suite'
 
 export interface LiveRunMonitorProps {
@@ -521,7 +522,7 @@ export const LiveRunMonitor: React.FC<LiveRunMonitorProps> = ({
               <div>
                 <div className="text-[11px] text-slate-400">Error Rate</div>
                 <div className="text-lg font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                  {((run.metrics.errorRatePct ?? 0) * 100).toFixed(2)}%
+                  {formatErrorRate(run.metrics?.errorRatePct)}
                 </div>
               </div>
 
