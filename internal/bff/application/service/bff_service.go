@@ -222,6 +222,7 @@ func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOvervi
 		cpVersion            = ""
 		activeRunsCount      int64
 		suitesCount          int
+		suitesCountQueried   bool
 		recentSuites         []outbound.SuiteSummary
 		profilesSummary      []outbound.ProfileSummary
 		activeSchedulesCount int
@@ -287,6 +288,7 @@ func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOvervi
 		} else {
 			mu.Lock()
 			suitesCount = total
+			suitesCountQueried = true
 			mu.Unlock()
 		}
 	}()
@@ -346,7 +348,7 @@ func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOvervi
 	if recentSuites != nil {
 		overview.RecentSuites = recentSuites
 	}
-	if suitesCount > 0 {
+	if suitesCountQueried {
 		overview.SuitesCount = suitesCount
 	} else {
 		overview.SuitesCount = len(overview.RecentSuites)

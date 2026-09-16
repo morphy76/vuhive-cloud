@@ -44,6 +44,7 @@ export function useCreateSuite() {
       onSuccess: (newSuite) => {
         queryClient.setQueryData<TestSuite[]>(['suites'], (old = []) => [newSuite, ...old])
         queryClient.invalidateQueries({ queryKey: ['suites'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       },
     },
     queryClient
@@ -63,6 +64,7 @@ export function useUpdateSuite(id: string) {
           old.map((s) => (s.id === id ? { ...s, ...updatedSuite } : s))
         )
         queryClient.invalidateQueries({ queryKey: ['suites'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       },
     },
     queryClient
@@ -77,6 +79,7 @@ export function useDeleteSuite() {
       mutationFn: (id: string) => api.deleteSuite(id),
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['suites'] })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       },
     },
     queryClient
