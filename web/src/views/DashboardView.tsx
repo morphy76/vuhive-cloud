@@ -104,10 +104,23 @@ export const DashboardView: React.FC<{ onNavigate?: (route: RouteId) => void }> 
     },
     {
       title: 'SLA Pass Rate',
-      value: dashboard ? `${dashboard.sla_pass_rate.toFixed(1)}%` : isLoading ? '-' : '100.0%',
-      trend: `Across ${dashboard?.total_runs_count ?? 0} runs`,
+      value:
+        dashboard && dashboard.sla_pass_rate != null
+          ? `${dashboard.sla_pass_rate.toFixed(1)}%`
+          : isLoading
+            ? '-'
+            : 'N/A',
+      trend:
+        dashboard && dashboard.sla_pass_rate != null
+          ? `Across ${dashboard.total_runs_count} runs`
+          : isLoading
+            ? 'Loading telemetry...'
+            : 'No completed runs yet',
       icon: CheckCircle2,
-      color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/50',
+      color:
+        dashboard && dashboard.sla_pass_rate != null
+          ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/50'
+          : 'text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400',
       help: 'Percentage of test runs satisfying all latency percentiles (p50, p90, p95, p99) and error rate SLAs.',
     },
   ]

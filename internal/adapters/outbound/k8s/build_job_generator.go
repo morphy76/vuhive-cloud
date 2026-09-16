@@ -75,7 +75,7 @@ func (g *BuildJobGenerator) GenerateBuildJob(opts outbound.BuildJobOptions) (*ba
 	buildScript := fmt.Sprintf(`set -e
 mkdir -p /workspace/src /workspace/bin /workspace/.cache /workspace/go
 echo "Downloading source archive..."
-wget -qO /workspace/source.tar.gz "${SOURCE_URL}"
+http_proxy="" HTTP_PROXY="" wget -Y off -qO /workspace/source.tar.gz "${SOURCE_URL}"
 echo "Extracting source archive..."
 tar -xf /workspace/source.tar.gz -C /workspace/src
 cd /workspace/src

@@ -46,7 +46,7 @@ export interface DashboardData {
   }>
   active_schedules_count: number
   recent_runs: HistoricalRun[]
-  sla_pass_rate: number
+  sla_pass_rate: number | null
   total_runs_count: number
   timestamp: string
 }
@@ -413,7 +413,7 @@ export const api = {
       profiles_summary: res.profiles_summary || [],
       active_schedules_count: res.active_schedules_count ?? 0,
       recent_runs: recentRuns,
-      sla_pass_rate: res.sla_pass_rate ?? 100.0,
+      sla_pass_rate: res.sla_pass_rate ?? null,
       total_runs_count: res.total_runs_count ?? recentRuns.length,
       timestamp: res.timestamp || new Date().toISOString(),
     }

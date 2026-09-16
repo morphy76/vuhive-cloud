@@ -238,6 +238,8 @@ builder:
     # HTTPS_PROXY injected into builder container env.
     httpsProxy: ""
     # NO_PROXY — comma-separated list of hosts/CIDRs that bypass the proxy.
+    # Note: internal S3 source downloads bypass the proxy automatically. However, when using a proxy,
+    # it is recommended to also exempt cluster-local domains: "localhost,127.0.0.1,.svc,.cluster.local".
     noProxy: ""
 
   # GOPROXY — Go module proxy chain injected as the GOPROXY env var.
