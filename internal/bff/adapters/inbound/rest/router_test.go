@@ -230,7 +230,7 @@ func TestRouter_Endpoints(t *testing.T) {
 			RecentRuns: []outbound.RunDetail{
 				{ID: "run-101", Status: "COMPLETED"},
 			},
-			SLAPassRate:    98.5,
+			SLAPassRate:    func() *float64 { v := 98.5; return &v }(),
 			TotalRunsCount: 1,
 			Timestamp:      time.Now().UTC(),
 		}, nil).Once()
@@ -251,8 +251,42 @@ func TestRouter_Endpoints(t *testing.T) {
 		assert.Equal(t, 2, resp.ActiveSchedulesCount)
 		assert.Len(t, resp.RecentRuns, 1)
 		assert.Equal(t, "run-101", resp.RecentRuns[0].ID)
-		assert.Equal(t, 98.5, resp.SLAPassRate)
+		require.NotNil(t, resp.SLAPassRate)
+		assert.Equal(t, 98.5, *resp.SLAPassRate)
 		assert.Equal(t, int64(1), resp.TotalRunsCount)
+		mockSvc.AssertExpectations(t)
+	})
+
+	t.Run("GET /api/bff/v1/dashboard returns null sla_pass_rate when no completed runs exist", func(t *testing.T) {
+		mockSvc := new(MockBFFService)
+		router := rest.SetupRouter(mockSvc, "0.2.0")
+
+		mockSvc.On("GetDashboard", mock.Anything).Return(&inbound.DashboardOverview{
+			BFFStatus:            "UP",
+			BFFVersion:           "0.2.0",
+			ControlPlaneStatus:   "UP",
+			ActiveRunsCount:      0,
+			SuitesCount:          0,
+			RecentSuites:         []outbound.SuiteSummary{},
+			ProfilesCount:        0,
+			ProfilesSummary:      []outbound.ProfileSummary{},
+			ActiveSchedulesCount: 0,
+			RecentRuns:           []outbound.RunDetail{},
+			SLAPassRate:          nil,
+			TotalRunsCount:       0,
+			Timestamp:            time.Now().UTC(),
+		}, nil).Once()
+
+		req, _ := http.NewRequest(http.MethodGet, "/api/bff/v1/dashboard", nil)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var resp rest.DashboardResponse
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Nil(t, resp.SLAPassRate)
+		assert.Contains(t, rec.Body.String(), `"sla_pass_rate":null`)
 		mockSvc.AssertExpectations(t)
 	})
 
