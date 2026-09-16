@@ -44,7 +44,7 @@ type DashboardOverview struct {
 	ProfilesSummary      []outbound.ProfileSummary `json:"profiles_summary"`
 	ActiveSchedulesCount int                       `json:"active_schedules_count"`
 	RecentRuns           []outbound.RunDetail      `json:"recent_runs"`
-	SLAPassRate          float64                   `json:"sla_pass_rate"`
+	SLAPassRate          *float64                  `json:"sla_pass_rate"`
 	TotalRunsCount       int64                     `json:"total_runs_count"`
 	Timestamp            time.Time                 `json:"timestamp"`
 }

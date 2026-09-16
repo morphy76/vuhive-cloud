@@ -2973,6 +2973,8 @@ components:
         sla_pass_rate:
           type: number
           format: double
+          nullable: true
+          description: Overall SLA pass percentage across completed runs. Returns null when zero completed runs exist.
           example: 99.4
         total_runs_count:
           type: integer

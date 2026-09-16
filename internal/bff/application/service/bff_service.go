@@ -204,7 +204,7 @@ func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOvervi
 		ProfilesSummary:      []outbound.ProfileSummary{},
 		ActiveSchedulesCount: 0,
 		RecentRuns:           []outbound.RunDetail{},
-		SLAPassRate:          100.0,
+		SLAPassRate:          nil,
 		TotalRunsCount:       0,
 		Timestamp:            time.Now().UTC(),
 	}
@@ -376,20 +376,24 @@ func (s *BFFService) GetDashboard(ctx context.Context) (*inbound.DashboardOvervi
 			}
 		}
 		if completedCount > 0 {
-			overview.SLAPassRate = (float64(passedCount) / float64(completedCount)) * 100.0
+			rate := (float64(passedCount) / float64(completedCount)) * 100.0
+			overview.SLAPassRate = &rate
 		} else {
-			overview.SLAPassRate = 100.0
+			overview.SLAPassRate = nil
 		}
 	}
 
-	log.Info().
+	eventLog := log.Info().
 		Str("control_plane_status", overview.ControlPlaneStatus).
 		Int64("active_runs", overview.ActiveRunsCount).
 		Int("suites_count", overview.SuitesCount).
 		Int("profiles_count", overview.ProfilesCount).
 		Int("active_schedules", overview.ActiveSchedulesCount).
-		Int("recent_runs_count", len(overview.RecentRuns)).
-		Float64("sla_pass_rate", overview.SLAPassRate).
+		Int("recent_runs_count", len(overview.RecentRuns))
+	if overview.SLAPassRate != nil {
+		eventLog = eventLog.Float64("sla_pass_rate", *overview.SLAPassRate)
+	}
+	eventLog.
 		Dur("duration_ms", time.Since(start)).
 		Msg("completed dashboard composite aggregation")
 
