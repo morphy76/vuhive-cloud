@@ -86,6 +86,9 @@ export function useBuildEvents(
               queryClient.invalidateQueries({
                 queryKey: ['suites'],
               })
+              queryClient.invalidateQueries({
+                queryKey: ['dashboard'],
+              })
             }
           } catch (err) {
             console.warn('Failed parsing build_status_changed SSE payload:', err)
@@ -159,6 +162,9 @@ export function useRunEvents(
                   queryKey: ['suites', data.suite_id, 'runs'],
                 })
               }
+              queryClient.invalidateQueries({
+                queryKey: ['dashboard'],
+              })
             }
           } catch (err) {
             console.warn('Failed parsing run_status_changed SSE payload:', err)
