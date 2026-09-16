@@ -1,7 +1,10 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { axe } from 'vitest-axe'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { DeleteSuiteDialog } from '@/components/dialogs/DeleteSuiteDialog'
+import { useDeleteSuite, useCreateSuite } from '@/hooks/use-suites'
+import { api } from '@/lib/api'
 import type { TestSuite } from '@/types/suite'
 
 const mockDraftSuite: TestSuite = {
@@ -160,5 +163,75 @@ describe('DeleteSuiteDialog', () => {
 
     const results = await axe(container)
     expect(results).toHaveNoViolations()
+  })
+})
+
+describe('useDeleteSuite & useCreateSuite cache invalidation', () => {
+  it('invalidates both suites and dashboard queries upon successful suite deletion', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const deleteSpy = vi.spyOn(api, 'deleteSuite').mockResolvedValue(undefined)
+
+    function TestComponent() {
+      const deleteMutation = useDeleteSuite()
+      return (
+        <button onClick={() => deleteMutation.mutate('suite-to-delete')}>
+          Confirm Delete
+        </button>
+      )
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TestComponent />
+      </QueryClientProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+    await waitFor(() => {
+      expect(deleteSpy).toHaveBeenCalledWith('suite-to-delete')
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['suites'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard'] })
+
+    deleteSpy.mockRestore()
+  })
+
+  it('invalidates dashboard queries upon successful suite creation', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const createSpy = vi.spyOn(api, 'createSuite').mockResolvedValue(mockDraftSuite)
+
+    function TestComponent() {
+      const createMutation = useCreateSuite()
+      return (
+        <button onClick={() => createMutation.mutate({ name: 'New Test Suite' })}>
+          Create Suite
+        </button>
+      )
+    }
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TestComponent />
+      </QueryClientProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /create suite/i }))
+
+    await waitFor(() => {
+      expect(createSpy).toHaveBeenCalledWith({ name: 'New Test Suite' })
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['suites'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dashboard'] })
+
+    createSpy.mockRestore()
   })
 })

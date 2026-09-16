@@ -398,6 +398,28 @@ func TestBFFService_GetDashboard(t *testing.T) {
 		assert.Len(t, dashboard.RecentRuns, 2)
 		assert.Nil(t, dashboard.SLAPassRate, "SLA pass rate must be nil when zero completed runs exist")
 	})
+
+	t.Run("dashboard reports 0 suites when GetTotalSuitesCount returns 0", func(t *testing.T) {
+		mockCP := new(MockControlPlaneClient)
+		mockCache := new(MockCache)
+
+		mockCP.On("CheckHealth", mock.Anything).Return(&outbound.ControlPlaneHealth{Status: "UP"}, nil)
+		mockCP.On("GetVersion", mock.Anything).Return(&outbound.ControlPlaneVersion{Version: "1.0.0"}, nil)
+		mockCP.On("GetActiveRunsCount", mock.Anything).Return(int64(0), nil)
+		mockCP.On("GetTotalSuitesCount", mock.Anything).Return(0, nil)
+		mockCP.On("ListRecentSuites", mock.Anything, 5).Return([]outbound.SuiteSummary{
+			{ID: "suite-old", Name: "Deleted Suite", State: "ACTIVE"},
+		}, nil)
+		mockCP.On("ListProfiles", mock.Anything).Return([]outbound.ProfileSummary{}, nil)
+		mockCP.On("GetActiveSchedulesCount", mock.Anything).Return(0, nil)
+		mockCP.On("ListRuns", mock.Anything, "", 10).Return([]outbound.RunDetail{}, nil)
+
+		svc := service.NewBFFService(mockCP, mockCache, "0.2.0")
+
+		dashboard, err := svc.GetDashboard(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, 0, dashboard.SuitesCount, "SuitesCount must be 0 when GetTotalSuitesCount returns 0")
+	})
 }
 
 func TestBFFService_GetRunDetail(t *testing.T) {
