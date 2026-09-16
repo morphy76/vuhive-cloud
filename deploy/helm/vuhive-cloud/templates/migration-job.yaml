@@ -27,6 +27,13 @@ spec:
       restartPolicy: OnFailure
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.dnsPolicy }}
+      dnsPolicy: {{ . }}
+      {{- end }}
+      {{- $migDnsConfig := include "vuhive-cloud.dnsConfig" (dict "ndots" .Values.ndots "dnsConfig" .Values.dnsConfig) -}}
+      {{- if $migDnsConfig }}
+      {{- $migDnsConfig | nindent 6 }}
+      {{- end }}
       containers:
         - name: migration
           securityContext:

@@ -776,3 +776,139 @@ func TestHelmChart_CustomBuilderAndMigrationResources(t *testing.T) {
 	assert.Equal(t, "512Mi", migLim["memory"])
 }
 
+func TestHelmChart_ControlPlane_DNSConfig(t *testing.T) {
+	getPodSpec := func(t *testing.T, docs []map[string]interface{}, kind, name string) map[string]interface{} {
+		res := findResource(docs, kind, name)
+		require.NotNil(t, res, "%s %s should exist", kind, name)
+		spec := res["spec"].(map[string]interface{})
+		tmpl := spec["template"].(map[string]interface{})
+		return tmpl["spec"].(map[string]interface{})
+	}
+
+	t.Run("default ndots 2 on server, bff, and migration job", func(t *testing.T) {
+		rendered := runHelmTemplate(t)
+		docs := splitManifests(rendered)
+
+		// Server Deployment
+		serverPod := getPodSpec(t, docs, "Deployment", "vuhive-vuhive-cloud")
+		require.NotNil(t, serverPod["dnsConfig"])
+		dnsConfig := serverPod["dnsConfig"].(map[string]interface{})
+		options := dnsConfig["options"].([]interface{})
+		require.Len(t, options, 1)
+		opt := options[0].(map[string]interface{})
+		assert.Equal(t, "ndots", opt["name"])
+		assert.Equal(t, "2", opt["value"])
+
+		// BFF Deployment
+		bffPod := getPodSpec(t, docs, "Deployment", "vuhive-vuhive-cloud-bff")
+		require.NotNil(t, bffPod["dnsConfig"])
+		bffDNS := bffPod["dnsConfig"].(map[string]interface{})
+		bffOptions := bffDNS["options"].([]interface{})
+		require.Len(t, bffOptions, 1)
+		bffOpt := bffOptions[0].(map[string]interface{})
+		assert.Equal(t, "ndots", bffOpt["name"])
+		assert.Equal(t, "2", bffOpt["value"])
+
+		// Migration Job
+		migPod := getPodSpec(t, docs, "Job", "vuhive-vuhive-cloud-migration")
+		require.NotNil(t, migPod["dnsConfig"])
+		migDNS := migPod["dnsConfig"].(map[string]interface{})
+		migOptions := migDNS["options"].([]interface{})
+		require.Len(t, migOptions, 1)
+		migOpt := migOptions[0].(map[string]interface{})
+		assert.Equal(t, "ndots", migOpt["name"])
+		assert.Equal(t, "2", migOpt["value"])
+	})
+
+	t.Run("custom ndots threshold", func(t *testing.T) {
+		rendered := runHelmTemplate(t, "--set", "ndots=3")
+		docs := splitManifests(rendered)
+
+		serverPod := getPodSpec(t, docs, "Deployment", "vuhive-vuhive-cloud")
+		require.NotNil(t, serverPod["dnsConfig"])
+		dnsConfig := serverPod["dnsConfig"].(map[string]interface{})
+		options := dnsConfig["options"].([]interface{})
+		require.Len(t, options, 1)
+		opt := options[0].(map[string]interface{})
+		assert.Equal(t, "ndots", opt["name"])
+		assert.Equal(t, "3", opt["value"])
+	})
+
+	t.Run("custom nameservers and searches preserves ndots", func(t *testing.T) {
+		rendered := runHelmTemplate(t,
+			"--set", "dnsConfig.nameservers[0]=1.1.1.1",
+			"--set", "dnsConfig.nameservers[1]=8.8.8.8",
+			"--set", "dnsConfig.searches[0]=custom.svc.cluster.local",
+		)
+		docs := splitManifests(rendered)
+
+		serverPod := getPodSpec(t, docs, "Deployment", "vuhive-vuhive-cloud")
+		require.NotNil(t, serverPod["dnsConfig"])
+		dnsConfig := serverPod["dnsConfig"].(map[string]interface{})
+		assert.Equal(t, []interface{}{"1.1.1.1", "8.8.8.8"}, dnsConfig["nameservers"])
+		assert.Equal(t, []interface{}{"custom.svc.cluster.local"}, dnsConfig["searches"])
+		options := dnsConfig["options"].([]interface{})
+		require.Len(t, options, 1)
+		opt := options[0].(map[string]interface{})
+		assert.Equal(t, "ndots", opt["name"])
+		assert.Equal(t, "2", opt["value"])
+	})
+
+	t.Run("custom dns options overriding ndots", func(t *testing.T) {
+		rendered := runHelmTemplate(t,
+			"--set", "dnsConfig.options[0].name=ndots",
+			"--set", "dnsConfig.options[0].value=4",
+			"--set", "dnsConfig.options[1].name=timeout",
+			"--set", "dnsConfig.options[1].value=1",
+		)
+		docs := splitManifests(rendered)
+
+		serverPod := getPodSpec(t, docs, "Deployment", "vuhive-vuhive-cloud")
+		require.NotNil(t, serverPod["dnsConfig"])
+		dnsConfig := serverPod["dnsConfig"].(map[string]interface{})
+		options := dnsConfig["options"].([]interface{})
+		require.Len(t, options, 2)
+		opt0 := options[0].(map[string]interface{})
+		assert.Equal(t, "ndots", opt0["name"])
+		assert.Equal(t, "4", opt0["value"])
+		opt1 := options[1].(map[string]interface{})
+		assert.Equal(t, "timeout", opt1["name"])
+		assert.Equal(t, "1", opt1["value"])
+	})
+
+	t.Run("ndots none disables dns config", func(t *testing.T) {
+		rendered := runHelmTemplate(t, "--set", "ndots=none")
+		docs := splitManifests(rendered)
+
+		serverPod := getPodSpec(t, docs, "Deployment", "vuhive-vuhive-cloud")
+		assert.Nil(t, serverPod["dnsConfig"])
+	})
+
+	t.Run("custom dns policy", func(t *testing.T) {
+		rendered := runHelmTemplate(t, "--set", "dnsPolicy=ClusterFirstWithHostNet")
+		docs := splitManifests(rendered)
+
+		serverPod := getPodSpec(t, docs, "Deployment", "vuhive-vuhive-cloud")
+		assert.Equal(t, "ClusterFirstWithHostNet", serverPod["dnsPolicy"])
+	})
+
+	t.Run("bff specific override", func(t *testing.T) {
+		rendered := runHelmTemplate(t,
+			"--set", "ndots=2",
+			"--set", "bff.ndots=4",
+			"--set", "bff.dnsPolicy=ClusterFirstWithHostNet",
+		)
+		docs := splitManifests(rendered)
+
+		serverPod := getPodSpec(t, docs, "Deployment", "vuhive-vuhive-cloud")
+		serverDNS := serverPod["dnsConfig"].(map[string]interface{})
+		assert.Equal(t, "2", serverDNS["options"].([]interface{})[0].(map[string]interface{})["value"])
+		assert.Nil(t, serverPod["dnsPolicy"])
+
+		bffPod := getPodSpec(t, docs, "Deployment", "vuhive-vuhive-cloud-bff")
+		bffDNS := bffPod["dnsConfig"].(map[string]interface{})
+		assert.Equal(t, "4", bffDNS["options"].([]interface{})[0].(map[string]interface{})["value"])
+		assert.Equal(t, "ClusterFirstWithHostNet", bffPod["dnsPolicy"])
+	})
+}
+

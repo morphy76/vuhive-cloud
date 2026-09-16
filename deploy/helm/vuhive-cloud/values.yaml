@@ -47,6 +47,26 @@ securityContext:
     drop:
       - ALL
 
+# DNS ndots threshold for control plane pods to prevent 5-dot DNS search leaks (Issue #223).
+# Default is "2" so that cross-namespace services (*.svc.cluster.local) and external targets
+# resolve directly as absolute domains on the first query without upstream search domain hijacking.
+ndots: "2"
+
+# DNS policy for control plane pods. Leave empty to use the cluster default (ClusterFirst).
+# Set to "None" when providing custom nameservers via dnsConfig below.
+dnsPolicy: ""
+
+# Custom DNS configuration applied to control plane pods.
+# If options are omitted or do not specify ndots, the ndots value above is automatically injected.
+dnsConfig: {}
+#   nameservers:
+#     - 8.8.8.8
+#   searches:
+#     - corp.internal
+#   options:
+#     - name: ndots
+#       value: "2"
+
 service:
   type: ClusterIP
   port: 8080
@@ -423,6 +443,12 @@ bff:
   affinity: {}
   extraEnv: []
   extraEnvFrom: []
+  # DNS ndots threshold for BFF pods (defaults to root ndots "2")
+  ndots: ""
+  # DNS policy for BFF pods. Leave empty to use root dnsPolicy / cluster default.
+  dnsPolicy: ""
+  # Custom DNS configuration applied to BFF pods
+  dnsConfig: {}
 
 
 

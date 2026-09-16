@@ -32,7 +32,7 @@ Project roadmaps, epics, and implementation tasks are tracked directly via the [
 ### 5. Automated KPI Indexing, Analytics & Retention
 - 📊 **Deterministic KPI Parsing & PostgreSQL Indexing**: Automatically digests execution reports (`summary.json`), indexing latency percentiles ($p_{50}$, $p_{90}$, $p_{95}$, $p_{99}$), throughput (TPS), error rates, and SLA pass/fail compliance directly into PostgreSQL for historical regression analysis.
 - 📦 **Pluggable Object Storage Retention**: Integrates seamlessly with AWS S3 or MinIO for durable storage and presigned download URL generation for raw execution logs (`run.log`), full summary reports (`summary.json`), and compiled scenario binaries.
-- 🔄 **Resilient Runner Telemetry & DNS Optimization**: Injected runner wrapper reliably posts completion telemetry to `/api/v1/runs/complete` (resolving ad-hoc UUIDs or CronJob names); runner pod templates inject custom `dnsConfig` (`ndots: "2"`) to immediately resolve cross-namespace and external test endpoints without 5-dot upstream search leaks.
+- 🔄 **Resilient Telemetry & DNS Optimization**: Injected runner wrapper reliably posts completion telemetry to `/api/v1/runs/complete` (resolving ad-hoc UUIDs or CronJob names); control plane, runner, and BFF pod templates inject custom `dnsConfig` (`ndots: "2"`) to immediately resolve cross-namespace and external test endpoints without 5-dot upstream search leaks.
 
 ### 6. Developer Experience: Web Dashboard, Go BFF & CLI
 - 🌐 **Modern React 19 PWA Web Dashboard**: Progressive Web App frontend (`web/`) with dark/light themes, offline query cache persistence via IndexedDB, and live status updates, packaged with zero overhead into the Go BFF via Go `embed.FS`.
