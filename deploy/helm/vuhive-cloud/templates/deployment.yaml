@@ -33,6 +33,13 @@ spec:
       serviceAccountName: {{ include "vuhive-cloud.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.dnsPolicy }}
+      dnsPolicy: {{ . }}
+      {{- end }}
+      {{- $dnsConfig := include "vuhive-cloud.dnsConfig" (dict "ndots" .Values.ndots "dnsConfig" .Values.dnsConfig) -}}
+      {{- if $dnsConfig }}
+      {{- $dnsConfig | nindent 6 }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:

@@ -127,3 +127,50 @@ Construct the BFF upstream control plane URL.
 {{- printf "http://%s:%d" (include "vuhive-cloud.fullname" .) (.Values.service.port | int) }}
 {{- end }}
 {{- end }}
+
+{{/*
+Render Pod dnsConfig.
+Defaults to options: [ndots: "2"] unless explicitly disabled (ndots == "none" or empty)
+or overridden in dnsConfig.
+Accepts a dictionary with:
+  - ndots: string (e.g. "2", "3", "none")
+  - dnsConfig: dict (with optional nameservers, searches, options)
+*/}}
+{{- define "vuhive-cloud.dnsConfig" -}}
+{{- $ndots := (default "2" .ndots) | toString | trim -}}
+{{- $dnsConfig := default (dict) .dnsConfig -}}
+{{- $hasCustomConfig := or $dnsConfig.nameservers $dnsConfig.searches $dnsConfig.options -}}
+{{- if or $hasCustomConfig (and (ne $ndots "none") (ne $ndots "")) -}}
+dnsConfig:
+{{- if $dnsConfig.nameservers }}
+  nameservers:
+    {{- toYaml $dnsConfig.nameservers | nindent 4 }}
+{{- end }}
+{{- if $dnsConfig.searches }}
+  searches:
+    {{- toYaml $dnsConfig.searches | nindent 4 }}
+{{- end }}
+{{- $hasNdots := false }}
+{{- if $dnsConfig.options }}
+  options:
+  {{- range $dnsConfig.options }}
+    {{- if eq .name "ndots" }}
+      {{- $hasNdots = true }}
+    {{- end }}
+    - name: {{ .name }}
+      {{- if hasKey . "value" }}
+      {{- if ne .value nil }}
+      value: {{ .value | toString | quote }}
+      {{- end }}
+      {{- end }}
+  {{- end }}
+{{- end }}
+{{- if and (not $hasNdots) (ne $ndots "none") (ne $ndots "") }}
+  {{- if not $dnsConfig.options }}
+  options:
+  {{- end }}
+    - name: ndots
+      value: {{ $ndots | quote }}
+{{- end }}
+{{- end }}
+{{- end }}

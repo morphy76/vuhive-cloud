@@ -31,6 +31,13 @@ spec:
       serviceAccountName: {{ include "vuhive-cloud.serviceAccountName" . }}
       securityContext:
         {{- toYaml (default .Values.podSecurityContext .Values.bff.podSecurityContext) | nindent 8 }}
+      {{- with (default .Values.dnsPolicy (default (dict) .Values.bff).dnsPolicy) }}
+      dnsPolicy: {{ . }}
+      {{- end }}
+      {{- $bffDnsConfig := include "vuhive-cloud.dnsConfig" (dict "ndots" (default .Values.ndots (default (dict) .Values.bff).ndots) "dnsConfig" (default .Values.dnsConfig (default (dict) .Values.bff).dnsConfig)) -}}
+      {{- if $bffDnsConfig }}
+      {{- $bffDnsConfig | nindent 6 }}
+      {{- end }}
       containers:
         - name: bff
           securityContext:

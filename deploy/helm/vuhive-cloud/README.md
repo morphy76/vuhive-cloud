@@ -615,14 +615,15 @@ helm install vuhive deploy/helm/vuhive-cloud \
 
 In this case no extra namespaces are created and no cross-namespace RBAC is needed. Furthermore, `apiCallbackUrl` automatically resolves to the unqualified service name `http://<fullname>:<port>/api/v1/runs/complete`.
 
-### Runner Completion Callbacks and DNS Search Domain Mitigation
+### DNS Search Domain Mitigation & ndots Optimization (Control Plane & Runners)
 
-Runner containers upload execution artifacts (`run.log` and `summary.json`) to S3 and post completion telemetry to the control plane callback endpoint (`POST /api/v1/runs/complete`).
+Runner containers upload execution artifacts (`run.log` and `summary.json`) to S3 and post completion telemetry to the control plane callback endpoint (`POST /api/v1/runs/complete`). Similarly, the control plane and BFF connect to PostgreSQL, S3/MinIO, and Keycloak infrastructure.
 
-To ensure callback requests succeed across different Kubernetes network setups:
+To ensure DNS resolution succeeds without upstream latency or captive DNS sinkhole loops:
 - **Same Namespace (`runner.namespace == Release.Namespace`)**: The chart automatically configures `apiCallbackUrl` as `http://<fullname>:<port>/api/v1/runs/complete`. With 0 dots, standard Kubernetes pods resolve the service name directly via the local namespace search domain without traversing upstream search lists.
 - **Cross-Namespace (`runner.namespace != Release.Namespace`)**: Standard Kubernetes pods have `ndots:5` in `/etc/resolv.conf`. Because `<service>.<namespace>.svc.cluster.local` has 4 dots, standard resolvers query host/DHCP upstream search domains first, which can cause connection failures if upstream wildcard DNS returns `127.0.0.1`. The chart mitigates this by generating a fully qualified domain name with a **trailing dot** (`http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete`), bypassing search lists and directing the query straight to CoreDNS.
 - **Runner Pod `dnsConfig` Optimization (`ndots: "2"`)**: Runner pods (both ad-hoc Jobs and scheduled CronJobs) are automatically configured with `dnsConfig.options: [{name: "ndots", value: "2"}]` (Issue #217). Any domain name with 2 or more dots (such as cross-namespace `*.svc.cluster.local` with 4 dots, or external targets like `api.example.com` with 2 dots) is treated as an absolute domain on the very first query, completely bypassing failing upstream search domain queries. Single-label names (`minio`) and two-label names (`minio.vuhive-system`) retain cluster search domain expansion.
+- **Control Plane & BFF Pod `dnsConfig` Optimization (`ndots: "2"`)**: Control plane pods (`Deployment`), BFF pods (`Deployment`), and database migration hook jobs (`Job`) are automatically rendered with `dnsConfig.options: [{name: "ndots", value: "2"}]` (Issue #223). Cross-namespace infrastructure endpoints (e.g. `vuhive-infra-minio.vuhive-system.svc.cluster.local` or `vuhive-infra-postgresql.vuhive-system.svc.cluster.local`) and external endpoints resolve directly as absolute domains on the first attempt without leaking to host/DHCP search domains or triggering captive portal DNS sinkholes.
 - **Custom Override**: You can override `apiCallbackUrl` explicitly with `--set apiCallbackUrl=...` if you route runner callbacks through custom gateways or ingresses.
 
 ### Ad-Hoc Test Run Dispatching
@@ -856,6 +857,9 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `readinessProbe.periodSeconds` | Readiness probe poll frequency | `2` |
 | `readinessProbe.timeoutSeconds` | Readiness probe request timeout | `5` |
 | `readinessProbe.failureThreshold` | Readiness probe failure threshold | `2` |
+| `ndots` | DNS ndots threshold for control plane pods to prevent 5-dot upstream search leaks | `"2"` |
+| `dnsPolicy` | DNS policy applied to control plane pods (`ClusterFirst`, `Default`, `None`, etc.). Empty preserves cluster default. | `""` |
+| `dnsConfig` | Custom DNS configuration (`nameservers`, `searches`, `options`) applied to control plane pods | `{}` |
 | `database.host` | PostgreSQL host | `vuhive-infra-postgresql` |
 | `database.port` | PostgreSQL port | `5432` |
 | `database.name` | PostgreSQL database name | `vuhive` |
@@ -956,6 +960,9 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `bff.readinessProbe.failureThreshold` | BFF readiness probe failure threshold | `2` |
 | `bff.controlPlaneUrl` | Upstream control plane URL override (defaults to `http://<fullname>:8080`) | `""` |
 | `bff.controlPlaneToken` | Bearer token for control plane if required | `""` |
+| `bff.ndots` | DNS ndots threshold for BFF pods (defaults to root `ndots` `"2"`) | `""` |
+| `bff.dnsPolicy` | DNS policy applied to BFF pods. Empty preserves cluster default. | `""` |
+| `bff.dnsConfig` | Custom DNS configuration applied to BFF pods | `{}` |
 | `bff.ssePollInterval` | Polling frequency for upstream run/build status transitions | `2s` |
 | `bff.keycloak.baseUrl` | Base Keycloak root URL (e.g. `https://auth.example.com`) | `""` |
 | `bff.keycloak.realm` | Keycloak realm name | `vuhive` |

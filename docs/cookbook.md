@@ -727,6 +727,7 @@ In Kubernetes environments:
 - When runners share the control plane namespace, `API_CALLBACK_URL` defaults to the unqualified service name `http://<fullname>:<port>/api/v1/runs/complete`, avoiding DNS search domain overhead.
 - When runners execute in a separate namespace (e.g., `vuhive-runners`), `API_CALLBACK_URL` defaults to the absolute FQDN with a trailing dot: `http://<fullname>.<namespace>.svc.cluster.local.:<port>/api/v1/runs/complete`. This trailing dot prevents standard Linux `/etc/resolv.conf` `ndots:5` lookups from leaking to external upstream DHCP search domains before reaching CoreDNS.
 - In addition, all generated runner pods and CronJobs configure custom `dnsConfig` with `ndots: "2"` (Issue #217). Any name containing 2 or more dots (including `*.svc.cluster.local` and external targets) is resolved as an absolute domain on the very first query, eliminating DNS search path iteration delays and local captive DNS sinkholes.
+- Similarly, control plane pods, BFF pods, and database migration hook jobs configure custom `dnsConfig` with `ndots: "2"` (Issue #223). Cross-namespace infrastructure dependencies (such as `vuhive-infra-minio.vuhive-system.svc.cluster.local:9000` or `vuhive-infra-postgresql.vuhive-system.svc.cluster.local:5432`) resolve directly on the first query without requiring manual trailing dots or risking captive portal DHCP resolution loops.
 
 #### Triggering Callback via POST /api/v1/runs/complete:
 
