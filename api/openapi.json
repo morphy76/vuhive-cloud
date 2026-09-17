@@ -5091,16 +5091,8 @@
   ],
   "servers": [
     {
-      "description": "Local port-forwarded control plane",
-      "url": "http://localhost:8080"
-    },
-    {
-      "description": "Local Backend-For-Frontend (BFF) service",
-      "url": "http://localhost:8081"
-    },
-    {
-      "description": "In-cluster Kubernetes service",
-      "url": "http://vuhive-cloud.vuhive-system.svc.cluster.local:8080"
+      "description": "vuhive-cloud Control Plane REST API (relative to current origin)",
+      "url": "/"
     }
   ]
 }

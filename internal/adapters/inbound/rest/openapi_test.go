@@ -35,6 +35,16 @@ func TestOpenAPI_Endpoints(t *testing.T) {
 		assert.Equal(t, "3.1.0", doc["openapi"])
 		assert.NotNil(t, doc["info"])
 		assert.NotNil(t, doc["paths"])
+
+		// Issue #239: OpenAPI must export strictly one server with relative URL "/"
+		serversRaw, ok := doc["servers"]
+		require.True(t, ok, "servers must be present in OpenAPI YAML")
+		servers, ok := serversRaw.([]interface{})
+		require.True(t, ok, "servers must be a slice")
+		require.Len(t, servers, 1, "OpenAPI spec must export strictly one server")
+		server0, ok := servers[0].(map[string]interface{})
+		require.True(t, ok, "server entry must be a map")
+		assert.Equal(t, "/", server0["url"], "server URL must be relative / to match document origin")
 	})
 
 	t.Run("GET /api/openapi.json returns HTTP 200 with application/json and valid OpenAPI 3.1", func(t *testing.T) {
@@ -51,6 +61,16 @@ func TestOpenAPI_Endpoints(t *testing.T) {
 		assert.Equal(t, "3.1.0", doc["openapi"])
 		assert.NotNil(t, doc["info"])
 		assert.NotNil(t, doc["paths"])
+
+		// Issue #239: OpenAPI must export strictly one server with relative URL "/"
+		serversRaw, ok := doc["servers"]
+		require.True(t, ok, "servers must be present in OpenAPI JSON")
+		servers, ok := serversRaw.([]interface{})
+		require.True(t, ok, "servers must be a slice")
+		require.Len(t, servers, 1, "OpenAPI spec must export strictly one server")
+		server0, ok := servers[0].(map[string]interface{})
+		require.True(t, ok, "server entry must be a map")
+		assert.Equal(t, "/", server0["url"], "server URL must be relative / to match document origin")
 	})
 
 	t.Run("GET /api/version returns HTTP 200 with VersionResponse", func(t *testing.T) {
