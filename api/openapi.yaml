@@ -11,12 +11,8 @@ info:
     interact with the API across different domains and ports.
   version: 0.0.1
 servers:
-  - url: http://localhost:8080
-    description: Local port-forwarded control plane
-  - url: http://localhost:8081
-    description: Local Backend-For-Frontend (BFF) service
-  - url: http://vuhive-cloud.vuhive-system.svc.cluster.local:8080
-    description: In-cluster Kubernetes service
+  - url: /
+    description: vuhive-cloud Control Plane REST API (relative to current origin)
 
 security:
   - BearerAuth: []
