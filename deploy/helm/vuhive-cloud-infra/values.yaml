@@ -76,6 +76,10 @@ openapiViewer:
   #   - Ingress / Reverse Proxy: When Swagger UI and the control plane are exposed behind an Ingress
   #     controller under the same hostname, configure a relative path:
   #       specUrl: "/api/openapi.json"
+  #
+  # Note: The OpenAPI 3.1 specification exports a single relative server URL (`url: /`), so interactive
+  # API requests executed from Swagger UI are automatically dispatched against the same origin FQDN
+  # from which the specification was fetched.
   specUrl: "http://vuhive-vuhive-cloud:8080/api/openapi.json"
   resources:
     requests:

@@ -69,6 +69,8 @@ The OpenAPI viewer runs with its own dedicated context root defaulting to `/docs
 > - **In-Cluster Default (`http://vuhive-vuhive-cloud:8080/api/openapi.json`)**: Resolves only inside the Kubernetes pod network. Desktop browsers accessing Swagger UI externally cannot resolve Kubernetes internal DNS names (`vuhive-vuhive-cloud`), causing `ERR_NAME_NOT_RESOLVED`.
 > - **Local Development via `kubectl port-forward`**: Configure `specUrl: "http://localhost:8080/api/openapi.json"` (as shown above) and port-forward both the viewer and the control plane to your local machine.
 > - **Ingress / Shared Domain**: When exposing Swagger UI and the control plane under the same ingress hostname, configure a relative path (e.g., `--set openapiViewer.specUrl="/api/openapi.json"`).
+>
+> The OpenAPI 3.1 specification exports a single relative server URL (`url: /`). When Swagger UI executes API requests ("Try it out"), calls are resolved relative to the origin host from which the specification was loaded, preventing issues with unreachable cluster-internal hostnames.
 
 #### Accessing Swagger UI via Port-Forwarding
 
