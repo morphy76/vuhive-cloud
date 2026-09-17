@@ -21,6 +21,7 @@ type RouterConfig struct {
 	HousekeepingUC inbound.HousekeepingUseCase
 	SuitesUC       inbound.SuitesUseCase
 	ConfigsUC      inbound.ConfigsUseCase
+	SecretsUC      inbound.SecretsUseCase
 	TokenVerifier  outbound.TokenVerifierPort
 }
 
@@ -147,7 +148,7 @@ func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 		v1.Use(AuthMiddleware(cfg.TokenVerifier, false))
 	}
 	{
-		if cfg.SuitesUC != nil || cfg.ConfigsUC != nil || cfg.BuildsUC != nil {
+		if cfg.SuitesUC != nil || cfg.ConfigsUC != nil || cfg.BuildsUC != nil || cfg.SecretsUC != nil {
 			suites := v1.Group("/suites")
 			{
 				if cfg.SuitesUC != nil {
@@ -166,6 +167,14 @@ func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 					suites.GET("/:id/configs/:configId", roleGuard(model.RoleViewer), configHandler.GetConfig)
 					suites.PUT("/:id/configs/:configId", roleGuard(model.RoleDeveloper, model.RoleAdmin), configHandler.UpdateConfig)
 					suites.DELETE("/:id/configs/:configId", roleGuard(model.RoleDeveloper, model.RoleAdmin), configHandler.DeleteConfig)
+				}
+
+				if cfg.SecretsUC != nil {
+					secretHandler := NewSecretHandler(cfg.SecretsUC)
+					suites.POST("/:id/secrets", roleGuard(model.RoleDeveloper, model.RoleAdmin), secretHandler.CreateSecret)
+					suites.GET("/:id/secrets", roleGuard(model.RoleDeveloper, model.RoleAdmin), secretHandler.ListSecrets)
+					suites.PUT("/:id/secrets/:secretId", roleGuard(model.RoleDeveloper, model.RoleAdmin), secretHandler.UpdateSecret)
+					suites.DELETE("/:id/secrets/:secretId", roleGuard(model.RoleDeveloper, model.RoleAdmin), secretHandler.DeleteSecret)
 				}
 
 				if cfg.BuildsUC != nil {

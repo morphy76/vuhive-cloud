@@ -119,5 +119,11 @@ var (
 
 	// ErrUnsupportedGoVersion indicates a Go version older than 1.26 or invalid.
 	ErrUnsupportedGoVersion = errors.New("unsupported go version: vuhive requires Go >= 1.26")
+
+	// ErrInvalidSecretKey indicates a secret key does not match the required naming convention.
+	ErrInvalidSecretKey = errors.New("invalid secret key: must be uppercase letters, digits, and underscores, starting with a letter")
+
+	// ErrMissingSecret indicates a configuration template references secrets that do not exist.
+	ErrMissingSecret = errors.New("configuration references missing secrets")
 )
 

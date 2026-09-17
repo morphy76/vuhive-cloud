@@ -83,6 +83,13 @@ spec:
                   name: {{ default (include "vuhive-cloud.fullname" .) (default (dict) .Values.auth.runner).existingSecret }}
                   key: {{ default "RUNNER_CLIENT_SECRET" (default (dict) .Values.auth.runner).existingSecretKey }}
             {{- end }}
+            {{- if or (default (dict) .Values.secrets).encryptionKey (default (dict) .Values.secrets).existingSecret }}
+            - name: SECRETS_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "vuhive-cloud.fullname" .) (default (dict) .Values.secrets).existingSecret }}
+                  key: {{ default "SECRETS_ENCRYPTION_KEY" (default (dict) .Values.secrets).existingSecretKey }}
+            {{- end }}
             {{- if and .Values.resources .Values.resources.limits .Values.resources.limits.memory }}
             - name: GOMEMLIMIT
               valueFrom:

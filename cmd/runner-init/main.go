@@ -19,6 +19,7 @@ import (
 func main() {
 	showVersion := flag.Bool("version", false, "Print version information and exit")
 	sharedDirFlag := flag.String("shared-dir", "", "Path to shared emptyDir directory (defaults to SHARED_DIR or /shared)")
+	secretsDirFlag := flag.String("secrets-dir", "", "Path to secrets directory (defaults to SECRETS_DIR or /etc/vuhive/secrets)")
 	binaryKeyFlag := flag.String("binary-key", "", "S3 key for target runner binary (defaults to S3_BINARY_KEY)")
 	configKeyFlag := flag.String("config-key", "", "S3 key for target vuhive.yaml (defaults to S3_CONFIG_KEY)")
 	wrapperSrcFlag := flag.String("wrapper-src", "", "Source path for runner-wrapper to copy to shared directory")
@@ -49,6 +50,14 @@ func main() {
 	}
 	if sharedDir == "" {
 		sharedDir = runner.DefaultSharedDir
+	}
+
+	secretsDir := *secretsDirFlag
+	if secretsDir == "" {
+		secretsDir = os.Getenv("SECRETS_DIR")
+	}
+	if secretsDir == "" {
+		secretsDir = runner.DefaultSecretsDir
 	}
 
 	binaryKey := *binaryKeyFlag
@@ -112,6 +121,7 @@ func main() {
 
 	initCfg := runner.InitConfig{
 		SharedDir:            sharedDir,
+		SecretsDir:           secretsDir,
 		BinaryKey:            strings.TrimSpace(binaryKey),
 		ConfigKey:            strings.TrimSpace(configKey),
 		WrapperSourcePath:    wrapperSrc,

@@ -111,3 +111,54 @@ func TestWrapperConfig_APICallbackURLNormalization(t *testing.T) {
 		})
 	}
 }
+
+func TestInitConfig_Validate(t *testing.T) {
+	t.Run("defaults secrets dir when empty", func(t *testing.T) {
+		cfg := runner.InitConfig{
+			BinaryKey: "artifacts/runner",
+		}
+		err := cfg.Validate()
+		require.NoError(t, err)
+		assert.Equal(t, runner.DefaultSharedDir, cfg.SharedDir)
+		assert.Equal(t, "/etc/vuhive/secrets", cfg.SecretsDir)
+	})
+
+	t.Run("preserves and trims custom secrets dir", func(t *testing.T) {
+		cfg := runner.InitConfig{
+			BinaryKey:  "artifacts/runner",
+			SecretsDir: "  /custom/secrets/path  ",
+		}
+		err := cfg.Validate()
+		require.NoError(t, err)
+		assert.Equal(t, "/custom/secrets/path", cfg.SecretsDir)
+	})
+
+	t.Run("fails when binary key is empty", func(t *testing.T) {
+		cfg := runner.InitConfig{
+			BinaryKey: "",
+		}
+		err := cfg.Validate()
+		require.Error(t, err)
+	})
+}
+
+func TestWrapperConfig_SecretsDir(t *testing.T) {
+	t.Run("defaults secrets dir when empty", func(t *testing.T) {
+		cfg := runner.WrapperConfig{
+			RunID: "run-1",
+		}
+		err := cfg.Validate()
+		require.NoError(t, err)
+		assert.Equal(t, runner.DefaultSecretsDir, cfg.SecretsDir)
+	})
+
+	t.Run("preserves and trims custom secrets dir", func(t *testing.T) {
+		cfg := runner.WrapperConfig{
+			RunID:      "run-1",
+			SecretsDir: "  /custom/runner/secrets  ",
+		}
+		err := cfg.Validate()
+		require.NoError(t, err)
+		assert.Equal(t, "/custom/runner/secrets", cfg.SecretsDir)
+	})
+}

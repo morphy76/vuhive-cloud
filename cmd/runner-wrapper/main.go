@@ -23,6 +23,7 @@ func main() {
 	configPathFlag := flag.String("config-path", "", "Path to vuhive.yaml (defaults to CONFIG_PATH or /shared/vuhive.yaml)")
 	summaryPathFlag := flag.String("summary-path", "", "Path to summary.json (defaults to SUMMARY_PATH or /shared/summary.json)")
 	logPathFlag := flag.String("log-path", "", "Path to run.log (defaults to LOG_PATH or /shared/run.log)")
+	secretsDirFlag := flag.String("secrets-dir", "", "Path to secrets directory (defaults to SECRETS_DIR or /etc/vuhive/secrets)")
 	runIDFlag := flag.String("run-id", "", "Test run UUID (defaults to VUHIVE_RUN_ID or RUN_ID)")
 	reportKeyFlag := flag.String("report-key", "", "S3 key to upload summary.json (defaults to S3_REPORT_KEY)")
 	logsKeyFlag := flag.String("logs-key", "", "S3 key to upload run.log (defaults to S3_LOGS_KEY)")
@@ -79,6 +80,14 @@ func main() {
 	}
 	if logPath == "" {
 		logPath = runner.DefaultLogPath
+	}
+
+	secretsDir := *secretsDirFlag
+	if secretsDir == "" {
+		secretsDir = os.Getenv("SECRETS_DIR")
+	}
+	if secretsDir == "" {
+		secretsDir = runner.DefaultSecretsDir
 	}
 
 	runID := *runIDFlag
@@ -208,6 +217,7 @@ func main() {
 		ConfigPath:     strings.TrimSpace(configPath),
 		SummaryPath:    strings.TrimSpace(summaryPath),
 		LogPath:        strings.TrimSpace(logPath),
+		SecretsDir:     strings.TrimSpace(secretsDir),
 		RunID:          strings.TrimSpace(runID),
 		ReportKey:      strings.TrimSpace(reportKey),
 		LogsKey:        strings.TrimSpace(logsKey),

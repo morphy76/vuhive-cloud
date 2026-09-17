@@ -451,6 +451,37 @@ func (g *RunnerJobGenerator) GenerateJob(
 			},
 		},
 	}
+	// Mount ephemeral K8s Secret volume into init container for ${secrets.*} resolution
+	if opts.SecretRef != "" {
+		secretVolume := corev1.Volume{
+			Name: "vuhive-secrets",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: opts.SecretRef,
+					Optional:   func() *bool { b := true; return &b }(),
+				},
+			},
+		}
+		job.Spec.Template.Spec.Volumes = append(job.Spec.Template.Spec.Volumes, secretVolume)
+
+		secretMount := corev1.VolumeMount{
+			Name:      "vuhive-secrets",
+			MountPath: "/etc/vuhive/secrets",
+			ReadOnly:  true,
+		}
+		// Add to init container
+		if len(job.Spec.Template.Spec.InitContainers) > 0 {
+			job.Spec.Template.Spec.InitContainers[0].VolumeMounts = append(
+				job.Spec.Template.Spec.InitContainers[0].VolumeMounts, secretMount,
+			)
+		}
+		// Add to runner container for runner-wrapper log masking
+		if len(job.Spec.Template.Spec.Containers) > 0 {
+			job.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+				job.Spec.Template.Spec.Containers[0].VolumeMounts, secretMount,
+			)
+		}
+	}
 
 	return job, nil
 }

@@ -394,6 +394,90 @@ exit 0
 	assert.Equal(t, 1, exitCode)
 }
 
+func TestRunnerWrapper_LogMasking(t *testing.T) {
+	tempDir := t.TempDir()
+	runnerPath := filepath.Join(tempDir, "runner")
+	summaryPath := filepath.Join(tempDir, "summary.json")
+	logPath := filepath.Join(tempDir, "run.log")
+	secretsDir := filepath.Join(tempDir, "secrets")
+	require.NoError(t, os.MkdirAll(secretsDir, 0755))
+
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "API_TOKEN"), []byte("tok-secret-abc-123"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "DB_PASS"), []byte("db-pass-xyz-987"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "..data"), []byte("ignored"), 0644))
+	require.NoError(t, os.MkdirAll(filepath.Join(secretsDir, "subdir"), 0755))
+
+	script := fmt.Sprintf(`#!/bin/sh
+echo "Connecting with API_TOKEN=tok-secret-abc-123 to database"
+echo "Database password DB_PASS=db-pass-xyz-987 verified" >&2
+echo '{"status":"PASS","iterations":10}' > "%s"
+exit 0
+`, summaryPath)
+	require.NoError(t, os.WriteFile(runnerPath, []byte(script), 0755))
+
+	var mu sync.Mutex
+	uploads := make(map[string]uploadedFile)
+	mockStorage := &mockStoragePort{
+		uploadFunc: func(ctx context.Context, key string, content io.Reader, size int64, contentType string) error {
+			data, err := io.ReadAll(content)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			uploads[key] = uploadedFile{
+				key:         key,
+				content:     data,
+				size:        size,
+				contentType: contentType,
+			}
+			mu.Unlock()
+			return nil
+		},
+	}
+
+	wrapper := runner.NewRunnerWrapper(mockStorage)
+	var stdoutBuf, stderrBuf bytes.Buffer
+	wrapper.SetOutputs(&stdoutBuf, &stderrBuf)
+
+	cfg := runner.WrapperConfig{
+		RunnerPath:  runnerPath,
+		SummaryPath: summaryPath,
+		LogPath:     logPath,
+		SecretsDir:  secretsDir,
+		ReportKey:   "runs/run-mask/summary.json",
+		LogsKey:     "runs/run-mask/run.log",
+	}
+
+	exitCode, err := wrapper.Run(context.Background(), cfg, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 0, exitCode)
+
+	stdoutStr := stdoutBuf.String()
+	assert.NotContains(t, stdoutStr, "tok-secret-abc-123")
+	assert.Contains(t, stdoutStr, "Connecting with API_TOKEN=[REDACTED] to database")
+
+	stderrStr := stderrBuf.String()
+	assert.NotContains(t, stderrStr, "db-pass-xyz-987")
+	assert.Contains(t, stderrStr, "Database password DB_PASS=[REDACTED] verified")
+
+	diskLog, err := os.ReadFile(logPath)
+	require.NoError(t, err)
+	diskLogStr := string(diskLog)
+	assert.NotContains(t, diskLogStr, "tok-secret-abc-123")
+	assert.NotContains(t, diskLogStr, "db-pass-xyz-987")
+	assert.Contains(t, diskLogStr, "[REDACTED]")
+
+	mu.Lock()
+	uploadedLog, ok := uploads["runs/run-mask/run.log"]
+	mu.Unlock()
+	require.True(t, ok)
+	uploadedLogStr := string(uploadedLog.content)
+	assert.NotContains(t, uploadedLogStr, "tok-secret-abc-123")
+	assert.NotContains(t, uploadedLogStr, "db-pass-xyz-987")
+	assert.Contains(t, uploadedLogStr, "Connecting with API_TOKEN=[REDACTED] to database")
+	assert.Contains(t, uploadedLogStr, "Database password DB_PASS=[REDACTED] verified")
+}
+
 type mockHTTPClient struct {
 	doFunc func(req *http.Request) (*http.Response, error)
 }

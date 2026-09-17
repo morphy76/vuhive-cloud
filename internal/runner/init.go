@@ -6,9 +6,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
+	"github.com/morphy76/vuhive-cloud/internal/domain/service"
 	"github.com/rs/zerolog"
 )
 
@@ -31,6 +33,7 @@ func (r *RunnerInitializer) Init(ctx context.Context, cfg InitConfig) error {
 		Str("component", "runner-init").
 		Str("op", "RunnerInitializer.Init").
 		Str("shared_dir", cfg.SharedDir).
+		Str("secrets_dir", cfg.SecretsDir).
 		Str("binary_key", cfg.BinaryKey).
 		Str("config_key", cfg.ConfigKey).
 		Logger()
@@ -55,8 +58,8 @@ func (r *RunnerInitializer) Init(ctx context.Context, cfg InitConfig) error {
 	}
 
 	// 2. Download configuration YAML if specified
+	configDstPath := filepath.Join(cfg.SharedDir, "vuhive.yaml")
 	if cfg.ConfigKey != "" {
-		configDstPath := filepath.Join(cfg.SharedDir, "vuhive.yaml")
 		log.Debug().Str("destination", configDstPath).Msg("downloading vuhive.yaml configuration")
 		if err := r.downloadToFile(ctx, cfg.ConfigKey, configDstPath, 0644); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to download configuration")
@@ -64,7 +67,13 @@ func (r *RunnerInitializer) Init(ctx context.Context, cfg InitConfig) error {
 		}
 	}
 
-	// 3. Copy runner-wrapper if source path exists
+	// 3. Resolve configuration secrets if present
+	if err := r.resolveSecrets(ctx, cfg.SecretsDir, configDstPath); err != nil {
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to resolve configuration secrets")
+		return fmt.Errorf("failed to resolve configuration secrets: %w", err)
+	}
+
+	// 4. Copy runner-wrapper if source path exists
 	if cfg.WrapperSourcePath != "" {
 		wrapperDstPath := filepath.Join(cfg.SharedDir, "runner-wrapper")
 		log.Debug().Str("src", cfg.WrapperSourcePath).Str("dst", wrapperDstPath).Msg("copying runner-wrapper")
@@ -74,7 +83,7 @@ func (r *RunnerInitializer) Init(ctx context.Context, cfg InitConfig) error {
 		}
 	}
 
-	// 4. Copy entrypoint.sh if source path exists, or generate fallback default
+	// 5. Copy entrypoint.sh if source path exists, or generate fallback default
 	entrypointDstPath := filepath.Join(cfg.SharedDir, "entrypoint.sh")
 	if cfg.EntrypointSourcePath != "" {
 		log.Debug().Str("src", cfg.EntrypointSourcePath).Str("dst", entrypointDstPath).Msg("copying entrypoint.sh")
@@ -92,6 +101,103 @@ func (r *RunnerInitializer) Init(ctx context.Context, cfg InitConfig) error {
 
 	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed runner pod initialization")
 	return nil
+}
+
+func (r *RunnerInitializer) resolveSecrets(ctx context.Context, secretsDir, configPath string) error {
+	secrets, err := loadSecrets(secretsDir)
+	if err != nil {
+		return err
+	}
+	if len(secrets) == 0 {
+		return nil
+	}
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return nil
+	}
+
+	configBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read configuration file %q: %w", configPath, err)
+	}
+
+	rawConfig := string(configBytes)
+	placeholderKeys := service.ExtractPlaceholderKeys(rawConfig)
+	resolvedConfig := service.ResolveTemplatePlaceholders(rawConfig, secrets)
+
+	var resolvedCount int
+	for _, key := range placeholderKeys {
+		if _, ok := secrets[key]; ok {
+			resolvedCount++
+		}
+	}
+
+	stat, err := os.Stat(configPath)
+	perm := os.FileMode(0644)
+	if err == nil {
+		perm = stat.Mode().Perm()
+	}
+
+	if err := os.WriteFile(configPath, []byte(resolvedConfig), perm); err != nil {
+		return fmt.Errorf("failed to write resolved configuration to %q: %w", configPath, err)
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("component", "runner-init").
+		Str("op", "RunnerInitializer.resolveSecrets").
+		Str("config_path", configPath).
+		Logger()
+	log.Info().
+		Int("secrets_resolved", resolvedCount).
+		Int("secrets_available", len(secrets)).
+		Msg("resolved configuration template placeholders with secrets")
+
+	return nil
+}
+
+func loadSecrets(secretsDir string) (map[string]string, error) {
+	if secretsDir == "" {
+		return nil, nil
+	}
+
+	entries, err := os.ReadDir(secretsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to read secrets directory %q: %w", secretsDir, err)
+	}
+
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	secrets := make(map[string]string)
+	for _, entry := range entries {
+		// Skip Kubernetes metadata files and directories (e.g. "..data", hidden files)
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+
+		filePath := filepath.Join(secretsDir, entry.Name())
+		info, err := os.Stat(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to stat secret file %q: %w", filePath, err)
+		}
+
+		if info.IsDir() {
+			continue
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read secret file %q: %w", filePath, err)
+		}
+
+		secrets[entry.Name()] = string(content)
+	}
+
+	return secrets, nil
 }
 
 func (r *RunnerInitializer) downloadToFile(ctx context.Context, s3Key, dstPath string, perm os.FileMode) error {

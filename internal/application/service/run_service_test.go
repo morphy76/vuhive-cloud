@@ -290,7 +290,12 @@ func (m *mockRunnerOrchestrator) AbortJob(_ context.Context, k8sJobName, namespa
 	m.abortedJobs[k8sJobName] = namespace
 	return nil
 }
-
+func (m *mockRunnerOrchestrator) CreateEphemeralSecret(_ context.Context, _, _ string, _ map[string][]byte) error {
+	return nil
+}
+func (m *mockRunnerOrchestrator) DeleteEphemeralSecret(_ context.Context, _, _ string) error {
+	return nil
+}
 // Mock storage port
 type mockStoragePort struct {
 	files map[string][]byte
