@@ -144,6 +144,117 @@ func TestParseSummaryReport_FlatFallbackReport(t *testing.T) {
 	assert.InDelta(t, 0.2, result.Metrics.ErrorRatePct, 0.01)
 }
 
+func TestParseSummaryReport_ErrorRatePct_BoundsAndContract(t *testing.T) {
+	tests := []struct {
+		name        string
+		jsonPayload string
+		expectedPct float64
+	}{
+		{
+			name: "0% error rate directly from error_rate_pct",
+			jsonPayload: `{
+				"iterations": 100,
+				"error_rate_pct": 0.0
+			}`,
+			expectedPct: 0.0,
+		},
+		{
+			name: "50% error rate directly from error_rate_pct",
+			jsonPayload: `{
+				"iterations": 100,
+				"error_rate_pct": 50.0
+			}`,
+			expectedPct: 50.0,
+		},
+		{
+			name: "100% error rate directly from error_rate_pct",
+			jsonPayload: `{
+				"iterations": 100,
+				"error_rate_pct": 100.0
+			}`,
+			expectedPct: 100.0,
+		},
+		{
+			name: "fractional error_rate field converts to percentage",
+			jsonPayload: `{
+				"iterations": 100,
+				"error_rate": 0.5
+			}`,
+			expectedPct: 50.0,
+		},
+		{
+			name: "fractional error_rate 1.0 converts to 100%",
+			jsonPayload: `{
+				"iterations": 100,
+				"error_rate": 1.0
+			}`,
+			expectedPct: 100.0,
+		},
+		{
+			name: "iterations_failed ratio converts to percentage",
+			jsonPayload: `{
+				"total_iterations": 200,
+				"metrics": [
+					{
+						"name": "vuhive.vu.iterations_total",
+						"type": "counter",
+						"count": 200
+					},
+					{
+						"name": "vuhive.vu.iterations_failed",
+						"type": "counter",
+						"count": 100
+					}
+				]
+			}`,
+			expectedPct: 50.0,
+		},
+		{
+			name: "100% iterations failed",
+			jsonPayload: `{
+				"total_iterations": 50,
+				"metrics": [
+					{
+						"name": "vuhive.vu.iterations_total",
+						"type": "counter",
+						"count": 50
+					},
+					{
+						"name": "vuhive.vu.iterations_failed",
+						"type": "counter",
+						"count": 50
+					}
+				]
+			}`,
+			expectedPct: 100.0,
+		},
+		{
+			name: "out-of-bounds error_rate_pct clamped to 100.0",
+			jsonPayload: `{
+				"iterations": 100,
+				"error_rate_pct": 150.0
+			}`,
+			expectedPct: 100.0,
+		},
+		{
+			name: "negative error_rate_pct clamped to 0.0",
+			jsonPayload: `{
+				"iterations": 100,
+				"error_rate_pct": -5.0
+			}`,
+			expectedPct: 0.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := service.ParseSummaryReport([]byte(tt.jsonPayload))
+			require.NoError(t, err)
+			assert.InDelta(t, tt.expectedPct, parsed.Metrics.ErrorRatePct, 0.001)
+		})
+	}
+}
+
 func TestParseSummaryReport_FailedRunnerCrashReport(t *testing.T) {
 	rawJSON := []byte(`{
 		"status": "FAILED",

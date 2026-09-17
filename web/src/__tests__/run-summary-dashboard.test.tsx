@@ -104,7 +104,7 @@ const failedRun: HistoricalRun = {
     p90DurationMs: 190,
     p95DurationMs: 320,
     p99DurationMs: 750,
-    errorRatePct: 0.082, // 8.2% error rate (critical)
+    errorRatePct: 8.2, // 8.2% error rate (critical)
   },
 }
 
@@ -113,7 +113,7 @@ const warningRun: HistoricalRun = {
   id: 'run-warn-303',
   metrics: {
     ...completedPassedRun.metrics,
-    errorRatePct: 0.024, // 2.4% error rate (warning threshold)
+    errorRatePct: 2.4, // 2.4% error rate (warning threshold)
   },
 }
 

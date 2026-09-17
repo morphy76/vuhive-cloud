@@ -41,10 +41,7 @@ export const ThroughputErrorCorrelationChart: React.FC<ThroughputErrorCorrelatio
     if (!metrics) return []
 
     const avgTps = metrics.avgTps ?? 0
-    let errPct = metrics.errorRatePct ?? 0
-    if (errPct > 0 && errPct <= 1.0) {
-      errPct = errPct * 100
-    }
+    const errPct = Math.min(100.0, Math.max(0.0, metrics.errorRatePct ?? 0))
 
     const durationSec = runDurationMs && runDurationMs > 0 ? runDurationMs / 1000 : 60
     const steps = 6 // 0%, 20%, 40%, 60%, 80%, 100%

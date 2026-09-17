@@ -657,6 +657,53 @@ describe('Ad-Hoc Load Test Execution Dispatcher & Live Monitor', () => {
       })
       expect(getRunsSpy).toHaveBeenCalledTimes(2)
     })
+
+    it('renders 100% error rate as 100.00% and never 10000.00% in Runs table and monitor (Issue #219)', async () => {
+      const fullErrorRun: HistoricalRun = {
+        id: 'run-100pct-err',
+        suiteId: 'suite-1',
+        status: 'FAILED',
+        k8sJobName: 'job-err-100',
+        durationMs: 60000,
+        exitCode: 1,
+        slaPassed: false,
+        metrics: {
+          totalIterations: 100,
+          totalRequests: 100,
+          avgTps: 1.67,
+          p95DurationMs: 500,
+          errorRatePct: 100.0,
+        },
+        createdAt: new Date().toISOString(),
+      }
+
+      vi.spyOn(api, 'getRuns').mockResolvedValue([fullErrorRun])
+
+      renderWithProviders(<RunsView />)
+
+      await waitFor(() => {
+        expect(screen.getByText('run-100pct-err')).toBeInTheDocument()
+      })
+
+      // In Runs table, 100.00% must be displayed, never 10000.00%
+      expect(screen.getByText('100.00%')).toBeInTheDocument()
+      expect(screen.queryByText('10000.00%')).not.toBeInTheDocument()
+
+      // Click on row to open LiveRunMonitor (failed run with inspectorTab=monitor or toggle)
+      fireEvent.click(screen.getByText('run-100pct-err'))
+
+      const detailsBtn = screen.getByRole('button', { name: /execution details/i })
+      fireEvent.click(detailsBtn)
+
+      await waitFor(() => {
+        expect(screen.getByText('Live Execution Monitor')).toBeInTheDocument()
+      })
+
+      // In LiveRunMonitor KPIs, 100.00% must be displayed, never 10000.00%
+      expect(screen.queryByText('10000.00%')).not.toBeInTheDocument()
+      const errorRateDisplays = screen.getAllByText('100.00%')
+      expect(errorRateDisplays.length).toBeGreaterThanOrEqual(1)
+    })
   })
 })
 

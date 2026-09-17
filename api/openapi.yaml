@@ -2194,8 +2194,8 @@ components:
         error_rate_pct:
           type: number
           format: double
-          description: Percentage of failed HTTP transactions (5xx status or network timeouts)
-          example: 0.02
+          description: Percentage of failed HTTP transactions in range [0.0, 100.0] (5xx status or network timeouts, e.g. 2.5 represents 2.5%)
+          example: 2.00
 
     RunResponse:
       type: object
@@ -3105,7 +3105,8 @@ components:
         error_rate_pct:
           type: number
           format: double
-          example: 0.02
+          description: Percentage of failed HTTP transactions in range [0.0, 100.0] (5xx status or network timeouts, e.g. 2.5 represents 2.5%)
+          example: 2.00
 
     RunDetailResponse:
       type: object

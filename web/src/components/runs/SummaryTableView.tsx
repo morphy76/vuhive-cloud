@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { exportToCsvFile, type CsvColumn } from '@/lib/export-utils'
+import { formatErrorRate } from '@/lib/format-utils'
 import type {
   SummaryReport,
   SummaryStepItem,
@@ -49,9 +50,7 @@ function formatNumber(val?: number): string {
 }
 
 function formatRate(rate?: number): string {
-  if (rate === undefined || rate === null) return '-'
-  const pct = rate <= 1.0 && rate > 0 ? rate * 100 : rate
-  return `${pct.toFixed(2)}%`
+  return formatErrorRate(rate)
 }
 
 // Fallback extractor in case steps are represented within metrics array
