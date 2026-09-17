@@ -60,4 +60,3 @@ func ResolveBearerToken(ctx context.Context, cfg WrapperConfig, client HTTPClien
 
 	return "", nil
 }
-

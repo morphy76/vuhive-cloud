@@ -158,6 +158,15 @@ s3:
   existingSecretAccessKey: "AWS_ACCESS_KEY_ID"
   existingSecretSecretKey: "AWS_SECRET_ACCESS_KEY"
 
+# ── Secrets Encryption ──────────────────────────────────────────────────
+# AES-256-GCM encryption key for suite-scoped secrets stored in PostgreSQL.
+# Must be exactly 32 bytes (characters).
+secrets:
+  encryptionKey: ""
+  # Optional existing secret containing the encryption key.
+  existingSecret: ""
+  existingSecretKey: "SECRETS_ENCRYPTION_KEY"
+
 # ── Runner & Builder Workload Orchestration ────────────────────────────
 runner:
   namespace: "vuhive-runners"

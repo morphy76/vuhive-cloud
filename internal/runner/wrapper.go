@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -123,9 +124,32 @@ func (w *RunnerWrapper) Run(ctx context.Context, cfg WrapperConfig, extraArgs []
 	stdoutWriter := io.MultiWriter(w.stdout, logFile)
 	stderrWriter := io.MultiWriter(w.stderr, logFile)
 
+	// Read secret values from SecretsDir for log masking
+	secretsMap, err := loadSecrets(cfg.SecretsDir)
+	if err != nil {
+		_ = logFile.Close()
+		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to load secrets for masking")
+		w.guaranteeReportAndLogsUpload(ctx, cfg, 1, fmt.Sprintf("failed to load secrets: %v", err))
+		if cfg.APICallbackURL != "" {
+			w.sendCallback(ctx, cfg, 1)
+		}
+		return 1, err
+	}
+
+	var secretValues []string
+	for _, val := range secretsMap {
+		trimmed := strings.TrimSpace(val)
+		if trimmed != "" {
+			secretValues = append(secretValues, trimmed)
+		}
+	}
+
+	maskingStdout := NewMaskingWriter(stdoutWriter, secretValues)
+	maskingStderr := NewMaskingWriter(stderrWriter, secretValues)
+
 	cmd := exec.Command(cfg.RunnerPath, args...)
-	cmd.Stdout = stdoutWriter
-	cmd.Stderr = stderrWriter
+	cmd.Stdout = maskingStdout
+	cmd.Stderr = maskingStderr
 
 	// Setup signal trapping
 	sigCh := make(chan os.Signal, 2)

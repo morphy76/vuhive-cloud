@@ -21,6 +21,7 @@ import (
 	"github.com/morphy76/vuhive-cloud/internal/adapters/inbound/rest"
 	authadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/auth"
 	coordinatoradapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/coordinator"
+	cryptoadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/crypto"
 	k8sadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/k8s"
 	pgadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/postgres"
 	s3adapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/s3"
@@ -147,10 +148,12 @@ func main() {
 	var suiteRepo outbound.TestSuiteRepository
 	var artifactRepo outbound.ArtifactRepository
 	var configRepo outbound.ConfigurationRepository
+	var secretRepo outbound.SecretRepository
 	var profileRepo outbound.RunnerProfileRepository
 	var runRepo outbound.TestRunRepository
 	var scheduleRepo outbound.ScheduleRepository
 	var storageAdapter outbound.StoragePort
+	var encryptor outbound.Encryptor
 	var buildOrchestrator outbound.BuildOrchestratorPort
 	var runnerOrchestrator outbound.RunnerOrchestratorPort
 	var scheduleOrchestrator outbound.ScheduleOrchestratorPort
@@ -180,6 +183,7 @@ func main() {
 				suiteRepo = pgadapter.NewTestSuiteRepository(pool)
 				artifactRepo = pgadapter.NewArtifactRepository(pool)
 				configRepo = pgadapter.NewConfigurationRepository(pool)
+				secretRepo = pgadapter.NewSecretRepository(pool)
 				profileRepo = pgadapter.NewRunnerProfileRepository(pool)
 				runRepo = pgadapter.NewTestRunRepository(pool)
 				scheduleRepo = pgadapter.NewScheduleRepository(pool)
@@ -222,7 +226,20 @@ func main() {
 		log.Warn().Msg("S3_BUCKET not set; s3 storage adapter unavailable")
 	}
 
-	// 3. Kubernetes Orchestrator
+	// 3. Secrets Encryption
+	if encKey := os.Getenv("SECRETS_ENCRYPTION_KEY"); encKey != "" {
+		keyBytes := []byte(encKey)
+		enc, err := cryptoadapter.NewAESEncryptor(keyBytes)
+		if err != nil {
+			log.Fatal().Err(err).Msg("invalid SECRETS_ENCRYPTION_KEY: must be exactly 32 bytes for AES-256-GCM")
+		}
+		encryptor = enc
+		log.Info().Msg("secrets encryption initialized (AES-256-GCM)")
+	} else {
+		log.Warn().Msg("SECRETS_ENCRYPTION_KEY not set; secrets management unavailable")
+	}
+
+	// 4. Kubernetes Orchestrator
 	k8sConfig, err := k8srest.InClusterConfig()
 	if err != nil {
 		kubeconfigPath := os.Getenv("KUBECONFIG")
@@ -380,6 +397,10 @@ func main() {
 	})
 	suiteService := service.NewSuiteService(suiteRepo)
 	configService := service.NewConfigService(suiteRepo, configRepo, storageAdapter)
+	var secretService *service.SecretService
+	if secretRepo != nil && encryptor != nil {
+		secretService = service.NewSecretService(suiteRepo, secretRepo, encryptor)
+	}
 	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator, staticAnalyzer)
 	profileService := service.NewProfileService(profileRepo)
 	var runServiceOpts []service.RunServiceOption
@@ -473,6 +494,7 @@ func main() {
 		HousekeepingUC: housekeepingService,
 		SuitesUC:       suiteService,
 		ConfigsUC:      configService,
+		SecretsUC:      secretService,
 		TokenVerifier:  tokenVerifier,
 	})
 

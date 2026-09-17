@@ -17,11 +17,13 @@ const (
 	DefaultConfigPath  = "/shared/vuhive.yaml"
 	DefaultSummaryPath = "/shared/summary.json"
 	DefaultLogPath     = "/shared/run.log"
+	DefaultSecretsDir  = "/etc/vuhive/secrets"
 )
 
 // InitConfig holds configuration for the runner pod init container.
 type InitConfig struct {
 	SharedDir            string
+	SecretsDir           string
 	BinaryKey            string
 	ConfigKey            string
 	WrapperSourcePath    string
@@ -34,6 +36,11 @@ func (c *InitConfig) Validate() error {
 	c.SharedDir = strings.TrimSpace(c.SharedDir)
 	if c.SharedDir == "" {
 		c.SharedDir = DefaultSharedDir
+	}
+
+	c.SecretsDir = strings.TrimSpace(c.SecretsDir)
+	if c.SecretsDir == "" {
+		c.SecretsDir = DefaultSecretsDir
 	}
 
 	c.BinaryKey = strings.TrimSpace(c.BinaryKey)
@@ -54,6 +61,7 @@ type WrapperConfig struct {
 	ConfigPath     string
 	SummaryPath    string
 	LogPath        string
+	SecretsDir     string
 	RunID          string
 	ReportKey      string
 	LogsKey        string
@@ -91,6 +99,11 @@ func (c *WrapperConfig) Validate() error {
 	c.LogPath = strings.TrimSpace(c.LogPath)
 	if c.LogPath == "" {
 		c.LogPath = DefaultLogPath
+	}
+
+	c.SecretsDir = strings.TrimSpace(c.SecretsDir)
+	if c.SecretsDir == "" {
+		c.SecretsDir = DefaultSecretsDir
 	}
 
 	c.RunID = strings.TrimSpace(c.RunID)

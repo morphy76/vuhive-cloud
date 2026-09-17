@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -109,6 +110,78 @@ func (o *RunnerOrchestrator) AbortJob(ctx context.Context, k8sJobName, namespace
 	})
 
 	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed runner job abort")
+	return nil
+}
+
+// CreateEphemeralSecret creates a short-lived Kubernetes Secret containing decrypted suite secrets
+// for injection into runner pods.
+func (o *RunnerOrchestrator) CreateEphemeralSecret(ctx context.Context, name, namespace string, data map[string][]byte) error {
+	start := time.Now()
+	trimmedNamespace := strings.TrimSpace(namespace)
+	if trimmedNamespace == "" {
+		trimmedNamespace = strings.TrimSpace(o.cfg.RunnerNamespace)
+	}
+	if trimmedNamespace == "" {
+		trimmedNamespace = model.DefaultRunnerNamespace
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunnerOrchestrator.CreateEphemeralSecret").
+		Str("secret_name", name).
+		Str("namespace", trimmedNamespace).
+		Logger()
+	log.Debug().Msg("starting ephemeral secret creation")
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: trimmedNamespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "vuhive-cloud",
+				"vuhive.io/ephemeral":          "true",
+			},
+		},
+		Data: data,
+		Type: corev1.SecretTypeOpaque,
+	}
+
+	_, err := o.client.CoreV1().Secrets(trimmedNamespace).Create(ctx, secret, metav1.CreateOptions{})
+	if err != nil {
+		mapped := MapK8sError(err)
+		log.Error().Err(mapped).Dur("duration_ms", time.Since(start)).Msg("failed creating ephemeral secret in kubernetes")
+		return mapped
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed ephemeral secret creation")
+	return nil
+}
+
+// DeleteEphemeralSecret removes an ephemeral Kubernetes Secret by name and namespace.
+func (o *RunnerOrchestrator) DeleteEphemeralSecret(ctx context.Context, name, namespace string) error {
+	start := time.Now()
+	trimmedNamespace := strings.TrimSpace(namespace)
+	if trimmedNamespace == "" {
+		trimmedNamespace = strings.TrimSpace(o.cfg.RunnerNamespace)
+	}
+	if trimmedNamespace == "" {
+		trimmedNamespace = model.DefaultRunnerNamespace
+	}
+
+	log := zerolog.Ctx(ctx).With().
+		Str("op", "RunnerOrchestrator.DeleteEphemeralSecret").
+		Str("secret_name", name).
+		Str("namespace", trimmedNamespace).
+		Logger()
+	log.Debug().Msg("starting ephemeral secret deletion")
+
+	err := o.client.CoreV1().Secrets(trimmedNamespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
+		mapped := MapK8sError(err)
+		log.Error().Err(mapped).Dur("duration_ms", time.Since(start)).Msg("failed deleting ephemeral secret from kubernetes")
+		return mapped
+	}
+
+	log.Info().Dur("duration_ms", time.Since(start)).Msg("completed ephemeral secret deletion")
 	return nil
 }
 

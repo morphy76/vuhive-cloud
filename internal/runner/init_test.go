@@ -223,3 +223,273 @@ func TestRunnerInitializer_ComponentTaggingInLogs(t *testing.T) {
 	assert.Contains(t, buf.String(), `"component":"runner-init"`)
 }
 
+func TestRunnerInitializer_SecretResolution_Success(t *testing.T) {
+	tempDir := t.TempDir()
+	sharedDir := filepath.Join(tempDir, "shared")
+	secretsDir := filepath.Join(tempDir, "secrets")
+	require.NoError(t, os.MkdirAll(secretsDir, 0755))
+
+	// Write secret files (including Kubernetes-style dotfiles and subdirectories)
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "DB_PASSWORD"), []byte("s3cr3t_p@ss"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "API_KEY"), []byte("api-key-12345"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "..data_secret"), []byte("ignored"), 0644))
+	subDir := filepath.Join(secretsDir, "nested_dir")
+	require.NoError(t, os.MkdirAll(subDir, 0755))
+
+	rawTemplateConfig := `version: 1
+database:
+  host: postgres.internal
+  password: ${secrets.DB_PASSWORD}
+auth:
+  api_key: ${secrets.API_KEY}
+`
+	fakeBinaryData := []byte("ELF-binary")
+
+	mockStorage := &mockStoragePort{
+		downloadFunc: func(ctx context.Context, key string) (io.ReadCloser, error) {
+			switch key {
+			case "runner-bin":
+				return io.NopCloser(bytes.NewReader(fakeBinaryData)), nil
+			case "config-tmpl":
+				return io.NopCloser(bytes.NewReader([]byte(rawTemplateConfig))), nil
+			default:
+				return nil, errors.New("key not found: " + key)
+			}
+		},
+	}
+
+	initializer := runner.NewRunnerInitializer(mockStorage)
+	cfg := runner.InitConfig{
+		SharedDir:  sharedDir,
+		SecretsDir: secretsDir,
+		BinaryKey:  "runner-bin",
+		ConfigKey:  "config-tmpl",
+	}
+
+	err := initializer.Init(context.Background(), cfg)
+	require.NoError(t, err)
+
+	configFile := filepath.Join(sharedDir, "vuhive.yaml")
+	assert.FileExists(t, configFile)
+	resolvedContent, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+
+	expectedConfig := `version: 1
+database:
+  host: postgres.internal
+  password: s3cr3t_p@ss
+auth:
+  api_key: api-key-12345
+`
+	assert.Equal(t, expectedConfig, string(resolvedContent))
+}
+
+func TestRunnerInitializer_SecretResolution_PartialSecrets(t *testing.T) {
+	tempDir := t.TempDir()
+	sharedDir := filepath.Join(tempDir, "shared")
+	secretsDir := filepath.Join(tempDir, "secrets")
+	require.NoError(t, os.MkdirAll(secretsDir, 0755))
+
+	// Only provide DB_PASSWORD, omit API_KEY
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "DB_PASSWORD"), []byte("s3cr3t_p@ss"), 0644))
+
+	rawTemplateConfig := `password: ${secrets.DB_PASSWORD}
+api_key: ${secrets.API_KEY}
+`
+	fakeBinaryData := []byte("ELF-binary")
+
+	mockStorage := &mockStoragePort{
+		downloadFunc: func(ctx context.Context, key string) (io.ReadCloser, error) {
+			switch key {
+			case "runner-bin":
+				return io.NopCloser(bytes.NewReader(fakeBinaryData)), nil
+			case "config-tmpl":
+				return io.NopCloser(bytes.NewReader([]byte(rawTemplateConfig))), nil
+			default:
+				return nil, errors.New("key not found: " + key)
+			}
+		},
+	}
+
+	initializer := runner.NewRunnerInitializer(mockStorage)
+	cfg := runner.InitConfig{
+		SharedDir:  sharedDir,
+		SecretsDir: secretsDir,
+		BinaryKey:  "runner-bin",
+		ConfigKey:  "config-tmpl",
+	}
+
+	err := initializer.Init(context.Background(), cfg)
+	require.NoError(t, err)
+
+	configFile := filepath.Join(sharedDir, "vuhive.yaml")
+	resolvedContent, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+
+	expectedConfig := `password: s3cr3t_p@ss
+api_key: ${secrets.API_KEY}
+`
+	assert.Equal(t, expectedConfig, string(resolvedContent))
+}
+
+func TestRunnerInitializer_SecretResolution_NonExistentSecretsDir(t *testing.T) {
+	tempDir := t.TempDir()
+	sharedDir := filepath.Join(tempDir, "shared")
+	nonExistentSecretsDir := filepath.Join(tempDir, "does-not-exist")
+
+	rawTemplateConfig := `password: ${secrets.DB_PASSWORD}
+`
+	fakeBinaryData := []byte("ELF-binary")
+
+	mockStorage := &mockStoragePort{
+		downloadFunc: func(ctx context.Context, key string) (io.ReadCloser, error) {
+			switch key {
+			case "runner-bin":
+				return io.NopCloser(bytes.NewReader(fakeBinaryData)), nil
+			case "config-tmpl":
+				return io.NopCloser(bytes.NewReader([]byte(rawTemplateConfig))), nil
+			default:
+				return nil, errors.New("key not found: " + key)
+			}
+		},
+	}
+
+	initializer := runner.NewRunnerInitializer(mockStorage)
+	cfg := runner.InitConfig{
+		SharedDir:  sharedDir,
+		SecretsDir: nonExistentSecretsDir,
+		BinaryKey:  "runner-bin",
+		ConfigKey:  "config-tmpl",
+	}
+
+	err := initializer.Init(context.Background(), cfg)
+	require.NoError(t, err)
+
+	configFile := filepath.Join(sharedDir, "vuhive.yaml")
+	resolvedContent, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+	assert.Equal(t, rawTemplateConfig, string(resolvedContent))
+}
+
+func TestRunnerInitializer_SecretResolution_EmptySecretsDir(t *testing.T) {
+	tempDir := t.TempDir()
+	sharedDir := filepath.Join(tempDir, "shared")
+	emptySecretsDir := filepath.Join(tempDir, "empty-secrets")
+	require.NoError(t, os.MkdirAll(emptySecretsDir, 0755))
+
+	rawTemplateConfig := `password: ${secrets.DB_PASSWORD}
+`
+	fakeBinaryData := []byte("ELF-binary")
+
+	mockStorage := &mockStoragePort{
+		downloadFunc: func(ctx context.Context, key string) (io.ReadCloser, error) {
+			switch key {
+			case "runner-bin":
+				return io.NopCloser(bytes.NewReader(fakeBinaryData)), nil
+			case "config-tmpl":
+				return io.NopCloser(bytes.NewReader([]byte(rawTemplateConfig))), nil
+			default:
+				return nil, errors.New("key not found: " + key)
+			}
+		},
+	}
+
+	initializer := runner.NewRunnerInitializer(mockStorage)
+	cfg := runner.InitConfig{
+		SharedDir:  sharedDir,
+		SecretsDir: emptySecretsDir,
+		BinaryKey:  "runner-bin",
+		ConfigKey:  "config-tmpl",
+	}
+
+	err := initializer.Init(context.Background(), cfg)
+	require.NoError(t, err)
+
+	configFile := filepath.Join(sharedDir, "vuhive.yaml")
+	resolvedContent, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+	assert.Equal(t, rawTemplateConfig, string(resolvedContent))
+}
+
+func TestRunnerInitializer_SecretResolution_SymlinkSupport(t *testing.T) {
+	tempDir := t.TempDir()
+	sharedDir := filepath.Join(tempDir, "shared")
+	secretsDir := filepath.Join(tempDir, "secrets")
+	dataDir := filepath.Join(tempDir, "data")
+	require.NoError(t, os.MkdirAll(secretsDir, 0755))
+	require.NoError(t, os.MkdirAll(dataDir, 0755))
+
+	realFile := filepath.Join(dataDir, "DB_PASSWORD")
+	require.NoError(t, os.WriteFile(realFile, []byte("symlinked-secret"), 0644))
+
+	symlinkFile := filepath.Join(secretsDir, "DB_PASSWORD")
+	require.NoError(t, os.Symlink(realFile, symlinkFile))
+
+	rawTemplateConfig := `password: ${secrets.DB_PASSWORD}
+`
+	mockStorage := &mockStoragePort{
+		downloadFunc: func(ctx context.Context, key string) (io.ReadCloser, error) {
+			switch key {
+			case "runner-bin":
+				return io.NopCloser(bytes.NewReader([]byte("ELF-binary"))), nil
+			case "config-tmpl":
+				return io.NopCloser(bytes.NewReader([]byte(rawTemplateConfig))), nil
+			default:
+				return nil, errors.New("key not found: " + key)
+			}
+		},
+	}
+
+	initializer := runner.NewRunnerInitializer(mockStorage)
+	cfg := runner.InitConfig{
+		SharedDir:  sharedDir,
+		SecretsDir: secretsDir,
+		BinaryKey:  "runner-bin",
+		ConfigKey:  "config-tmpl",
+	}
+
+	err := initializer.Init(context.Background(), cfg)
+	require.NoError(t, err)
+
+	configFile := filepath.Join(sharedDir, "vuhive.yaml")
+	resolvedContent, err := os.ReadFile(configFile)
+	require.NoError(t, err)
+	assert.Equal(t, "password: symlinked-secret\n", string(resolvedContent))
+}
+
+func TestRunnerInitializer_SecretResolution_Logging(t *testing.T) {
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf)
+	ctx := logger.WithContext(context.Background())
+
+	tempDir := t.TempDir()
+	sharedDir := filepath.Join(tempDir, "shared")
+	secretsDir := filepath.Join(tempDir, "secrets")
+	require.NoError(t, os.MkdirAll(secretsDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "TOKEN"), []byte("tok-99"), 0644))
+
+	mockStorage := &mockStoragePort{
+		downloadFunc: func(ctx context.Context, key string) (io.ReadCloser, error) {
+			switch key {
+			case "runner-bin":
+				return io.NopCloser(bytes.NewReader([]byte("ELF-binary"))), nil
+			case "config-tmpl":
+				return io.NopCloser(bytes.NewReader([]byte("token: ${secrets.TOKEN}\n"))), nil
+			default:
+				return nil, errors.New("key not found: " + key)
+			}
+		},
+	}
+
+	initializer := runner.NewRunnerInitializer(mockStorage)
+	cfg := runner.InitConfig{
+		SharedDir:  sharedDir,
+		SecretsDir: secretsDir,
+		BinaryKey:  "runner-bin",
+		ConfigKey:  "config-tmpl",
+	}
+
+	err := initializer.Init(ctx, cfg)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), `"secrets_resolved":1`)
+}

@@ -711,3 +711,53 @@ func ToConfigListResponse(configs []*model.Configuration) ConfigListResponse {
 		Count:   len(items),
 	}
 }
+
+// CreateSecretRequest represents the request body to create a suite-scoped secret.
+type CreateSecretRequest struct {
+	Key   string `json:"key" binding:"required"`
+	Value string `json:"value" binding:"required"`
+}
+
+// UpdateSecretRequest represents the request body to update a suite-scoped secret's value.
+type UpdateSecretRequest struct {
+	Value string `json:"value" binding:"required"`
+}
+
+// SecretResponse represents the JSON response for a suite-scoped Secret entity.
+// Note: the encrypted value is never returned to the client.
+type SecretResponse struct {
+	ID        string `json:"id"`
+	SuiteID   string `json:"suite_id"`
+	Key       string `json:"key"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// SecretListResponse represents the JSON response containing a list of Secrets.
+type SecretListResponse struct {
+	Secrets []SecretResponse `json:"secrets"`
+	Count   int              `json:"count"`
+}
+
+// ToSecretResponse converts a domain model.Secret entity into a SecretResponse DTO.
+func ToSecretResponse(s *model.Secret) SecretResponse {
+	return SecretResponse{
+		ID:        s.ID(),
+		SuiteID:   s.SuiteID(),
+		Key:       s.Key(),
+		CreatedAt: s.CreatedAt().Format(time.RFC3339),
+		UpdatedAt: s.UpdatedAt().Format(time.RFC3339),
+	}
+}
+
+// ToSecretListResponse converts a slice of domain model.Secret into a SecretListResponse DTO.
+func ToSecretListResponse(secrets []*model.Secret) SecretListResponse {
+	items := make([]SecretResponse, 0, len(secrets))
+	for _, s := range secrets {
+		items = append(items, ToSecretResponse(s))
+	}
+	return SecretListResponse{
+		Secrets: items,
+		Count:   len(items),
+	}
+}

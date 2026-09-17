@@ -1601,6 +1601,197 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/suites/{id}/secrets:
+    get:
+      summary: List suite secrets
+      description: Retrieves all suite-scoped secrets (key metadata only, encrypted values are never returned).
+      operationId: listSecrets
+      tags:
+        - Secrets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of suite-scoped secrets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretListResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a suite secret
+      description: |
+        Creates a new suite-scoped secret. The value is encrypted at rest using AES-256-GCM.
+        Secret keys must match the pattern `^[A-Z][A-Z0-9_]*$` and can be referenced in configuration
+        YAML templates using `${secrets.KEY}` placeholder syntax.
+      operationId: createSecret
+      tags:
+        - Secrets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSecretRequest'
+      responses:
+        '201':
+          description: Secret created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '400':
+          description: Invalid request (bad key format, empty value, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/suites/{id}/secrets/{secretId}:
+    put:
+      summary: Update a suite secret
+      description: Re-encrypts and updates the value of an existing suite-scoped secret.
+      operationId: updateSecret
+      tags:
+        - Secrets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+        - name: secretId
+          in: path
+          required: true
+          description: Secret ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSecretRequest'
+      responses:
+        '200':
+          description: Secret updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Secret or test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete a suite secret
+      description: Permanently removes a suite-scoped secret.
+      operationId: deleteSecret
+      tags:
+        - Secrets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Test Suite ID
+          schema:
+            type: string
+        - name: secretId
+          in: path
+          required: true
+          description: Secret ID
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Secret deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Secret or test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/suites/{id}/builds:
     post:
       summary: Upload Go test source and trigger build Job
@@ -3637,3 +3828,71 @@ components:
           type: integer
           example: 1
 
+    CreateSecretRequest:
+      type: object
+      required:
+        - key
+        - value
+      properties:
+        key:
+          type: string
+          description: Secret key name. Must match pattern ^[A-Z][A-Z0-9_]*$
+          pattern: '^[A-Z][A-Z0-9_]*$'
+          example: DB_PASSWORD
+        value:
+          type: string
+          description: Secret plaintext value (encrypted at rest)
+          example: my-database-password
+
+    UpdateSecretRequest:
+      type: object
+      required:
+        - value
+      properties:
+        value:
+          type: string
+          description: New secret plaintext value (re-encrypted at rest)
+          example: my-updated-password
+
+    SecretResponse:
+      type: object
+      required:
+        - id
+        - suite_id
+        - key
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+        suite_id:
+          type: string
+          format: uuid
+          example: 3e04a02e-bf34-4398-8b40-6389bca12c97
+        key:
+          type: string
+          example: DB_PASSWORD
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-09-17T10:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-09-17T10:00:00Z"
+
+    SecretListResponse:
+      type: object
+      required:
+        - secrets
+        - count
+      properties:
+        secrets:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecretResponse'
+        count:
+          type: integer
+          example: 2
