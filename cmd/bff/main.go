@@ -157,8 +157,8 @@ func main() {
 
 	cbMaxRequests := *cbMaxRequestsFlag
 	if envVal := os.Getenv("CB_MAX_REQUESTS"); envVal != "" {
-		if val, err := strconv.Atoi(envVal); err == nil && val > 0 {
-			cbMaxRequests = val
+		if val, err := strconv.ParseUint(envVal, 10, 32); err == nil && val > 0 {
+			cbMaxRequests = int(val)
 		}
 	}
 	if cbMaxRequests <= 0 {
