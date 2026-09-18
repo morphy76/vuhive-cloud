@@ -11,6 +11,9 @@ data:
   CONTROL_PLANE_URL: {{ include "vuhive-cloud.bff.controlPlaneUrl" . | quote }}
   SSE_POLL_INTERVAL: {{ .Values.bff.ssePollInterval | default "2s" | quote }}
   SSE_HEARTBEAT_INTERVAL: {{ .Values.bff.sseHeartbeatInterval | default "15s" | quote }}
+  CB_MAX_REQUESTS: {{ (default (dict) (default (dict) .Values.bff).circuitBreaker).maxRequests | default 3 | toString | quote }}
+  CB_TIMEOUT: {{ (default (dict) (default (dict) .Values.bff).circuitBreaker).timeout | default "10s" | quote }}
+  CB_FAILURE_RATIO: {{ (default (dict) (default (dict) .Values.bff).circuitBreaker).failureRatio | default 0.5 | toString | quote }}
   KEYCLOAK_ISSUER_URL: {{ default ((default (dict) .Values.auth).issuerUrl | default "") (default (dict) (default (dict) .Values.bff).keycloak).issuerUrl | quote }}
   KEYCLOAK_BASE_URL: {{ (default (dict) (default (dict) .Values.bff).keycloak).baseUrl | default "" | quote }}
   KEYCLOAK_REALM: {{ (default (dict) (default (dict) .Values.bff).keycloak).realm | default "vuhive" | quote }}

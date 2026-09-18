@@ -16,18 +16,24 @@ import (
 
 	"github.com/morphy76/vuhive-cloud/internal/bff/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/bff/domain/model"
+	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/circuitbreaker"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 var _ outbound.ControlPlaneClient = (*Client)(nil)
 
 // Config configures the outbound HTTP client for the control plane.
 type Config struct {
-	BaseURL    string
-	Timeout    time.Duration
-	AuthToken  string
-	MaxRetries int
-	HTTPClient *http.Client
+	BaseURL        string
+	Timeout        time.Duration
+	AuthToken      string
+	MaxRetries     int
+	HTTPClient     *http.Client
+	CBMaxRequests  uint32
+	CBTimeout      time.Duration
+	CBFailureRatio float64
+	CircuitBreaker *circuitbreaker.CircuitBreaker
 }
 
 // Client implements outbound.ControlPlaneClient via HTTP calls to cmd/server.
@@ -36,6 +42,7 @@ type Client struct {
 	authToken  string
 	maxRetries int
 	httpClient *http.Client
+	cb         *circuitbreaker.CircuitBreaker
 
 	healthMu         sync.Mutex
 	lastHealthStatus int // 0 = unknown, 1 = healthy, 2 = unhealthy
@@ -74,11 +81,49 @@ func NewClient(cfg Config) *Client {
 		baseURL = "http://localhost:8080"
 	}
 
+	cb := cfg.CircuitBreaker
+	if cb == nil {
+		maxRequests := cfg.CBMaxRequests
+		if maxRequests == 0 {
+			maxRequests = 3
+		}
+		cbTimeout := cfg.CBTimeout
+		if cbTimeout <= 0 {
+			cbTimeout = 10 * time.Second
+		}
+		failureRatio := cfg.CBFailureRatio
+		if failureRatio <= 0 {
+			failureRatio = 0.5
+		}
+		cb = circuitbreaker.New(circuitbreaker.Config{
+			Name:         "controlplane-client",
+			MaxRequests:  maxRequests,
+			Timeout:      cbTimeout,
+			FailureRatio: failureRatio,
+			OnStateChange: func(name string, from, to circuitbreaker.State) {
+				if to == circuitbreaker.StateOpen {
+					log.Warn().
+						Str("circuit_breaker", name).
+						Str("from", from.String()).
+						Str("to", to.String()).
+						Msg("control plane circuit breaker tripped open")
+				} else {
+					log.Info().
+						Str("circuit_breaker", name).
+						Str("from", from.String()).
+						Str("to", to.String()).
+						Msg("control plane circuit breaker state changed")
+				}
+			},
+		})
+	}
+
 	return &Client{
 		baseURL:    baseURL,
 		authToken:  cfg.AuthToken,
 		maxRetries: cfg.MaxRetries,
 		httpClient: httpClient,
+		cb:         cb,
 	}
 }
 
@@ -87,8 +132,34 @@ func (c *Client) HTTPClient() *http.Client {
 	return c.httpClient
 }
 
-// executeRequest executes an HTTP request with Bearer token propagation and retries for idempotent calls.
+// CircuitBreaker returns the underlying *circuitbreaker.CircuitBreaker.
+func (c *Client) CircuitBreaker() *circuitbreaker.CircuitBreaker {
+	return c.cb
+}
+
+// executeRequest executes an HTTP request governed by the circuit breaker and retry mechanism.
 func (c *Client) executeRequest(ctx context.Context, method, targetURL string, body io.Reader) (*http.Response, error) {
+	if c.cb != nil {
+		done, err := c.cb.Allow()
+		if err != nil {
+			return nil, model.NewDomainError(model.ErrControlPlaneUnavailable, err)
+		}
+		resp, err := c.doExecuteRequest(ctx, method, targetURL, body)
+		if err != nil {
+			done(false)
+			return nil, err
+		}
+		if resp.StatusCode >= 500 {
+			done(false)
+		} else {
+			done(true)
+		}
+		return resp, nil
+	}
+	return c.doExecuteRequest(ctx, method, targetURL, body)
+}
+
+func (c *Client) doExecuteRequest(ctx context.Context, method, targetURL string, body io.Reader) (*http.Response, error) {
 	attempts := 1
 	if c.maxRetries > 0 && (method == http.MethodGet || method == http.MethodHead) {
 		attempts += c.maxRetries

@@ -17,6 +17,42 @@ import type {
   UpdateScheduleInput,
 } from '@/types/schedule'
 
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+export const DEFAULT_REQUEST_TIMEOUT_MS = 8000
+
+export interface RequestOptions extends RequestInit {
+  timeoutMs?: number
+}
+
+function createTimeoutController(timeoutMs: number, callerSignal?: AbortSignal | null) {
+  const controller = new AbortController()
+  let timeoutId: any = null
+
+  if (callerSignal?.aborted) {
+    controller.abort(callerSignal.reason)
+  } else if (callerSignal) {
+    callerSignal.addEventListener('abort', () => controller.abort(callerSignal.reason), { once: true })
+  }
+
+  timeoutId = setTimeout(() => {
+    controller.abort(new Error(`Request timed out after ${timeoutMs}ms`))
+  }, timeoutMs)
+
+  const cleanup = () => {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
+
+  return { controller, cleanup }
+}
+
 const BASE_PREFIXES = ['/api/bff/v1', '/api/v1']
 
 export interface DashboardData {
@@ -68,15 +104,28 @@ function getTargetUrl(prefix: string, path: string): string {
  */
 async function apiRequest<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestOptions = {}
 ): Promise<T> {
+  const method = (options.method || 'GET').toUpperCase()
+
+  // Offline detection: pause/block mutating actions when offline
+  if (method !== 'GET' && method !== 'HEAD') {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      throw new Error('Network connection unavailable. Cannot perform mutating actions while offline.')
+    }
+  }
+
   let lastError: any = null
+  const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
 
   for (const prefix of BASE_PREFIXES) {
+    const { controller, cleanup } = createTimeoutController(timeoutMs, options.signal)
+
     try {
       const targetUrl = getTargetUrl(prefix, path)
       const response = await fetch(targetUrl, {
         ...options,
+        signal: controller.signal,
         credentials: 'same-origin',
         headers: {
           Accept: 'application/json',
@@ -98,7 +147,25 @@ async function apiRequest<T>(
         } catch {
           // ignore json parse error
         }
-        throw new Error(errMessage)
+
+        if (response.status === 503 && typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('vuhive:circuit-breaker', {
+              detail: { open: true, message: errMessage },
+            })
+          )
+        }
+
+        throw new ApiError(errMessage, response.status)
+      }
+
+      // Successful response clears circuit breaker degraded state
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('vuhive:circuit-breaker', {
+            detail: { open: false },
+          })
+        )
       }
 
       if (response.status === 204) {
@@ -106,8 +173,15 @@ async function apiRequest<T>(
       }
 
       return (await response.json()) as T
-    } catch (err) {
-      lastError = err
+    } catch (err: any) {
+      if (controller.signal.aborted && controller.signal.reason instanceof Error) {
+        lastError = controller.signal.reason
+        break
+      } else {
+        lastError = err
+      }
+    } finally {
+      cleanup()
     }
   }
 

@@ -49,6 +49,11 @@ func TestDomainErrors(t *testing.T) {
 			err:      model.ErrProfileNotFound,
 			expected: "runner profile not found",
 		},
+		{
+			name:     "ErrCircuitOpen",
+			err:      model.ErrCircuitOpen,
+			expected: "circuit breaker is open",
+		},
 	}
 
 	for _, tc := range tests {

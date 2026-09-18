@@ -670,7 +670,14 @@ The Backend-For-Frontend service (`cmd/bff`) acts as the presentation gateway an
   - `--control-plane-retries` / `CONTROL_PLANE_RETRIES`: Number of retry attempts on transient 5xx errors (default `2`).
   - `--sse-poll-interval` / `SSE_POLL_INTERVAL`: Frequency for polling upstream control plane state transitions (default `2s`).
   - `--sse-heartbeat-interval` / `SSE_HEARTBEAT_INTERVAL`: Keep-alive heartbeat interval for active SSE connections (default `15s`).
+  - `--cb-max-requests` / `CB_MAX_REQUESTS`: Max consecutive requests in half-open state before closing circuit (default `3`).
+  - `--cb-timeout` / `CB_TIMEOUT`: Circuit breaker open state cooldown timeout (default `10s`).
+  - `--cb-failure-ratio` / `CB_FAILURE_RATIO`: Failure ratio threshold (0.0 to 1.0) to trip circuit breaker open (default `0.5`).
   - `--port` / `PORT`: Listening HTTP port (default `8081`).
+- **Resilience & Circuit Breakers**:
+  - The BFF incorporates an outbound circuit breaker protecting upstream control plane communication. When consecutive failures exceed the configured threshold, the circuit trips to `OPEN`, immediately short-circuiting downstream proxy requests with HTTP 503 (`{"error":"upstream service circuit open"}`) to avoid cascading connection exhaustion.
+  - Outbound Keycloak OIDC calls (`ExchangeCode`, `RefreshToken`, `RevokeToken`, `refreshJWKS`) enforce dedicated 5-second timeout boundaries.
+  - The React 19 PWA frontend listens for circuit-breaker events, displaying an interactive degraded service warning banner and preventing cascading failed retry requests.
 - **OIDC & Token Handler Security**:
   - `KEYCLOAK_ISSUER_URL`: Realm endpoint (`http://<keycloak-svc>:8080/auth/realms/vuhive` when deployed with `/auth` context path, or `http://<keycloak-svc>:8080/realms/vuhive`).
   - `KEYCLOAK_CLIENT_ID`: Confidential client ID (`vuhive-cloud-bff`).
@@ -964,6 +971,9 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `bff.dnsPolicy` | DNS policy applied to BFF pods. Empty preserves cluster default. | `""` |
 | `bff.dnsConfig` | Custom DNS configuration applied to BFF pods | `{}` |
 | `bff.ssePollInterval` | Polling frequency for upstream run/build status transitions | `2s` |
+| `bff.circuitBreaker.maxRequests` | Max consecutive requests in half-open state before closing circuit | `3` |
+| `bff.circuitBreaker.timeout` | Circuit breaker open state cooldown timeout | `10s` |
+| `bff.circuitBreaker.failureRatio` | Failure ratio threshold (0.0 to 1.0) to trip circuit breaker open | `0.5` |
 | `bff.keycloak.baseUrl` | Base Keycloak root URL (e.g. `https://auth.example.com`) | `""` |
 | `bff.keycloak.realm` | Keycloak realm name | `vuhive` |
 | `bff.keycloak.issuerUrl` | Keycloak realm endpoint for BFF Token Handler | `""` |

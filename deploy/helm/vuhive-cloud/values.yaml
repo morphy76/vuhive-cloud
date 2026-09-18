@@ -410,6 +410,15 @@ bff:
   ssePollInterval: "2s"
   sseHeartbeatInterval: "15s"
 
+  # Outbound Circuit Breaker configuration for upstream communication
+  circuitBreaker:
+    # Max requests allowed through in half-open state before closing
+    maxRequests: 3
+    # Open state duration before transitioning to half-open
+    timeout: "10s"
+    # Failure ratio threshold (0.0 to 1.0) to trip the circuit breaker open
+    failureRatio: 0.5
+
   # Optional upstream control plane URL override.
   # Defaults to: http://<fullname>:<service.port>
   controlPlaneUrl: ""

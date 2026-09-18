@@ -38,6 +38,9 @@ var (
 
 	// ErrInternal is returned when an unexpected internal error occurs.
 	ErrInternal = errors.New("internal bff error")
+
+	// ErrCircuitOpen is returned when an upstream service circuit breaker is open.
+	ErrCircuitOpen = errors.New("circuit breaker is open")
 )
 
 // DomainError wraps a base domain sentinel error with contextual details.
@@ -54,9 +57,12 @@ func (e *DomainError) Error() string {
 	return e.Sentinel.Error()
 }
 
-// Unwrap returns the underlying sentinel error for errors.Is checks.
-func (e *DomainError) Unwrap() error {
-	return e.Sentinel
+// Unwrap returns the underlying sentinel and cause errors for errors.Is and errors.As traversal.
+func (e *DomainError) Unwrap() []error {
+	if e.Cause != nil {
+		return []error{e.Sentinel, e.Cause}
+	}
+	return []error{e.Sentinel}
 }
 
 // NewDomainError creates a new DomainError instance wrapping a sentinel with cause.

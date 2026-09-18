@@ -20,6 +20,7 @@ import (
 	_ "go.uber.org/automaxprocs"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/inbound/rest"
+	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/circuitbreaker"
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/cache"
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/controlplane"
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/eventhub"
@@ -63,6 +64,9 @@ func main() {
 	retriesFlag := flag.Int("control-plane-retries", 2, "Max retries for idempotent control plane requests")
 	ssePollFlag := flag.Duration("sse-poll-interval", 0, "Polling interval for active run/build state changes (defaults to SSE_POLL_INTERVAL env or 2s)")
 	sseHbFlag := flag.Duration("sse-heartbeat-interval", 0, "Heartbeat interval for SSE streams (defaults to SSE_HEARTBEAT_INTERVAL env or 15s)")
+	cbMaxRequestsFlag := flag.Int("cb-max-requests", 3, "Max consecutive requests in half-open state before closing circuit (defaults to CB_MAX_REQUESTS env)")
+	cbTimeoutFlag := flag.Duration("cb-timeout", 0, "Circuit breaker open state timeout (defaults to CB_TIMEOUT env or 10s)")
+	cbFailureRatioFlag := flag.Float64("cb-failure-ratio", 0.5, "Failure ratio threshold to trip circuit breaker open (defaults to CB_FAILURE_RATIO env or 0.5)")
 
 	// Session & PostgreSQL flags
 	dbURLFlag := flag.String("database-url", "", "PostgreSQL database connection URL for persistent HTTP sessions (defaults to DATABASE_URL or POSTGRES_URL env)")
@@ -149,6 +153,38 @@ func main() {
 	}
 	if heartbeatInterval <= 0 {
 		heartbeatInterval = 15 * time.Second
+	}
+
+	cbMaxRequests := *cbMaxRequestsFlag
+	if envVal := os.Getenv("CB_MAX_REQUESTS"); envVal != "" {
+		if val, err := strconv.Atoi(envVal); err == nil && val > 0 {
+			cbMaxRequests = val
+		}
+	}
+	if cbMaxRequests <= 0 {
+		cbMaxRequests = 3
+	}
+
+	cbTimeout := *cbTimeoutFlag
+	if cbTimeout <= 0 {
+		if envVal := os.Getenv("CB_TIMEOUT"); envVal != "" {
+			if d, err := time.ParseDuration(envVal); err == nil && d > 0 {
+				cbTimeout = d
+			}
+		}
+	}
+	if cbTimeout <= 0 {
+		cbTimeout = 10 * time.Second
+	}
+
+	cbFailureRatio := *cbFailureRatioFlag
+	if envVal := os.Getenv("CB_FAILURE_RATIO"); envVal != "" {
+		if val, err := strconv.ParseFloat(envVal, 64); err == nil && val > 0 {
+			cbFailureRatio = val
+		}
+	}
+	if cbFailureRatio <= 0 {
+		cbFailureRatio = 0.5
 	}
 
 	// Session & Database configuration
@@ -278,14 +314,41 @@ func main() {
 		Dur("session_ttl", sessionTTL).
 		Dur("session_sliding_threshold", sessionSliding).
 		Dur("session_cleaner_interval", sessionCleanerInterval).
+		Int("cb_max_requests", cbMaxRequests).
+		Dur("cb_timeout", cbTimeout).
+		Float64("cb_failure_ratio", cbFailureRatio).
 		Msg("starting vuhive-cloud backend-for-frontend (bff) service")
+
+	// Initialize shared circuit breaker for control plane outbound client and reverse proxy
+	cb := circuitbreaker.New(circuitbreaker.Config{
+		Name:         "bff-controlplane-breaker",
+		MaxRequests:  uint32(cbMaxRequests),
+		Timeout:      cbTimeout,
+		FailureRatio: cbFailureRatio,
+		OnStateChange: func(name string, from, to circuitbreaker.State) {
+			if to == circuitbreaker.StateOpen {
+				log.Warn().
+					Str("circuit_breaker", name).
+					Str("from", from.String()).
+					Str("to", to.String()).
+					Msg("control plane circuit breaker tripped open")
+			} else {
+				log.Info().
+					Str("circuit_breaker", name).
+					Str("from", from.String()).
+					Str("to", to.String()).
+					Msg("control plane circuit breaker state changed")
+			}
+		},
+	})
 
 	// Initialize outbound control plane client, cache, and event hub
 	cpClient := controlplane.NewClient(controlplane.Config{
-		BaseURL:    cpURL,
-		Timeout:    5 * time.Second,
-		AuthToken:  cpToken,
-		MaxRetries: maxRetries,
+		BaseURL:        cpURL,
+		Timeout:        5 * time.Second,
+		AuthToken:      cpToken,
+		MaxRetries:     maxRetries,
+		CircuitBreaker: cb,
 	})
 	cacheAdapter := cache.NewMemoryCache()
 	eventHub := eventhub.NewHub(64)
@@ -441,12 +504,14 @@ func main() {
 		log.Info().Msg("configured SPA file server with embedded production assets")
 	}
 
+	proxyTransport := circuitbreaker.NewResilientTransport(nil, cb, 30*time.Second)
+
 	// Setup inbound REST router with control plane transparent proxying & auth session middleware
 	router := rest.SetupRouterWithConfig(rest.RouterConfig{
 		BFFService:      bffService,
 		Version:         version.Version,
 		ControlPlaneURL: cpURL,
-		ProxyTransport:  nil,
+		ProxyTransport:  proxyTransport,
 		SPAConfig:       &spaConfig,
 		AuthHandler:     authHandler,
 		SessionService:  sessionService,

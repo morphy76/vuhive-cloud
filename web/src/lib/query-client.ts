@@ -64,9 +64,25 @@ export const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5,
       // Attempt requests immediately, but fallback to cache seamlessly when offline
       networkMode: 'offlineFirst',
-      // Retry transient network errors once
-      retry: 1,
+      // Retry transient network errors: do not retry client 4xx errors; retry 5xx/network up to 2 times
+      retry: (failureCount, error: any) => {
+        if (failureCount >= 2) return false
+        const status =
+          error?.status ??
+          (typeof error?.message === 'string'
+            ? Number(error.message.match(/HTTP error (4\d{2})/)?.[1])
+            : undefined)
+        if (typeof status === 'number' && status >= 400 && status < 500) {
+          return false
+        }
+        return true
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
       refetchOnWindowFocus: false,
+    },
+    mutations: {
+      networkMode: 'online',
+      retry: 0,
     },
   },
 })

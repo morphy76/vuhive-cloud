@@ -455,3 +455,71 @@ func TestKeycloakClient_VerifyLogoutToken(t *testing.T) {
 		assert.Equal(t, "session-rotated-456", verified.SessionID)
 	})
 }
+
+
+func TestKeycloakClient_ResilienceTimeouts(t *testing.T) {
+	t.Run("RefreshToken enforces isolated timeout boundary when IdP hangs", func(t *testing.T) {
+		hangingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case <-r.Context().Done():
+			case <-time.After(200 * time.Millisecond):
+			}
+		}))
+		defer func() {
+			hangingServer.CloseClientConnections()
+			hangingServer.Close()
+		}()
+
+		client := keycloak.NewKeycloakClient(keycloak.Config{
+			TokenURL: hangingServer.URL,
+			ClientID: "test-client",
+			Timeout:  50 * time.Millisecond,
+		})
+
+		start := time.Now()
+		// Caller provides background context without deadline
+		_, err := client.RefreshToken(context.Background(), "refresh-token")
+		duration := time.Since(start)
+
+		require.Error(t, err)
+		assert.Less(t, duration, 500*time.Millisecond)
+	})
+
+	t.Run("JWKS fetch enforces isolated timeout boundary when IdP hangs", func(t *testing.T) {
+		hangingServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			select {
+			case <-r.Context().Done():
+			case <-time.After(200 * time.Millisecond):
+			}
+		}))
+		defer func() {
+			hangingServer.CloseClientConnections()
+			hangingServer.Close()
+		}()
+
+		client := keycloak.NewKeycloakClient(keycloak.Config{
+			JWKSURL:  hangingServer.URL,
+			ClientID: "test-client",
+			Timeout:  50 * time.Millisecond,
+		})
+
+		priv := generateRSAKey(t)
+		token := signJWT(t, priv, "hanging-key", map[string]interface{}{
+			"iss": "https://auth.example.com",
+			"aud": "test-client",
+			"sid": "session-123",
+			"jti": "jwt-123",
+			"iat": time.Now().Unix(),
+			"events": map[string]interface{}{
+				"http://schemas.openid.net/event/backchannel-logout": map[string]interface{}{},
+			},
+		})
+
+		start := time.Now()
+		_, err := client.VerifyLogoutToken(context.Background(), token)
+		duration := time.Since(start)
+
+		require.Error(t, err)
+		assert.Less(t, duration, 500*time.Millisecond)
+	})
+}

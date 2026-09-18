@@ -7,10 +7,12 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/morphy76/vuhive-cloud/internal/bff/adapters/outbound/controlplane"
 	"github.com/morphy76/vuhive-cloud/internal/bff/domain/model"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,8 +37,10 @@ func TestClient_CheckHealth(t *testing.T) {
 		})
 
 		client := controlplane.NewClient(controlplane.Config{
-			BaseURL:    "http://controlplane",
-			HTTPClient: &http.Client{Transport: mockTransport},
+			BaseURL:        "http://controlplane",
+			CBTimeout:      10 * time.Millisecond,
+			CBMaxRequests:  1,
+			HTTPClient:     &http.Client{Transport: mockTransport},
 		})
 
 		health, err := client.CheckHealth(ctx)
@@ -54,8 +58,10 @@ func TestClient_CheckHealth(t *testing.T) {
 		})
 
 		client := controlplane.NewClient(controlplane.Config{
-			BaseURL:    "http://controlplane",
-			HTTPClient: &http.Client{Transport: mockTransport},
+			BaseURL:        "http://controlplane",
+			CBFailureRatio: 1.0,
+			CBMaxRequests:  100,
+			HTTPClient:     &http.Client{Transport: mockTransport},
 		})
 
 		_, err := client.CheckHealth(ctx)
@@ -69,8 +75,10 @@ func TestClient_CheckHealth(t *testing.T) {
 		})
 
 		client := controlplane.NewClient(controlplane.Config{
-			BaseURL:    "http://controlplane",
-			HTTPClient: &http.Client{Transport: mockTransport},
+			BaseURL:        "http://controlplane",
+			CBTimeout:      10 * time.Millisecond,
+			CBMaxRequests:  1,
+			HTTPClient:     &http.Client{Transport: mockTransport},
 		})
 
 		_, err := client.CheckHealth(ctx)
@@ -100,8 +108,10 @@ func TestClient_CheckHealth(t *testing.T) {
 		})
 
 		client := controlplane.NewClient(controlplane.Config{
-			BaseURL:    "http://controlplane",
-			HTTPClient: &http.Client{Transport: mockTransport},
+			BaseURL:        "http://controlplane",
+			CBTimeout:      10 * time.Millisecond,
+			CBMaxRequests:  1,
+			HTTPClient:     &http.Client{Transport: mockTransport},
 		})
 
 		// 1. Initial healthy check logs Info
@@ -138,6 +148,7 @@ func TestClient_CheckHealth(t *testing.T) {
 		}
 
 		// 5. Recovery to healthy logs Info
+		time.Sleep(20 * time.Millisecond)
 		isHealthy = true
 		logBuf.Reset()
 		health, err = client.CheckHealth(testCtx)
@@ -732,3 +743,92 @@ func TestClient_Schedules(t *testing.T) {
 	})
 }
 
+
+
+func TestClient_CircuitBreaker(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("trips circuit breaker after consecutive failures and fast fails with ErrCircuitOpen", func(t *testing.T) {
+		requestsCount := 0
+		mockTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			requestsCount++
+			return &http.Response{
+				StatusCode: http.StatusInternalServerError,
+				Body:       io.NopCloser(bytes.NewBufferString(`control plane crash`)),
+				Header:     make(http.Header),
+			}, nil
+		})
+
+		client := controlplane.NewClient(controlplane.Config{
+			BaseURL:        "http://controlplane",
+			CBMaxRequests:  1,
+			CBTimeout:      100 * time.Millisecond,
+			CBFailureRatio: 0.5,
+			HTTPClient:     &http.Client{Transport: mockTransport},
+		})
+
+		// Trip circuit with consecutive failures
+		for i := 0; i < 3; i++ {
+			_, err := client.CheckHealth(ctx)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, model.ErrControlPlaneUnavailable)
+		}
+
+		require.NotNil(t, client.CircuitBreaker())
+		assert.True(t, client.CircuitBreaker().IsOpen())
+		reqsBeforeFastFail := requestsCount
+
+		// Next call should fast fail immediately with ErrCircuitOpen without executing network request
+		_, err := client.CheckHealth(ctx)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, model.ErrControlPlaneUnavailable)
+		assert.ErrorIs(t, err, model.ErrCircuitOpen)
+		assert.Equal(t, reqsBeforeFastFail, requestsCount, "network request should not be made when circuit is open")
+
+		// Other endpoints also fast-fail
+		_, err = client.GetVersion(ctx)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, model.ErrControlPlaneUnavailable)
+		assert.ErrorIs(t, err, model.ErrCircuitOpen)
+
+		_, err = client.ListRecentSuites(ctx, 10)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, model.ErrControlPlaneUnavailable)
+		assert.ErrorIs(t, err, model.ErrCircuitOpen)
+	})
+
+	t.Run("structured Zerolog logging on circuit state transitions", func(t *testing.T) {
+		var logBuf bytes.Buffer
+		testLogger := zerolog.New(&logBuf)
+		testCtx := testLogger.WithContext(context.Background())
+		oldLogger := log.Logger
+		defer func() { log.Logger = oldLogger }()
+		log.Logger = testLogger
+
+		mockTransport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Body:       io.NopCloser(bytes.NewBufferString(`service unavailable`)),
+				Header:     make(http.Header),
+			}, nil
+		})
+
+		client := controlplane.NewClient(controlplane.Config{
+			BaseURL:        "http://controlplane",
+			CBMaxRequests:  1,
+			CBTimeout:      50 * time.Millisecond,
+			CBFailureRatio: 0.5,
+			HTTPClient:     &http.Client{Transport: mockTransport},
+		})
+
+		logBuf.Reset()
+		for i := 0; i < 3; i++ {
+			_, _ = client.CheckHealth(testCtx)
+		}
+
+		assert.True(t, client.CircuitBreaker().IsOpen())
+		logOutput := logBuf.String()
+		assert.Contains(t, logOutput, "circuit breaker")
+		assert.Contains(t, logOutput, "warn")
+	})
+}

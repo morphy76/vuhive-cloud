@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -8,8 +9,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/morphy76/vuhive-cloud/internal/bff/domain/model"
 	"github.com/rs/zerolog"
 )
+
+// CircuitBreakerChecker checks whether a circuit breaker is open.
+type CircuitBreakerChecker interface {
+	IsOpen() bool
+}
 
 // NewControlPlaneProxy creates a reverse proxy Gin handler that transparently forwards requests
 // from /api/bff/v1/<path> to the upstream control plane server under /api/v1/<path>.
@@ -17,6 +24,11 @@ func NewControlPlaneProxy(targetBaseURL string, transport http.RoundTripper) gin
 	parsedURL, err := url.Parse(strings.TrimRight(targetBaseURL, "/"))
 	if err != nil {
 		panic("invalid targetBaseURL for control plane proxy: " + err.Error())
+	}
+
+	var cbChecker CircuitBreakerChecker
+	if checker, ok := transport.(CircuitBreakerChecker); ok {
+		cbChecker = checker
 	}
 
 	proxy := &httputil.ReverseProxy{
@@ -38,6 +50,15 @@ func NewControlPlaneProxy(targetBaseURL string, transport http.RoundTripper) gin
 				Str("op", "ControlPlaneProxy").
 				Str("target", targetBaseURL).
 				Logger()
+
+			if errors.Is(err, model.ErrCircuitOpen) {
+				log.Warn().Err(err).Msg("control plane reverse proxy circuit open")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = w.Write([]byte(`{"error":"upstream service circuit open"}`))
+				return
+			}
+
 			log.Error().Err(err).Msg("control plane reverse proxy request failed")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadGateway)
@@ -52,6 +73,15 @@ func NewControlPlaneProxy(targetBaseURL string, transport http.RoundTripper) gin
 			Str("method", c.Request.Method).
 			Str("path", c.Request.URL.Path).
 			Logger()
+
+		// Pre-flight check: short-circuit immediately if circuit breaker is open
+		if cbChecker != nil && cbChecker.IsOpen() {
+			log.Warn().Msg("control plane circuit open, short-circuiting proxy request")
+			c.Header("Content-Type", "application/json")
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "upstream service circuit open"})
+			return
+		}
+
 		log.Debug().Msg("proxying request to control plane")
 
 		proxy.ServeHTTP(proxyResponseWriter{ResponseWriter: c.Writer}, c.Request)

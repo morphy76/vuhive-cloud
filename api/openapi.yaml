@@ -101,6 +101,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Upstream control plane unavailable or circuit open
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/bff/v1/runs/{id}:
     get:
@@ -112,12 +118,12 @@ paths:
         - name: id
           in: path
           required: true
+          description: Unique test run identifier
           schema:
             type: string
-          description: Unique test run identifier
       responses:
         '200':
-          description: Unified run detail with artifact links
+          description: Test run details with pre-signed download URLs
           content:
             application/json:
               schema:
@@ -135,7 +141,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: Upstream control plane unavailable
+          description: Upstream control plane unavailable or circuit open
           content:
             application/json:
               schema:
@@ -465,6 +471,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Upstream control plane unavailable or circuit open
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/bff/runs/{id}:
     get:
@@ -493,7 +505,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
-          description: Upstream control plane unavailable
+          description: Upstream control plane unavailable or circuit open
           content:
             application/json:
               schema:
