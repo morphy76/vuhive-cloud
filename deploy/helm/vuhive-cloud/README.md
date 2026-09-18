@@ -264,6 +264,22 @@ s3:
   existingSecret: "vuhive-r2-secret"
 ```
 
+##### Scenario 3: Secure Runner Pod Storage Credential Management (`runner.existingSecret`)
+
+By default, the control plane's `RunnerJobGenerator` and `CronJobGenerator` inject S3 credentials into runner and init containers via Kubernetes `Secret` references (`valueFrom.secretKeyRef`) instead of plaintext values in Job/CronJob manifests. Anyone inspecting runner pod definitions via `kubectl get pod -o yaml` will only observe references to the secret rather than sensitive storage tokens:
+
+- **Default Cross-Namespace Deployment (`runner.namespace != Release.Namespace`)**: When using default/inline Helm S3 credentials (`s3.accessKeyId` and `s3.secretAccessKey`), the Helm chart automatically provisions a scoped Kubernetes Secret (`<fullname>-runner-s3`) directly in `runner.namespace`.
+- **External Secrets & Secret Replicators**: When referencing an external secret via `s3.existingSecret` that is mirrored or replicated to `runner.namespace` (e.g. via External Secrets Operator or Kyverno), runner pods reference that secret name automatically.
+- **Dedicated Runner Secret (`runner.existingSecret`)**: If a dedicated secret in `runner.namespace` contains runner S3 credentials (with optional custom keys):
+  ```yaml
+  runner:
+    namespace: "vuhive-runners"
+    existingSecret: "vuhive-runner-s3"
+    existingSecretAccessKey: "AWS_ACCESS_KEY_ID"
+    existingSecretSecretKey: "AWS_SECRET_ACCESS_KEY"
+  ```
+- **AWS IAM IRSA / EKS Pod Identity / GCP Workload Identity**: When using IAM roles attached to the runner service account instead of static credentials, leave `s3.accessKeyId`, `s3.secretAccessKey`, `s3.existingSecret`, and `runner.existingSecret` empty. No secret references or access key environment variables will be injected, allowing cloud SDKs to authenticate seamlessly via cloud instance or workload identity.
+
 ---
 
 #### C. External IAM & Keycloak Realm Prerequisites
@@ -900,6 +916,9 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `runner.dnsPolicy` | DNS policy applied to runner pods (`ClusterFirst`, `Default`, `None`, etc.). Empty preserves cluster default. | `""` |
 | `runner.dnsConfig` | Custom DNS configuration (`nameservers`, `searches`, `options`) applied to runner pods | `{}` |
 | `runner.activeDeadlineSeconds` | Default active deadline timeout (seconds) injected into runner Jobs if unspecified on profile | `3600` |
+| `runner.existingSecret` | Name of existing Secret in `runner.namespace` containing S3 credentials for runner pods | `""` |
+| `runner.existingSecretAccessKey` | Key within `runner.existingSecret` for access key (defaults to `s3.existingSecretAccessKey` or `AWS_ACCESS_KEY_ID`) | `""` |
+| `runner.existingSecretSecretKey` | Key within `runner.existingSecret` for secret key (defaults to `s3.existingSecretSecretKey` or `AWS_SECRET_ACCESS_KEY`) | `""` |
 | `networkPolicy.enabled` | Enable egress NetworkPolicy for runner pods in `runner.namespace` | `false` |
 | `networkPolicy.denyMetadata` | Block egress access to cloud provider instance metadata (`169.254.169.254/32`) | `true` |
 | `networkPolicy.denyClusterCIDR` | Block egress access to internal Kubernetes cluster CIDRs | `true` |

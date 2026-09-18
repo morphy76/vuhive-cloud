@@ -912,3 +912,96 @@ func TestHelmChart_ControlPlane_DNSConfig(t *testing.T) {
 	})
 }
 
+func TestHelmChart_RunnerS3Secret_Rendering(t *testing.T) {
+	t.Run("default cross-namespace install creates runner-s3 secret and sets ConfigMap", func(t *testing.T) {
+		rendered := runHelmTemplate(t)
+		docs := splitManifests(rendered)
+
+		cm := findResource(docs, "ConfigMap", "vuhive-vuhive-cloud")
+		require.NotNil(t, cm)
+		cmData := cm["data"].(map[string]interface{})
+		assert.Equal(t, "vuhive-vuhive-cloud-runner-s3", cmData["RUNNER_S3_SECRET_NAME"])
+		assert.Equal(t, "AWS_ACCESS_KEY_ID", cmData["RUNNER_S3_ACCESS_KEY_KEY"])
+		assert.Equal(t, "AWS_SECRET_ACCESS_KEY", cmData["RUNNER_S3_SECRET_KEY_KEY"])
+
+		runnerSec := findResource(docs, "Secret", "vuhive-vuhive-cloud-runner-s3")
+		require.NotNil(t, runnerSec, "runner-s3 Secret must be rendered in cross-namespace default setup")
+		secMeta := runnerSec["metadata"].(map[string]interface{})
+		assert.Equal(t, "vuhive-runners", secMeta["namespace"])
+		stringData := runnerSec["stringData"].(map[string]interface{})
+		assert.Equal(t, "vuhive-dev", stringData["AWS_ACCESS_KEY_ID"])
+		assert.Equal(t, "vuhive-dev-secret", stringData["AWS_SECRET_ACCESS_KEY"])
+	})
+
+	t.Run("same namespace install reuses release secret without separate runner secret", func(t *testing.T) {
+		rendered := runHelmTemplate(t,
+			"--namespace", "default",
+			"--set", "runner.namespace=default",
+		)
+		docs := splitManifests(rendered)
+
+		cm := findResource(docs, "ConfigMap", "vuhive-vuhive-cloud")
+		require.NotNil(t, cm)
+		cmData := cm["data"].(map[string]interface{})
+		assert.Equal(t, "vuhive-vuhive-cloud", cmData["RUNNER_S3_SECRET_NAME"])
+
+		runnerSec := findResource(docs, "Secret", "vuhive-vuhive-cloud-runner-s3")
+		assert.Nil(t, runnerSec, "runner-s3 Secret must not be rendered when runner is in the same release namespace")
+	})
+
+	t.Run("custom runner.existingSecret overrides secret name and keys", func(t *testing.T) {
+		rendered := runHelmTemplate(t,
+			"--set", "runner.existingSecret=my-vault-secret",
+			"--set", "runner.existingSecretAccessKey=CUSTOM_ID",
+			"--set", "runner.existingSecretSecretKey=CUSTOM_KEY",
+		)
+		docs := splitManifests(rendered)
+
+		cm := findResource(docs, "ConfigMap", "vuhive-vuhive-cloud")
+		require.NotNil(t, cm)
+		cmData := cm["data"].(map[string]interface{})
+		assert.Equal(t, "my-vault-secret", cmData["RUNNER_S3_SECRET_NAME"])
+		assert.Equal(t, "CUSTOM_ID", cmData["RUNNER_S3_ACCESS_KEY_KEY"])
+		assert.Equal(t, "CUSTOM_KEY", cmData["RUNNER_S3_SECRET_KEY_KEY"])
+
+		runnerSec := findResource(docs, "Secret", "vuhive-vuhive-cloud-runner-s3")
+		assert.Nil(t, runnerSec, "runner-s3 Secret must not be rendered when runner.existingSecret is set")
+	})
+
+	t.Run("s3.existingSecret propagated to runner when runner.existingSecret is omitted", func(t *testing.T) {
+		rendered := runHelmTemplate(t,
+			"--set", "s3.existingSecret=corp-s3-secret",
+			"--set", "s3.existingSecretAccessKey=S3_KEY",
+			"--set", "s3.existingSecretSecretKey=S3_SECRET",
+		)
+		docs := splitManifests(rendered)
+
+		cm := findResource(docs, "ConfigMap", "vuhive-vuhive-cloud")
+		require.NotNil(t, cm)
+		cmData := cm["data"].(map[string]interface{})
+		assert.Equal(t, "corp-s3-secret", cmData["RUNNER_S3_SECRET_NAME"])
+		assert.Equal(t, "S3_KEY", cmData["RUNNER_S3_ACCESS_KEY_KEY"])
+		assert.Equal(t, "S3_SECRET", cmData["RUNNER_S3_SECRET_KEY_KEY"])
+
+		runnerSec := findResource(docs, "Secret", "vuhive-vuhive-cloud-runner-s3")
+		assert.Nil(t, runnerSec)
+	})
+
+	t.Run("omits runner s3 secret when no secrets or access keys are configured (IAM IRSA)", func(t *testing.T) {
+		rendered := runHelmTemplate(t,
+			"--set", "s3.accessKeyId=",
+			"--set", "s3.secretAccessKey=",
+		)
+		docs := splitManifests(rendered)
+
+		cm := findResource(docs, "ConfigMap", "vuhive-vuhive-cloud")
+		require.NotNil(t, cm)
+		cmData := cm["data"].(map[string]interface{})
+		assert.Equal(t, "", cmData["RUNNER_S3_SECRET_NAME"])
+
+		runnerSec := findResource(docs, "Secret", "vuhive-vuhive-cloud-runner-s3")
+		assert.Nil(t, runnerSec)
+	})
+}
+
+

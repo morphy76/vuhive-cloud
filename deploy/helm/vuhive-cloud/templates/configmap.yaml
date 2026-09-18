@@ -24,6 +24,10 @@ data:
   RUNNER_DNS_POLICY: {{ (default (dict) .Values.runner).dnsPolicy | default "" | quote }}
   RUNNER_DNS_NAMESERVERS: {{ (default (dict) (default (dict) .Values.runner).dnsConfig).nameservers | default (list) | join "," | quote }}
   RUNNER_DNS_SEARCHES: {{ (default (dict) (default (dict) .Values.runner).dnsConfig).searches | default (list) | join "," | quote }}
+  # Runner S3 credentials secret configuration (Issue #216)
+  RUNNER_S3_SECRET_NAME: {{ include "vuhive-cloud.runnerS3SecretName" . | quote }}
+  RUNNER_S3_ACCESS_KEY_KEY: {{ (default (dict) .Values.runner).existingSecretAccessKey | default .Values.s3.existingSecretAccessKey | default "AWS_ACCESS_KEY_ID" | quote }}
+  RUNNER_S3_SECRET_KEY_KEY: {{ (default (dict) .Values.runner).existingSecretSecretKey | default .Values.s3.existingSecretSecretKey | default "AWS_SECRET_ACCESS_KEY" | quote }}
   BUILDER_NAMESPACE: {{ .Values.builder.namespace | quote }}
   BUILDER_IMAGE: {{ .Values.builder.image | quote }}
   BUILDER_CPU_REQUEST: {{ (default (dict) (default (dict) (default (dict) .Values.builder).resources).requests).cpu | default "1000m" | quote }}
