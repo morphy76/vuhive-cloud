@@ -90,6 +90,27 @@ service name (http://<fullname>:<port>/api/v1/runs/complete).
 {{- end }}
 
 {{/*
+Construct the runner S3 secret name (Issue #216).
+*/}}
+{{- define "vuhive-cloud.runnerS3SecretName" -}}
+{{- if (default (dict) .Values.runner).existingSecret -}}
+{{- .Values.runner.existingSecret -}}
+{{- else if and .Values.runner.namespace (ne .Values.runner.namespace .Release.Namespace) -}}
+  {{- if .Values.s3.existingSecret -}}
+    {{- .Values.s3.existingSecret -}}
+  {{- else if or .Values.s3.accessKeyId .Values.s3.secretAccessKey -}}
+    {{- printf "%s-runner-s3" (include "vuhive-cloud.fullname" .) -}}
+  {{- end -}}
+{{- else -}}
+  {{- if .Values.s3.existingSecret -}}
+    {{- .Values.s3.existingSecret -}}
+  {{- else if or .Values.s3.accessKeyId .Values.s3.secretAccessKey -}}
+    {{- include "vuhive-cloud.fullname" . -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Create a default fully qualified bff name.
 */}}
 {{- define "vuhive-cloud.bff.fullname" -}}

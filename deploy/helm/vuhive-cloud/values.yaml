@@ -200,6 +200,14 @@ runner:
   #   options:
   #     - name: ndots
   #       value: "2"
+  # S3 credentials Secret configuration for runner pods (Issue #216).
+  # When configured, runner and init containers mount S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY
+  # securely via valueFrom.secretKeyRef rather than plaintext environment variables.
+  # If empty, the chart will automatically provision a scoped secret in runner.namespace if cross-namespace,
+  # or reuse the release Secret if in the same namespace, or fall back to s3.existingSecret.
+  existingSecret: ""
+  existingSecretAccessKey: ""
+  existingSecretSecretKey: ""
 
 # ── Network Policy Hardening ──────────────────────────────────────────
 networkPolicy:

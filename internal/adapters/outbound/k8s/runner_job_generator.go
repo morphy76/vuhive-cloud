@@ -487,26 +487,7 @@ func (g *RunnerJobGenerator) GenerateJob(
 }
 
 func (g *RunnerJobGenerator) buildS3EnvVars() []corev1.EnvVar {
-	var envs []corev1.EnvVar
-	if g.cfg.S3Endpoint != "" {
-		envs = append(envs, corev1.EnvVar{Name: "S3_ENDPOINT", Value: g.cfg.S3Endpoint})
-	}
-	if g.cfg.S3Region != "" {
-		envs = append(envs, corev1.EnvVar{Name: "S3_REGION", Value: g.cfg.S3Region})
-	}
-	if g.cfg.S3Bucket != "" {
-		envs = append(envs, corev1.EnvVar{Name: "S3_BUCKET", Value: g.cfg.S3Bucket})
-	}
-	if g.cfg.S3AccessKeyID != "" {
-		envs = append(envs, corev1.EnvVar{Name: "S3_ACCESS_KEY_ID", Value: g.cfg.S3AccessKeyID})
-	}
-	if g.cfg.S3SecretAccessKey != "" {
-		envs = append(envs, corev1.EnvVar{Name: "S3_SECRET_ACCESS_KEY", Value: g.cfg.S3SecretAccessKey})
-	}
-	if g.cfg.S3UsePathStyle {
-		envs = append(envs, corev1.EnvVar{Name: "S3_USE_PATH_STYLE", Value: "true"})
-	}
-	return envs
+	return buildS3EnvVars(g.cfg)
 }
 
 func formatRunnerJobName(runID string, suffix string) string {
