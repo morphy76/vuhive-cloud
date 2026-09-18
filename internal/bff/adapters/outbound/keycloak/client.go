@@ -37,6 +37,7 @@ type Config struct {
 	IssuerURL    string
 	HTTPClient   *http.Client
 	JWKSCacheTTL time.Duration
+	Timeout      time.Duration
 }
 
 type jwksKey struct {
@@ -102,9 +103,14 @@ func NewKeycloakClient(cfg Config) *KeycloakClient {
 		cfg.JWKSCacheTTL = 1 * time.Hour
 	}
 
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+
 	client := cfg.HTTPClient
 	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
+		client = &http.Client{Timeout: timeout}
 	}
 
 	return &KeycloakClient{
@@ -169,6 +175,17 @@ func (c *KeycloakClient) BuildAuthorizationURL(state, nonce, redirectURI string,
 	return c.cfg.AuthURL + sep + params.Encode(), nil
 }
 
+func (c *KeycloakClient) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	timeout := 5 * time.Second
+	if c.cfg.Timeout > 0 {
+	timeout = c.cfg.Timeout
+	}
+	if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > timeout {
+		return context.WithTimeout(ctx, timeout)
+	}
+	return ctx, func() {}
+}
+
 // ExchangeCode exchanges an authorization code and PKCE verifier for OAuth2/OIDC tokens.
 func (c *KeycloakClient) ExchangeCode(ctx context.Context, code, codeVerifier, redirectURI string) (*outbound.TokenResponse, error) {
 	start := time.Now()
@@ -177,6 +194,8 @@ func (c *KeycloakClient) ExchangeCode(ctx context.Context, code, codeVerifier, r
 		Str("client_id", c.cfg.ClientID).
 		Logger()
 	log.Debug().Msg("starting authorization code exchange")
+	ctx, cancel := c.withTimeout(ctx)
+	defer cancel()
 
 	if code == "" || codeVerifier == "" || redirectURI == "" {
 		err := fmt.Errorf("%w: code, codeVerifier, and redirectURI must not be empty", model.ErrInvalidParameter)
@@ -249,6 +268,8 @@ func (c *KeycloakClient) RefreshToken(ctx context.Context, refreshToken string) 
 		Str("client_id", c.cfg.ClientID).
 		Logger()
 	log.Debug().Msg("starting token refresh")
+	ctx, cancel := c.withTimeout(ctx)
+	defer cancel()
 
 	if refreshToken == "" {
 		err := fmt.Errorf("%w: refresh token cannot be empty", model.ErrInvalidParameter)
@@ -319,6 +340,8 @@ func (c *KeycloakClient) RevokeToken(ctx context.Context, token, tokenTypeHint s
 		Str("token_type_hint", tokenTypeHint).
 		Logger()
 	log.Debug().Msg("starting token revocation")
+	ctx, cancel := c.withTimeout(ctx)
+	defer cancel()
 
 	if token == "" {
 		err := fmt.Errorf("%w: token cannot be empty", model.ErrInvalidParameter)
@@ -524,6 +547,9 @@ func (c *KeycloakClient) getPublicKey(ctx context.Context, kid string) (*rsa.Pub
 }
 
 func (c *KeycloakClient) refreshJWKS(ctx context.Context) error {
+	ctx, cancel := c.withTimeout(ctx)
+	defer cancel()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.JWKSURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed creating jwks request: %w", err)

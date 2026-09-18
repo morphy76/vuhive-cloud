@@ -2205,6 +2205,16 @@
               }
             },
             "description": "Internal server error during dashboard aggregation"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream control plane unavailable or circuit open"
           }
         },
         "summary": "Aggregated composite dashboard overview",
@@ -2298,7 +2308,7 @@
                 }
               }
             },
-            "description": "Upstream control plane unavailable"
+            "description": "Upstream control plane unavailable or circuit open"
           }
         },
         "summary": "Unified composite run detail",
@@ -2605,6 +2615,16 @@
               }
             },
             "description": "Internal server error during dashboard aggregation"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream control plane unavailable or circuit open"
           }
         },
         "summary": "Aggregated composite dashboard overview (alias)",
@@ -2688,7 +2708,7 @@
                 }
               }
             },
-            "description": "Upstream control plane unavailable"
+            "description": "Upstream control plane unavailable or circuit open"
           }
         },
         "summary": "Unified composite run detail (alias)",
