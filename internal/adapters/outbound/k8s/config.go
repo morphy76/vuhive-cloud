@@ -100,6 +100,13 @@ type Config struct {
 	RunnerClientID                string
 	RunnerClientSecret            string
 	RunnerTokenURL                string
+
+	// Runner S3 credentials secret configuration (Issue #216).
+	// When RunnerS3SecretName is non-empty, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY
+	// are injected into runner and init containers via valueFrom.secretKeyRef instead of plaintext.
+	RunnerS3SecretName   string
+	RunnerS3AccessKeyKey string
+	RunnerS3SecretKeyKey string
 }
 
 // DefaultGoImage is the cluster-wide fallback container image for ephemeral compilation jobs.

@@ -313,3 +313,142 @@ func TestCronJobGenerator_DNSConfig(t *testing.T) {
 		assert.Nil(t, cronJob.Spec.JobTemplate.Spec.Template.Spec.DNSConfig)
 	})
 }
+
+func TestCronJobGenerator_S3CredentialsSecret(t *testing.T) {
+	suiteID := "suite-1111-2222"
+	artifactID := "art-3333-4444"
+	profileID := "prof-7777-8888"
+
+	res, err := model.NewResourceRequirements("500m", "1000m", "256Mi", "512Mi")
+	require.NoError(t, err)
+
+	profile, err := model.NewRunnerProfile("profile-1", "desc", "custom-runner:v2", res, nil, model.Affinity{}, nil)
+	require.NoError(t, err)
+
+	schedule, err := model.NewSchedule(suiteID, artifactID, nil, profileID, "nightly", "0 2 * * *")
+	require.NoError(t, err)
+
+	opts := outbound.RunnerJobOptions{
+		S3BinaryKey: "vuhive-binaries/nightly/runner",
+		S3ConfigKey: "vuhive-configs/nightly/config.yaml",
+	}
+
+	findEnv := func(envs []corev1.EnvVar, name string) *corev1.EnvVar {
+		for _, e := range envs {
+			if e.Name == name {
+				return &e
+			}
+		}
+		return nil
+	}
+
+	t.Run("secret configured with default keys injects valueFrom and no plaintext", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerS3SecretName = "vuhive-runner-s3"
+		cfg.S3Endpoint = "http://minio:9000"
+		cfg.S3Bucket = "artifacts"
+		cfg.S3AccessKeyID = "plaintext-should-not-leak"
+		cfg.S3SecretAccessKey = "plaintext-secret-should-not-leak"
+
+		gen := k8s.NewCronJobGenerator(cfg)
+		cronJob, err := gen.GenerateCronJob(schedule, profile, opts)
+		require.NoError(t, err)
+
+		podSpec := cronJob.Spec.JobTemplate.Spec.Template.Spec
+		containers := []corev1.Container{
+			podSpec.InitContainers[0],
+			podSpec.Containers[0],
+		}
+
+		for _, c := range containers {
+			accessKeyEnv := findEnv(c.Env, "S3_ACCESS_KEY_ID")
+			require.NotNil(t, accessKeyEnv, "container %s must have S3_ACCESS_KEY_ID", c.Name)
+			assert.Empty(t, accessKeyEnv.Value, "container %s S3_ACCESS_KEY_ID value must not be plaintext", c.Name)
+			require.NotNil(t, accessKeyEnv.ValueFrom)
+			require.NotNil(t, accessKeyEnv.ValueFrom.SecretKeyRef)
+			assert.Equal(t, "vuhive-runner-s3", accessKeyEnv.ValueFrom.SecretKeyRef.Name)
+			assert.Equal(t, "AWS_ACCESS_KEY_ID", accessKeyEnv.ValueFrom.SecretKeyRef.Key)
+
+			secretKeyEnv := findEnv(c.Env, "S3_SECRET_ACCESS_KEY")
+			require.NotNil(t, secretKeyEnv, "container %s must have S3_SECRET_ACCESS_KEY", c.Name)
+			assert.Empty(t, secretKeyEnv.Value, "container %s S3_SECRET_ACCESS_KEY value must not be plaintext", c.Name)
+			require.NotNil(t, secretKeyEnv.ValueFrom)
+			require.NotNil(t, secretKeyEnv.ValueFrom.SecretKeyRef)
+			assert.Equal(t, "vuhive-runner-s3", secretKeyEnv.ValueFrom.SecretKeyRef.Name)
+			assert.Equal(t, "AWS_SECRET_ACCESS_KEY", secretKeyEnv.ValueFrom.SecretKeyRef.Key)
+
+			endpointEnv := findEnv(c.Env, "S3_ENDPOINT")
+			require.NotNil(t, endpointEnv)
+			assert.Equal(t, "http://minio:9000", endpointEnv.Value)
+		}
+	})
+
+	t.Run("secret configured with custom keys", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerS3SecretName = "custom-cron-secret"
+		cfg.RunnerS3AccessKeyKey = "CUSTOM_ACCESS_KEY"
+		cfg.RunnerS3SecretKeyKey = "CUSTOM_SECRET_KEY"
+
+		gen := k8s.NewCronJobGenerator(cfg)
+		cronJob, err := gen.GenerateCronJob(schedule, profile, opts)
+		require.NoError(t, err)
+
+		podSpec := cronJob.Spec.JobTemplate.Spec.Template.Spec
+		for _, c := range []corev1.Container{podSpec.InitContainers[0], podSpec.Containers[0]} {
+			accessKeyEnv := findEnv(c.Env, "S3_ACCESS_KEY_ID")
+			require.NotNil(t, accessKeyEnv)
+			require.NotNil(t, accessKeyEnv.ValueFrom)
+			require.NotNil(t, accessKeyEnv.ValueFrom.SecretKeyRef)
+			assert.Equal(t, "custom-cron-secret", accessKeyEnv.ValueFrom.SecretKeyRef.Name)
+			assert.Equal(t, "CUSTOM_ACCESS_KEY", accessKeyEnv.ValueFrom.SecretKeyRef.Key)
+
+			secretKeyEnv := findEnv(c.Env, "S3_SECRET_ACCESS_KEY")
+			require.NotNil(t, secretKeyEnv)
+			require.NotNil(t, secretKeyEnv.ValueFrom)
+			require.NotNil(t, secretKeyEnv.ValueFrom.SecretKeyRef)
+			assert.Equal(t, "custom-cron-secret", secretKeyEnv.ValueFrom.SecretKeyRef.Name)
+			assert.Equal(t, "CUSTOM_SECRET_KEY", secretKeyEnv.ValueFrom.SecretKeyRef.Key)
+		}
+	})
+
+	t.Run("no secret and no credentials omits env vars for IAM IRSA", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerS3SecretName = ""
+		cfg.S3AccessKeyID = ""
+		cfg.S3SecretAccessKey = ""
+
+		gen := k8s.NewCronJobGenerator(cfg)
+		cronJob, err := gen.GenerateCronJob(schedule, profile, opts)
+		require.NoError(t, err)
+
+		podSpec := cronJob.Spec.JobTemplate.Spec.Template.Spec
+		for _, c := range []corev1.Container{podSpec.InitContainers[0], podSpec.Containers[0]} {
+			assert.Nil(t, findEnv(c.Env, "S3_ACCESS_KEY_ID"))
+			assert.Nil(t, findEnv(c.Env, "S3_SECRET_ACCESS_KEY"))
+		}
+	})
+
+	t.Run("no secret with plaintext credentials preserves backward compatibility", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		cfg.RunnerS3SecretName = ""
+		cfg.S3AccessKeyID = "legacy-cron-access"
+		cfg.S3SecretAccessKey = "legacy-cron-secret"
+
+		gen := k8s.NewCronJobGenerator(cfg)
+		cronJob, err := gen.GenerateCronJob(schedule, profile, opts)
+		require.NoError(t, err)
+
+		podSpec := cronJob.Spec.JobTemplate.Spec.Template.Spec
+		for _, c := range []corev1.Container{podSpec.InitContainers[0], podSpec.Containers[0]} {
+			accessKeyEnv := findEnv(c.Env, "S3_ACCESS_KEY_ID")
+			require.NotNil(t, accessKeyEnv)
+			assert.Equal(t, "legacy-cron-access", accessKeyEnv.Value)
+			assert.Nil(t, accessKeyEnv.ValueFrom)
+
+			secretKeyEnv := findEnv(c.Env, "S3_SECRET_ACCESS_KEY")
+			require.NotNil(t, secretKeyEnv)
+			assert.Equal(t, "legacy-cron-secret", secretKeyEnv.Value)
+			assert.Nil(t, secretKeyEnv.ValueFrom)
+		}
+	})
+}
