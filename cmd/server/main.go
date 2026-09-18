@@ -318,6 +318,23 @@ func main() {
 				k8sCfg.RunnerTokenURL = strings.TrimRight(os.Getenv("OIDC_ISSUER_URL"), "/") + "/protocol/openid-connect/token"
 			}
 
+			// Runner S3 credentials secret configuration (Issue #216).
+			if runnerS3Secret := os.Getenv("RUNNER_S3_SECRET_NAME"); runnerS3Secret != "" {
+				k8sCfg.RunnerS3SecretName = runnerS3Secret
+			} else if rSec := os.Getenv("RUNNER_EXISTING_SECRET"); rSec != "" {
+				k8sCfg.RunnerS3SecretName = rSec
+			}
+			if runnerS3AccessKeyKey := os.Getenv("RUNNER_S3_ACCESS_KEY_KEY"); runnerS3AccessKeyKey != "" {
+				k8sCfg.RunnerS3AccessKeyKey = runnerS3AccessKeyKey
+			} else if s3AccessKeyKey := os.Getenv("S3_EXISTING_SECRET_ACCESS_KEY"); s3AccessKeyKey != "" {
+				k8sCfg.RunnerS3AccessKeyKey = s3AccessKeyKey
+			}
+			if runnerS3SecretKeyKey := os.Getenv("RUNNER_S3_SECRET_KEY_KEY"); runnerS3SecretKeyKey != "" {
+				k8sCfg.RunnerS3SecretKeyKey = runnerS3SecretKeyKey
+			} else if s3SecretKeyKey := os.Getenv("S3_EXISTING_SECRET_SECRET_KEY"); s3SecretKeyKey != "" {
+				k8sCfg.RunnerS3SecretKeyKey = s3SecretKeyKey
+			}
+
 			// Runner DNS configuration (Issue #217).
 			if runnerDNSNdots := os.Getenv("RUNNER_DNS_NDOTS"); runnerDNSNdots != "" {
 				k8sCfg.RunnerDNSNdots = runnerDNSNdots
