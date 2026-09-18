@@ -174,6 +174,12 @@ export function validateYaml(content: string): YamlValidationResult {
   }
 }
 
+export const SECRET_PLACEHOLDER_REGEX = /\$\{secrets\.([A-Z][A-Z0-9_]*)\}/
+
+export function hasSecretPlaceholder(val: unknown): boolean {
+  return typeof val === "string" && SECRET_PLACEHOLDER_REGEX.test(val)
+}
+
 const GO_DURATION_REGEX = /^([0-9]+(\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$/
 const VALID_SCENARIO_TYPES = ['constant_vus', 'arrival_rate', 'ramping_vus'] as const
 const VALID_THRESHOLD_STATS = [
@@ -193,7 +199,7 @@ const VALID_THINK_TIME_TYPES = ['fixed', 'range', 'expo', 'gaussian'] as const
 const VALID_STRICT_MODES = ['off', 'warn', 'fatal'] as const
 
 function isValidDuration(val: unknown): boolean {
-  return typeof val === 'string' && GO_DURATION_REGEX.test(val.trim())
+  return typeof val === 'string' && (GO_DURATION_REGEX.test(val.trim()) || hasSecretPlaceholder(val))
 }
 
 export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
@@ -288,6 +294,7 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
 
     if (
       scenario.max_pretest_retries !== undefined &&
+      !hasSecretPlaceholder(scenario.max_pretest_retries) &&
       (typeof scenario.max_pretest_retries !== 'number' ||
         scenario.max_pretest_retries < 0 ||
         !Number.isInteger(scenario.max_pretest_retries))
@@ -297,6 +304,7 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
 
     if (
       scenario.min_ready_ratio !== undefined &&
+      !hasSecretPlaceholder(scenario.min_ready_ratio) &&
       (typeof scenario.min_ready_ratio !== 'number' ||
         scenario.min_ready_ratio < 0 ||
         scenario.min_ready_ratio > 1.0)
@@ -306,6 +314,7 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
 
     if (
       scenario.strict !== undefined &&
+      !hasSecretPlaceholder(scenario.strict) &&
       !VALID_STRICT_MODES.includes(scenario.strict)
     ) {
       errors.push(
@@ -318,9 +327,10 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
       if (scenario.vus === undefined) {
         errors.push(`Scenario "${name}" (constant_vus) requires "vus"`)
       } else if (
-        typeof scenario.vus !== 'number' ||
-        scenario.vus <= 0 ||
-        !Number.isInteger(scenario.vus)
+        !hasSecretPlaceholder(scenario.vus) &&
+        (typeof scenario.vus !== 'number' ||
+          scenario.vus <= 0 ||
+          !Number.isInteger(scenario.vus))
       ) {
         errors.push(`Scenario "${name}.vus" must be a positive integer`)
       }
@@ -336,9 +346,10 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
       if (scenario.target_tps === undefined) {
         errors.push(`Scenario "${name}" (arrival_rate) requires "target_tps"`)
       } else if (
-        typeof scenario.target_tps !== 'number' ||
-        scenario.target_tps <= 0 ||
-        !Number.isInteger(scenario.target_tps)
+        !hasSecretPlaceholder(scenario.target_tps) &&
+        (typeof scenario.target_tps !== 'number' ||
+          scenario.target_tps <= 0 ||
+          !Number.isInteger(scenario.target_tps))
       ) {
         errors.push(`Scenario "${name}.target_tps" must be a positive integer`)
       }
@@ -346,9 +357,10 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
       if (scenario.max_vus === undefined) {
         errors.push(`Scenario "${name}" (arrival_rate) requires "max_vus"`)
       } else if (
-        typeof scenario.max_vus !== 'number' ||
-        scenario.max_vus <= 0 ||
-        !Number.isInteger(scenario.max_vus)
+        !hasSecretPlaceholder(scenario.max_vus) &&
+        (typeof scenario.max_vus !== 'number' ||
+          scenario.max_vus <= 0 ||
+          !Number.isInteger(scenario.max_vus))
       ) {
         errors.push(`Scenario "${name}.max_vus" must be a positive integer`)
       }
@@ -363,6 +375,7 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
 
       if (
         scenario.burst_buffer !== undefined &&
+        !hasSecretPlaceholder(scenario.burst_buffer) &&
         (typeof scenario.burst_buffer !== 'number' ||
           scenario.burst_buffer < 0 ||
           !Number.isInteger(scenario.burst_buffer))
@@ -381,9 +394,10 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
           if (stage.target === undefined) {
             errors.push(`Scenario "${name}.stages[${idx}]" requires "target"`)
           } else if (
-            typeof stage.target !== 'number' ||
-            stage.target < 0 ||
-            !Number.isInteger(stage.target)
+            !hasSecretPlaceholder(stage.target) &&
+            (typeof stage.target !== 'number' ||
+              stage.target < 0 ||
+              !Number.isInteger(stage.target))
           ) {
             errors.push(`Scenario "${name}.stages[${idx}].target" must be a non-negative integer`)
           }
@@ -413,13 +427,13 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
             errors.push(`Scenario "${name}.thresholds[${idx}]" requires a non-empty "metric" string`)
           }
 
-          if (!th.stat || !VALID_THRESHOLD_STATS.includes(th.stat)) {
+          if (!th.stat || (!hasSecretPlaceholder(th.stat) && !VALID_THRESHOLD_STATS.includes(th.stat))) {
             errors.push(
               `Scenario "${name}.thresholds[${idx}].stat" must be one of: ${VALID_THRESHOLD_STATS.join(', ')}`
             )
           }
 
-          if (!th.operator || !VALID_THRESHOLD_OPERATORS.includes(th.operator)) {
+          if (!th.operator || (!hasSecretPlaceholder(th.operator) && !VALID_THRESHOLD_OPERATORS.includes(th.operator))) {
             errors.push(
               `Scenario "${name}.thresholds[${idx}].operator" must be one of: ${VALID_THRESHOLD_OPERATORS.join(', ')}`
             )
@@ -433,13 +447,13 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
             errors.push(`Scenario "${name}.thresholds[${idx}]" requires a non-empty "target" value`)
           }
 
-          if (th.on_no_data !== undefined && !VALID_ON_NO_DATA.includes(th.on_no_data)) {
+          if (th.on_no_data !== undefined && !hasSecretPlaceholder(th.on_no_data) && !VALID_ON_NO_DATA.includes(th.on_no_data)) {
             errors.push(
               `Scenario "${name}.thresholds[${idx}].on_no_data" must be one of: ${VALID_ON_NO_DATA.join(', ')}`
             )
           }
 
-          if (th.abort_on_fail !== undefined && typeof th.abort_on_fail !== 'boolean') {
+          if (th.abort_on_fail !== undefined && !hasSecretPlaceholder(th.abort_on_fail) && typeof th.abort_on_fail !== 'boolean') {
             errors.push(`Scenario "${name}.thresholds[${idx}].abort_on_fail" must be a boolean`)
           }
 
@@ -461,7 +475,7 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
           errors.push(`Scenario "${name}.${ttField}" must be an object`)
           continue
         }
-        if (!tt.type || !VALID_THINK_TIME_TYPES.includes(tt.type)) {
+        if (!tt.type || (!hasSecretPlaceholder(tt.type) && !VALID_THINK_TIME_TYPES.includes(tt.type))) {
           errors.push(
             `Scenario "${name}.${ttField}.type" must be one of: ${VALID_THINK_TIME_TYPES.join(', ')}`
           )

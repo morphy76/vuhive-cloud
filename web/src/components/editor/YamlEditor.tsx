@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
+import CodeMirror, { type ReactCodeMirrorRef } from '@uiw/react-codemirror'
+import type { SuiteSecret } from '@/types/secret'
 import { yaml } from '@codemirror/lang-yaml'
 import { oneDark } from '@codemirror/theme-one-dark'
 import {
@@ -9,6 +10,7 @@ import {
   FileCode,
   ChevronDown,
   Sparkles,
+  KeyRound,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -34,6 +36,7 @@ export interface YamlEditorProps {
   showTemplates?: boolean
   onSelectTemplate?: (template: VuhiveYamlTemplate) => void
   onValidationChange?: (result: YamlValidationResult, schema: SchemaValidationResult) => void
+  availableSecrets?: SuiteSecret[]
   className?: string
 }
 
@@ -50,6 +53,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
   showTemplates = false,
   onSelectTemplate,
   onValidationChange,
+  availableSecrets = [],
   className = '',
 }) => {
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -59,6 +63,8 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
     return false
   })
   const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false)
+  const [isSecretMenuOpen, setIsSecretMenuOpen] = useState(false)
+  const editorRef = React.useRef<ReactCodeMirrorRef>(null)
 
   // Observe theme change on root element
   useEffect(() => {
@@ -86,6 +92,30 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
   useEffect(() => {
     onValidationChange?.(validation, schema)
   }, [validation, schema, onValidationChange])
+
+  const handleInsertSecret = useCallback(
+    (secretKey: string) => {
+      setIsSecretMenuOpen(false)
+      const placeholder = `\${secrets.${secretKey}}`
+      const view = editorRef.current?.view
+      if (view) {
+        const ranges = view.state.selection.ranges
+        const tr = view.state.update({
+          changes: ranges.map((range) => ({
+            from: range.from,
+            to: range.to,
+            insert: placeholder,
+          })),
+          selection: { anchor: ranges[0].from + placeholder.length },
+        })
+        view.dispatch(tr)
+        view.focus()
+      } else if (onChange) {
+        onChange(value + (value ? ' ' : '') + placeholder)
+      }
+    },
+    [onChange, value]
+  )
 
   const handleTemplateClick = useCallback(
     (template: VuhiveYamlTemplate) => {
@@ -120,6 +150,52 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Insert Secret Dropdown */}
+          {availableSecrets && availableSecrets.length > 0 && !readOnly && (
+            <div className="relative">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsSecretMenuOpen((prev) => !prev)}
+                className="h-7 text-xs gap-1.5 px-2.5 border-slate-200 dark:border-slate-700"
+                aria-haspopup="true"
+                aria-expanded={isSecretMenuOpen}
+              >
+                <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                <span>Insert Secret</span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </Button>
+
+              {isSecretMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-1 w-64 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl z-20 py-1"
+                >
+                  <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Suite Secrets
+                  </div>
+                  {availableSecrets.map((sec) => (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => handleInsertSecret(sec.key)}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-between"
+                    >
+                      <div className="font-mono text-xs font-semibold text-slate-900 dark:text-white">
+                        {sec.key}
+                      </div>
+                      <div className="font-mono text-[10px] text-brand-600 dark:text-brand-400">
+                        {`\${secrets.${sec.key}}`}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Preset Templates Dropdown */}
           {showTemplates && !readOnly && (
             <div className="relative">
@@ -196,6 +272,7 @@ export const YamlEditor: React.FC<YamlEditorProps> = ({
         className="font-mono text-xs overflow-auto"
       >
         <CodeMirror
+          ref={editorRef}
           value={value}
           height={height}
           minHeight={minHeight}
