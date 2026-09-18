@@ -12,6 +12,11 @@ import type {
   UpdateProfileInput,
 } from '@/types/profile'
 import type {
+  SuiteSecret,
+  CreateSecretPayload,
+  UpdateSecretPayload,
+} from "@/types/secret"
+import type {
   Schedule,
   CreateScheduleInput,
   UpdateScheduleInput,
@@ -395,6 +400,78 @@ function mapRunResponse(r: any): HistoricalRun {
       : undefined,
     createdAt: r.created_at || r.createdAt || new Date().toISOString(),
   }
+}
+
+
+export async function listSuiteSecrets(suiteId: string): Promise<SuiteSecret[]> {
+  const res = await apiRequest<{ secrets: any[]; count: number }>(
+    `/suites/${encodeURIComponent(suiteId)}/secrets`
+  )
+  if (res && Array.isArray(res.secrets)) {
+    return res.secrets.map((s) => ({
+      id: s.id,
+      suiteId: s.suite_id || suiteId,
+      key: s.key,
+      createdAt: s.created_at,
+      updatedAt: s.updated_at,
+    }))
+  }
+  return []
+}
+
+export async function createSuiteSecret(
+  suiteId: string,
+  payload: CreateSecretPayload
+): Promise<SuiteSecret> {
+  const s = await apiRequest<any>(
+    `/suites/${encodeURIComponent(suiteId)}/secrets`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  )
+  return {
+    id: s.id,
+    suiteId: s.suite_id || suiteId,
+    key: s.key,
+    createdAt: s.created_at,
+    updatedAt: s.updated_at,
+  }
+}
+
+export async function updateSuiteSecret(
+  suiteId: string,
+  secretId: string,
+  payload: UpdateSecretPayload
+): Promise<SuiteSecret> {
+  const s = await apiRequest<any>(
+    `/suites/${encodeURIComponent(suiteId)}/secrets/${encodeURIComponent(secretId)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  )
+  return {
+    id: s.id,
+    suiteId: s.suite_id || suiteId,
+    key: s.key,
+    createdAt: s.created_at,
+    updatedAt: s.updated_at,
+  }
+}
+
+export async function deleteSuiteSecret(
+  suiteId: string,
+  secretId: string
+): Promise<void> {
+  await apiRequest<void>(
+    `/suites/${encodeURIComponent(suiteId)}/secrets/${encodeURIComponent(secretId)}`,
+    {
+      method: "DELETE",
+    }
+  )
 }
 
 export const api = {
@@ -963,4 +1040,10 @@ export const api = {
       method: 'DELETE',
     })
   },
+
+  listSuiteSecrets,
+  getSuiteSecrets: listSuiteSecrets,
+  createSuiteSecret,
+  updateSuiteSecret,
+  deleteSuiteSecret,
 }

@@ -16,6 +16,11 @@ import {
   Ban,
   CheckCircle2,
   Archive,
+  KeyRound,
+  ShieldCheck,
+  Copy,
+  Check,
+  Edit2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -43,6 +48,11 @@ import { DeleteSuiteDialog } from '@/components/dialogs/DeleteSuiteDialog'
 import { DeleteArtifactDialog } from '@/components/dialogs/DeleteArtifactDialog'
 import { useBuildEvents } from '@/hooks/use-events'
 import { formatErrorRate } from '@/lib/format-utils'
+import { CreateSecretDialog } from '@/components/dialogs/CreateSecretDialog'
+import { EditSecretDialog } from '@/components/dialogs/EditSecretDialog'
+import { DeleteSecretDialog } from '@/components/dialogs/DeleteSecretDialog'
+import { useSuiteSecrets, useDeleteSuiteSecret } from '@/hooks/use-secrets'
+import type { SuiteSecret } from '@/types/secret'
 import type { TestSuite, SuiteConfiguration, HistoricalRun, CompiledArtifact } from '@/types/suite'
 import { cn } from '@/lib/utils'
 
@@ -67,6 +77,46 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedArtifactForDelete, setSelectedArtifactForDelete] = useState<CompiledArtifact | null>(null)
   const [isDeleteArtifactOpen, setIsDeleteArtifactOpen] = useState(false)
+  const { data: secrets = [] } = useSuiteSecrets(currentSuite.id)
+  const deleteSecretMutation = useDeleteSuiteSecret(currentSuite.id)
+  const [isCreateSecretOpen, setIsCreateSecretOpen] = useState(false)
+  const [selectedSecretForEdit, setSelectedSecretForEdit] = useState<SuiteSecret | null>(null)
+  const [isEditSecretOpen, setIsEditSecretOpen] = useState(false)
+  const [selectedSecretForDelete, setSelectedSecretForDelete] = useState<SuiteSecret | null>(null)
+  const [isDeleteSecretOpen, setIsDeleteSecretOpen] = useState(false)
+  const [copiedSecretKey, setCopiedSecretKey] = useState<string | null>(null)
+
+  const handleCopyPlaceholder = (key: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(`\${secrets.${key}}`)
+    }
+    setCopiedSecretKey(key)
+    toast({
+      title: 'Placeholder Copied',
+      description: `\${secrets.${key}} copied to clipboard.`,
+    })
+    setTimeout(() => setCopiedSecretKey(null), 2000)
+  }
+
+  const handleConfirmDeleteSecret = async () => {
+    if (!selectedSecretForDelete) return
+    try {
+      await deleteSecretMutation.mutateAsync(selectedSecretForDelete.id)
+      toast({
+        title: 'Secret Deleted',
+        description: `Secret "${selectedSecretForDelete.key}" was permanently removed.`,
+      })
+      setIsDeleteSecretOpen(false)
+      setSelectedSecretForDelete(null)
+    } catch (err: any) {
+      toast({
+        title: 'Failed to delete secret',
+        description: err.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      })
+    }
+  }
+
 
   const { toast } = useToast()
   const updateSuiteMutation = useUpdateSuite(currentSuite.id)
@@ -479,6 +529,10 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
           <TabsTrigger value="runs" className="gap-2 min-h-[40px] px-4">
             <Play className="w-4 h-4" />
             <span>Historical Runs ({runs.length})</span>
+          </TabsTrigger>
+          <TabsTrigger value="secrets" className="gap-2 min-h-[40px] px-4">
+            <KeyRound className="w-4 h-4" />
+            <span>Secrets ({secrets.length})</span>
           </TabsTrigger>
         </TabsList>
 
@@ -963,6 +1017,139 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
             )}
           </div>
         </TabsContent>
+        {/* Suite Secrets Tab */}
+        <TabsContent value="secrets">
+          <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  Suite Secrets
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Encrypted credentials, API tokens, and parameters referenced in scenario configurations via <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">${'{secrets.KEY}'}</span>.
+                </p>
+              </div>
+              <Button
+                onClick={() => setIsCreateSecretOpen(true)}
+                className="gap-2 min-h-[40px] shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Suite Secret</span>
+              </Button>
+            </div>
+
+            {secrets.length === 0 ? (
+              <div className="text-center py-12 px-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-800/20">
+                <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto mb-3 border border-brand-200 dark:border-brand-900/60">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                  No suite secrets defined
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-4 leading-relaxed">
+                  Store sensitive credentials securely encrypted with AES-256-GCM. Scenarios can reference them using <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">${'{secrets.KEY}'}</span> placeholders without committing secrets in configuration files.
+                </p>
+                <Button
+                  onClick={() => setIsCreateSecretOpen(true)}
+                  className="gap-1.5 text-xs min-h-[36px]"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Suite Secret</span>
+                </Button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+                      <th className="pb-3 font-semibold">Key / Placeholder</th>
+                      <th className="pb-3 font-semibold">Storage & Security</th>
+                      <th className="pb-3 font-semibold">Masked Value</th>
+                      <th className="pb-3 font-semibold">Last Updated</th>
+                      <th className="pb-3 font-semibold text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    {secrets.map((sec) => (
+                      <tr
+                        key={sec.id}
+                        className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <td className="py-3.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-sm text-slate-900 dark:text-white">
+                              {sec.key}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyPlaceholder(sec.key)}
+                              aria-label={`Copy placeholder \${secrets.${sec.key}}`}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              title="Copy placeholder"
+                            >
+                              {copiedSecretKey === sec.key ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                          <span className="font-mono text-[11px] text-brand-600 dark:text-brand-400 mt-0.5 block">
+                            ${`{secrets.${sec.key}}`}
+                          </span>
+                        </td>
+                        <td className="py-3.5">
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className="text-[10px] font-mono border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40">
+                              AES-256-GCM
+                            </Badge>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400">PostgreSQL</span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 font-mono text-slate-400 tracking-widest text-xs">
+                          ••••••••
+                        </td>
+                        <td className="py-3.5 text-slate-500 dark:text-slate-400">
+                          {sec.updatedAt ? new Date(sec.updatedAt).toLocaleDateString() : 'N/A'}
+                        </td>
+                        <td className="py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedSecretForEdit(sec)
+                                setIsEditSecretOpen(true)
+                              }}
+                              className="h-8 px-2 text-xs gap-1 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                              aria-label={`Edit secret ${sec.key}`}
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedSecretForDelete(sec)
+                                setIsDeleteSecretOpen(true)
+                              }}
+                              className="h-8 px-2 text-xs gap-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                              aria-label={`Delete secret ${sec.key}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete</span>
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Action Dialogs */}
@@ -1010,6 +1197,24 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
         artifact={selectedArtifactForDelete}
         onConfirm={handleConfirmDeleteArtifact}
         isDeleting={deleteArtifactMutation.isPending}
+      />
+      <CreateSecretDialog
+        suiteId={currentSuite.id}
+        open={isCreateSecretOpen}
+        onOpenChange={setIsCreateSecretOpen}
+      />
+      <EditSecretDialog
+        suiteId={currentSuite.id}
+        secret={selectedSecretForEdit}
+        open={isEditSecretOpen}
+        onOpenChange={setIsEditSecretOpen}
+      />
+      <DeleteSecretDialog
+        open={isDeleteSecretOpen}
+        onOpenChange={setIsDeleteSecretOpen}
+        secret={selectedSecretForDelete}
+        onConfirm={handleConfirmDeleteSecret}
+        isDeleting={deleteSecretMutation.isPending}
       />
     </div>
   )

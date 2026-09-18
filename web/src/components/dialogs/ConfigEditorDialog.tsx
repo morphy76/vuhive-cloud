@@ -14,6 +14,7 @@ import { HelpTooltip } from '@/components/help/HelpTooltip'
 import { YamlEditor } from '@/components/editor/YamlEditor'
 import { YamlDiffViewer } from '@/components/editor/YamlDiffViewer'
 import { useCreateSuiteConfig, useUpdateSuiteConfig } from '@/hooks/use-suites'
+import { useSuiteSecrets } from '@/hooks/use-secrets'
 import type { SuiteConfiguration } from '@/types/suite'
 import type { YamlValidationResult, SchemaValidationResult } from '@/lib/yaml-validator'
 import { FileCode, Split, CopyPlus } from 'lucide-react'
@@ -65,6 +66,7 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
   const [isValidYaml, setIsValidYaml] = React.useState(true)
   const [diffBaseId, setDiffBaseId] = React.useState<string>('original')
 
+  const { data: suiteSecrets = [] } = useSuiteSecrets(suiteId)
   const createMutation = useCreateSuiteConfig(suiteId)
   const updateMutation = useUpdateSuiteConfig(suiteId)
 
@@ -252,6 +254,7 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
                 value={contentYaml}
                 onChange={setContentYaml}
                 showTemplates={true}
+                availableSecrets={suiteSecrets}
                 height="320px"
                 onValidationChange={handleValidationChange}
                 ariaLabel="Scenario Configuration YAML Editor"
