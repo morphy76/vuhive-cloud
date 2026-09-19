@@ -1,0 +1,48 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: vuhive-routes
+  namespace: vuhive-system
+spec:
+  entryPoints:
+    - web
+    - websecure
+  routes:
+    - match: Host(`vuhive.local`) && PathPrefix(`/docs`)
+      kind: Rule
+      priority: 1000
+      services:
+        - name: vuhive-infra-vuhive-cloud-infra-openapi-viewer
+          port: 8080
+    - match: Host(`vuhive.local`) && PathPrefix(`/auth`)
+      kind: Rule
+      priority: 900
+      services:
+        - name: vuhive-infra-vuhive-cloud-infra-keycloak
+          port: 8080
+    - match: Host(`vuhive.local`) && PathPrefix(`/api/bff`)
+      kind: Rule
+      priority: 800
+      services:
+        - name: vuhive-vuhive-cloud-bff
+          port: 8081
+    - match: Host(`vuhive.local`) && PathPrefix(`/api`)
+      kind: Rule
+      priority: 700
+      services:
+        - name: vuhive-vuhive-cloud
+          port: 8080
+    - match: Host(`vuhive.local`) && PathPrefix(`/`)
+      kind: Rule
+      priority: 10
+      services:
+        - name: vuhive-vuhive-cloud-bff
+          port: 8081
+    - match: Host(`minio.vuhive.local`) && PathPrefix(`/`)
+      kind: Rule
+      priority: 10
+      services:
+        - name: vuhive-infra-minio-console
+          port: 9001
+  tls:
+    secretName: vuhive-tls-secret

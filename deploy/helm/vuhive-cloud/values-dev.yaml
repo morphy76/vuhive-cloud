@@ -20,3 +20,6 @@ bff:
     repository: vuhive/bff
     tag: local
     pullPolicy: Never
+
+s3:
+  endpoint: "http://vuhive-infra-minio.vuhive-system.svc.cluster.local:9000"
