@@ -1648,6 +1648,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       summary: Create a suite secret
       description: |
@@ -1697,6 +1703,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)
           content:
             application/json:
               schema:
@@ -1759,6 +1771,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       summary: Delete a suite secret
       description: Permanently removes a suite-scoped secret.
@@ -1795,6 +1813,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Secret or test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)
           content:
             application/json:
               schema:

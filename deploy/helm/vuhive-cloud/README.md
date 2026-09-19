@@ -476,6 +476,12 @@ s3:
   existingSecretAccessKey: "AWS_ACCESS_KEY_ID"
   existingSecretSecretKey: "AWS_SECRET_ACCESS_KEY"
 
+# Suite Secrets Encryption (AES-256-GCM)
+secrets:
+  # Must be exactly 32 bytes. If unconfigured, secrets endpoints return 501 Not Implemented.
+  existingSecret: "vuhive-secrets-key"
+  existingSecretKey: "SECRETS_ENCRYPTION_KEY"
+
 # Identity & Access Management (OIDC / Keycloak)
 auth:
   enabled: true
@@ -904,6 +910,9 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `s3.existingSecret` | Name of Secret containing AWS credentials | `""` |
 | `s3.existingSecretAccessKey`| Key within `s3.existingSecret` for access key | `AWS_ACCESS_KEY_ID` |
 | `s3.existingSecretSecretKey`| Key within `s3.existingSecret` for secret key | `AWS_SECRET_ACCESS_KEY` |
+| `secrets.encryptionKey` | 32-byte AES-256-GCM encryption key for suite-scoped secrets stored in PostgreSQL. If empty, secrets endpoints return 501 Not Implemented. | `""` |
+| `secrets.existingSecret` | Name of Secret containing the 32-byte secrets encryption key | `""` |
+| `secrets.existingSecretKey` | Key within `secrets.existingSecret` for the encryption key | `SECRETS_ENCRYPTION_KEY` |
 | `runner.namespace` | Target namespace where runner Jobs and CronJobs are spawned | `vuhive-runners` |
 | `runner.createNamespace` | Automatically create `runner.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release namespace) | `true` |
 | `runner.initImage` | Init container image fetching binaries from S3 | `ghcr.io/morphy76/vuhive-cloud/runner-init:latest` |

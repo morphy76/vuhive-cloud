@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/inbound"
+	"github.com/morphy76/vuhive-cloud/internal/domain/model"
 )
 
 // SecretHandler exposes HTTP endpoints for managing suite-scoped Secrets.
@@ -21,6 +22,11 @@ func NewSecretHandler(secretsUC inbound.SecretsUseCase) *SecretHandler {
 
 // CreateSecret handles POST /api/v1/suites/:id/secrets to create a new suite-scoped secret.
 func (h *SecretHandler) CreateSecret(c *gin.Context) {
+	if h == nil || h.secretsUC == nil {
+		c.JSON(http.StatusNotImplemented, ErrorResponse{Error: model.ErrSecretsDisabled.Error()})
+		return
+	}
+
 	suiteID := c.Param("id")
 	var req CreateSecretRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -45,6 +51,11 @@ func (h *SecretHandler) CreateSecret(c *gin.Context) {
 
 // ListSecrets handles GET /api/v1/suites/:id/secrets to list all secrets for a suite.
 func (h *SecretHandler) ListSecrets(c *gin.Context) {
+	if h == nil || h.secretsUC == nil {
+		c.JSON(http.StatusNotImplemented, ErrorResponse{Error: model.ErrSecretsDisabled.Error()})
+		return
+	}
+
 	suiteID := c.Param("id")
 
 	secrets, err := h.secretsUC.ListSecrets(c.Request.Context(), suiteID)
@@ -58,6 +69,11 @@ func (h *SecretHandler) ListSecrets(c *gin.Context) {
 
 // UpdateSecret handles PUT /api/v1/suites/:id/secrets/:secretId to update a secret's value.
 func (h *SecretHandler) UpdateSecret(c *gin.Context) {
+	if h == nil || h.secretsUC == nil {
+		c.JSON(http.StatusNotImplemented, ErrorResponse{Error: model.ErrSecretsDisabled.Error()})
+		return
+	}
+
 	suiteID := c.Param("id")
 	secretID := c.Param("secretId")
 
@@ -84,6 +100,11 @@ func (h *SecretHandler) UpdateSecret(c *gin.Context) {
 
 // DeleteSecret handles DELETE /api/v1/suites/:id/secrets/:secretId to delete a suite-scoped secret.
 func (h *SecretHandler) DeleteSecret(c *gin.Context) {
+	if h == nil || h.secretsUC == nil {
+		c.JSON(http.StatusNotImplemented, ErrorResponse{Error: model.ErrSecretsDisabled.Error()})
+		return
+	}
+
 	suiteID := c.Param("id")
 	secretID := c.Param("secretId")
 

@@ -378,7 +378,7 @@
             "type": "string"
           },
           "run_id": {
-            "description": "Identifier of the test run to finalize. Accepts either:\n- A **domain UUID** (e.g. `a1b2c3d4-e5f6-7890-abcd-ef0123456789`) — used by directly-dispatched ad-hoc runs\n  where `VUHIVE_RUN_ID` is set to the internal TestRun UUID.\n- A **Kubernetes Job name** (e.g. `vuhive-sched-abc-28492020`) — used by CronJob-spawned runner pods\n  where `VUHIVE_RUN_ID` resolves to `metadata.labels['batch.kubernetes.io/job-name']`.\n  The control plane will first attempt UUID lookup, then fall back to `k8s_job_name` correlation.\n",
+            "description": "Identifier of the test run to finalize. Accepts either:\n- A **domain UUID** (e.g. `a1b2c3d4-e5f6-7890-abcd-ef0123456789`) \u2014 used by directly-dispatched ad-hoc runs\n  where `VUHIVE_RUN_ID` is set to the internal TestRun UUID.\n- A **Kubernetes Job name** (e.g. `vuhive-sched-abc-28492020`) \u2014 used by CronJob-spawned runner pods\n  where `VUHIVE_RUN_ID` resolves to `metadata.labels['batch.kubernetes.io/job-name']`.\n  The control plane will first attempt UUID lookup, then fall back to `k8s_job_name` correlation.\n",
             "example": "a1b2c3d4-e5f6-7890-abcd-ef0123456789",
             "type": "string"
           },
@@ -574,6 +574,26 @@
         ],
         "type": "object"
       },
+      "CreateSecretRequest": {
+        "properties": {
+          "key": {
+            "description": "Secret key name. Must match pattern ^[A-Z][A-Z0-9_]*$",
+            "example": "DB_PASSWORD",
+            "pattern": "^[A-Z][A-Z0-9_]*$",
+            "type": "string"
+          },
+          "value": {
+            "description": "Secret plaintext value (encrypted at rest)",
+            "example": "my-database-password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
       "CreateSessionRequest": {
         "properties": {
           "metadata": {
@@ -668,8 +688,10 @@
             "type": "array"
           },
           "sla_pass_rate": {
+            "description": "Overall SLA pass percentage across completed runs. Returns null when zero completed runs exist.",
             "example": 99.4,
             "format": "double",
+            "nullable": true,
             "type": "number"
           },
           "suites_count": {
@@ -1554,6 +1576,61 @@
         ],
         "type": "object"
       },
+      "SecretListResponse": {
+        "properties": {
+          "count": {
+            "example": 2,
+            "type": "integer"
+          },
+          "secrets": {
+            "items": {
+              "$ref": "#/components/schemas/SecretResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "secrets",
+          "count"
+        ],
+        "type": "object"
+      },
+      "SecretResponse": {
+        "properties": {
+          "created_at": {
+            "example": "2026-09-17T10:00:00Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "format": "uuid",
+            "type": "string"
+          },
+          "key": {
+            "example": "DB_PASSWORD",
+            "type": "string"
+          },
+          "suite_id": {
+            "example": "3e04a02e-bf34-4398-8b40-6389bca12c97",
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "example": "2026-09-17T10:00:00Z",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "suite_id",
+          "key",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
       "ServerSentEvent": {
         "properties": {
           "data": {
@@ -1907,6 +1984,19 @@
         },
         "type": "object"
       },
+      "UpdateSecretRequest": {
+        "properties": {
+          "value": {
+            "description": "New secret plaintext value (re-encrypted at rest)",
+            "example": "my-updated-password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "type": "object"
+      },
       "UpdateSuiteRequest": {
         "properties": {
           "description": {
@@ -1953,7 +2043,7 @@
     "securitySchemes": {
       "BearerAuth": {
         "bearerFormat": "JWT",
-        "description": "OIDC JWT access token issued by Keycloak. Pass in Authorization header as 'Bearer \u003ctoken\u003e'.",
+        "description": "OIDC JWT access token issued by Keycloak. Pass in Authorization header as 'Bearer <token>'.",
         "scheme": "bearer",
         "type": "http"
       },
@@ -2278,7 +2368,7 @@
                 }
               }
             },
-            "description": "Unified run detail with artifact links"
+            "description": "Test run details with pre-signed download URLs"
           },
           "400": {
             "content": {
@@ -4494,7 +4584,7 @@
     },
     "/api/v1/suites/{id}/builds": {
       "post": {
-        "description": "Accepts a multipart/form-data payload containing the Go test source archive\n(`.tar.gz`, `.tar.bz2`, or `.zip`) and triggers an ephemeral Kubernetes `batch/v1` Job to compile it\nfor the requested target platform. The response is returned immediately; the\nbuild runs asynchronously.\n\n**Pre-Build AST Static Analysis \u0026 Framework Enforcement**:\nUploaded archives undergo strict automated static verification before compilation:\n- **Direct Dependency Check**: `go.mod` must declare `github.com/morphy76/vuhive` as a direct dependency.\n- **Inverted Control Driver**: Source code must declare `package scenario` (importing `github.com/morphy76/vuhive/pkg/vuhive` and defining a valid `vuhive.Scenario` entrypoint such as `NewScenario()`, `Scenario()`, `InitScenario()`, or `Register(*vuhive.Suite)`). Defining `package main` or `func main()` is prohibited; the platform injects a trusted `main.go` execution driver.\n- **Package Import Blocklist**: Dangerous packages (`os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`) are blocked by default. Callers may request an override with `allow_insecure_imports=true` if enabled by cluster administrator policy.\n\n**Retry semantics**: If a previous compilation attempt for the same suite and\nplatform resulted in a `FAILED` artifact, uploading corrected sources via this\nendpoint automatically resets the artifact from `FAILED → PENDING` and prunes\nthe stale Kubernetes Job before dispatching a fresh one. No manual database or\ncluster intervention is required — just re-upload and the control plane handles\nthe rest.\n",
+        "description": "Accepts a multipart/form-data payload containing the Go test source archive\n(`.tar.gz`, `.tar.bz2`, or `.zip`) and triggers an ephemeral Kubernetes `batch/v1` Job to compile it\nfor the requested target platform. The response is returned immediately; the\nbuild runs asynchronously.\n\n**Pre-Build AST Static Analysis & Framework Enforcement**:\nUploaded archives undergo strict automated static verification before compilation:\n- **Direct Dependency Check**: `go.mod` must declare `github.com/morphy76/vuhive` as a direct dependency.\n- **Inverted Control Driver**: Source code must declare `package scenario` (importing `github.com/morphy76/vuhive/pkg/vuhive` and defining a valid `vuhive.Scenario` entrypoint such as `NewScenario()`, `Scenario()`, `InitScenario()`, or `Register(*vuhive.Suite)`). Defining `package main` or `func main()` is prohibited; the platform injects a trusted `main.go` execution driver.\n- **Package Import Blocklist**: Dangerous packages (`os/exec`, `syscall`, `unsafe`, `plugin`, `runtime/cgo`, `golang.org/x/sys`) are blocked by default. Callers may request an override with `allow_insecure_imports=true` if enabled by cluster administrator policy.\n\n**Retry semantics**: If a previous compilation attempt for the same suite and\nplatform resulted in a `FAILED` artifact, uploading corrected sources via this\nendpoint automatically resets the artifact from `FAILED \u2192 PENDING` and prunes\nthe stale Kubernetes Job before dispatching a fresh one. No manual database or\ncluster intervention is required \u2014 just re-upload and the control plane handles\nthe rest.\n",
         "operationId": "uploadAndBuild",
         "parameters": [
           {
@@ -4523,7 +4613,7 @@
                     "type": "string"
                   },
                   "go_version": {
-                    "description": "Optional target Go toolchain version (e.g., 1.26, 1.27). Must be \u003e= 1.26. If omitted, auto-detected from go.mod or falls back to cluster default.",
+                    "description": "Optional target Go toolchain version (e.g., 1.26, 1.27). Must be >= 1.26. If omitted, auto-detected from go.mod or falls back to cluster default.",
                     "example": "1.26",
                     "type": "string"
                   },
@@ -4971,6 +5061,345 @@
         "summary": "Update scenario configuration",
         "tags": [
           "Configurations"
+        ]
+      }
+    },
+    "/api/v1/suites/{id}/secrets": {
+      "get": {
+        "description": "Retrieves all suite-scoped secrets (key metadata only, encrypted values are never returned).",
+        "operationId": "listSecrets",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretListResponse"
+                }
+              }
+            },
+            "description": "List of suite-scoped secrets"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test suite not found"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)"
+          }
+        },
+        "summary": "List suite secrets",
+        "tags": [
+          "Secrets"
+        ]
+      },
+      "post": {
+        "description": "Creates a new suite-scoped secret. The value is encrypted at rest using AES-256-GCM.\nSecret keys must match the pattern `^[A-Z][A-Z0-9_]*$` and can be referenced in configuration\nYAML templates using `${secrets.KEY}` placeholder syntax.\n",
+        "operationId": "createSecret",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Secret created successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request (bad key format, empty value, etc.)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Test suite not found"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)"
+          }
+        },
+        "summary": "Create a suite secret",
+        "tags": [
+          "Secrets"
+        ]
+      }
+    },
+    "/api/v1/suites/{id}/secrets/{secretId}": {
+      "delete": {
+        "description": "Permanently removes a suite-scoped secret.",
+        "operationId": "deleteSecret",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Secret ID",
+            "in": "path",
+            "name": "secretId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Secret deleted successfully"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Secret or test suite not found"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)"
+          }
+        },
+        "summary": "Delete a suite secret",
+        "tags": [
+          "Secrets"
+        ]
+      },
+      "put": {
+        "description": "Re-encrypts and updates the value of an existing suite-scoped secret.",
+        "operationId": "updateSecret",
+        "parameters": [
+          {
+            "description": "Test Suite ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Secret ID",
+            "in": "path",
+            "name": "secretId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            },
+            "description": "Secret updated successfully"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Secret or test suite not found"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)"
+          }
+        },
+        "summary": "Update a suite secret",
+        "tags": [
+          "Secrets"
         ]
       }
     },

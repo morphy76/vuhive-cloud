@@ -25,6 +25,7 @@ import (
 	k8sadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/k8s"
 	pgadapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/postgres"
 	s3adapter "github.com/morphy76/vuhive-cloud/internal/adapters/outbound/s3"
+	"github.com/morphy76/vuhive-cloud/internal/application/ports/inbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/ports/outbound"
 	"github.com/morphy76/vuhive-cloud/internal/application/service"
 	"github.com/morphy76/vuhive-cloud/internal/domain/model"
@@ -414,9 +415,9 @@ func main() {
 	})
 	suiteService := service.NewSuiteService(suiteRepo)
 	configService := service.NewConfigService(suiteRepo, configRepo, storageAdapter)
-	var secretService *service.SecretService
+	var secretsUC inbound.SecretsUseCase
 	if secretRepo != nil && encryptor != nil {
-		secretService = service.NewSecretService(suiteRepo, secretRepo, encryptor)
+		secretsUC = service.NewSecretService(suiteRepo, secretRepo, encryptor)
 	}
 	buildService := service.NewBuildService(suiteRepo, artifactRepo, storageAdapter, buildOrchestrator, staticAnalyzer)
 	profileService := service.NewProfileService(profileRepo)
@@ -511,7 +512,7 @@ func main() {
 		HousekeepingUC: housekeepingService,
 		SuitesUC:       suiteService,
 		ConfigsUC:      configService,
-		SecretsUC:      secretService,
+		SecretsUC:      secretsUC,
 		TokenVerifier:  tokenVerifier,
 	})
 

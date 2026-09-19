@@ -158,4 +158,40 @@ describe('SuiteDetailView Secrets Tab', () => {
     expect(await screen.findByText(/no suite secrets defined/i)).toBeInTheDocument()
     expect(screen.getAllByText(/\$\{secrets\.KEY\}/i).length).toBeGreaterThanOrEqual(1)
   })
+
+  it('displays disabled warning banner when secrets management returns HTTP 501', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/secrets')) {
+        return Promise.resolve({
+          ok: false,
+          status: 501,
+          json: async () => ({
+            error: 'secrets management is disabled: SECRETS_ENCRYPTION_KEY is not configured on the control plane',
+          }),
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ configs: [], artifacts: [], runs: [] }),
+      })
+    })
+
+    const Wrapper = createWrapper()
+    render(
+      <Wrapper>
+        <SuiteDetailView suite={mockSuite} onBack={vi.fn()} />
+      </Wrapper>
+    )
+
+    const secretsTab = await screen.findByRole('tab', { name: /secrets/i })
+    fireEvent.mouseDown(secretsTab, { button: 0 })
+    fireEvent.click(secretsTab)
+
+    expect(await screen.findByText(/Secrets Management Disabled/i)).toBeInTheDocument()
+    expect(screen.getByText(/SECRETS_ENCRYPTION_KEY/i)).toBeInTheDocument()
+    const addButtons = screen.getAllByRole('button', { name: /add suite secret/i })
+    expect(addButtons[0]).toBeDisabled()
+  })
 })
+

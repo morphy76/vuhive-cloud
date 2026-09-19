@@ -36,6 +36,10 @@ func NewSecretService(
 
 // CreateSecret encrypts a plaintext value and persists a new suite-scoped secret.
 func (s *SecretService) CreateSecret(ctx context.Context, cmd inbound.CreateSecretCommand) (*model.Secret, error) {
+	if s == nil || s.encryptor == nil {
+		return nil, model.ErrSecretsDisabled
+	}
+
 	start := time.Now()
 	trimmedSuiteID := strings.TrimSpace(cmd.SuiteID)
 	trimmedKey := strings.TrimSpace(cmd.Key)
@@ -94,6 +98,10 @@ func (s *SecretService) CreateSecret(ctx context.Context, cmd inbound.CreateSecr
 // ListSecrets retrieves all secrets attached to a given test suite.
 // Note: encrypted values are returned; use GetDecryptedSecrets for plaintext.
 func (s *SecretService) ListSecrets(ctx context.Context, suiteID string) ([]*model.Secret, error) {
+	if s == nil || s.encryptor == nil {
+		return nil, model.ErrSecretsDisabled
+	}
+
 	start := time.Now()
 	trimmedSuiteID := strings.TrimSpace(suiteID)
 	if trimmedSuiteID == "" {
@@ -129,6 +137,10 @@ func (s *SecretService) ListSecrets(ctx context.Context, suiteID string) ([]*mod
 
 // UpdateSecret re-encrypts a new plaintext value and updates an existing suite-scoped secret.
 func (s *SecretService) UpdateSecret(ctx context.Context, cmd inbound.UpdateSecretCommand) (*model.Secret, error) {
+	if s == nil || s.encryptor == nil {
+		return nil, model.ErrSecretsDisabled
+	}
+
 	start := time.Now()
 	trimmedSuiteID := strings.TrimSpace(cmd.SuiteID)
 	trimmedSecretID := strings.TrimSpace(cmd.SecretID)
@@ -198,6 +210,10 @@ func (s *SecretService) UpdateSecret(ctx context.Context, cmd inbound.UpdateSecr
 
 // DeleteSecret removes a suite-scoped secret by ID.
 func (s *SecretService) DeleteSecret(ctx context.Context, suiteID, secretID string) error {
+	if s == nil || s.encryptor == nil {
+		return model.ErrSecretsDisabled
+	}
+
 	start := time.Now()
 	trimmedSuiteID := strings.TrimSpace(suiteID)
 	trimmedSecretID := strings.TrimSpace(secretID)
@@ -243,6 +259,10 @@ func (s *SecretService) DeleteSecret(ctx context.Context, suiteID, secretID stri
 // GetDecryptedSecrets fetches and decrypts the specified secret keys for a given suite.
 // Returns a map of key → plaintext value. Returns ErrMissingSecret if any requested key is not found.
 func (s *SecretService) GetDecryptedSecrets(ctx context.Context, suiteID string, keys []string) (map[string]string, error) {
+	if s == nil || s.encryptor == nil {
+		return nil, model.ErrSecretsDisabled
+	}
+
 	start := time.Now()
 	trimmedSuiteID := strings.TrimSpace(suiteID)
 

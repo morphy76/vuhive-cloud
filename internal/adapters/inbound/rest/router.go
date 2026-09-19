@@ -175,6 +175,16 @@ func SetupRouterWithConfig(cfg RouterConfig) *gin.Engine {
 					suites.GET("/:id/secrets", roleGuard(model.RoleDeveloper, model.RoleAdmin), secretHandler.ListSecrets)
 					suites.PUT("/:id/secrets/:secretId", roleGuard(model.RoleDeveloper, model.RoleAdmin), secretHandler.UpdateSecret)
 					suites.DELETE("/:id/secrets/:secretId", roleGuard(model.RoleDeveloper, model.RoleAdmin), secretHandler.DeleteSecret)
+				} else {
+					disabledSecretHandler := func(c *gin.Context) {
+						c.JSON(http.StatusNotImplemented, ErrorResponse{
+							Error: model.ErrSecretsDisabled.Error(),
+						})
+					}
+					suites.POST("/:id/secrets", roleGuard(model.RoleDeveloper, model.RoleAdmin), disabledSecretHandler)
+					suites.GET("/:id/secrets", roleGuard(model.RoleDeveloper, model.RoleAdmin), disabledSecretHandler)
+					suites.PUT("/:id/secrets/:secretId", roleGuard(model.RoleDeveloper, model.RoleAdmin), disabledSecretHandler)
+					suites.DELETE("/:id/secrets/:secretId", roleGuard(model.RoleDeveloper, model.RoleAdmin), disabledSecretHandler)
 				}
 
 				if cfg.BuildsUC != nil {
