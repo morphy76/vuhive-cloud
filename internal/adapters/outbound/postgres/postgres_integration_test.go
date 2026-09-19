@@ -235,7 +235,7 @@ func TestRepositories_FullCRUD(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, suiteRepo.Save(ctx, suite))
 
-		config, err := model.NewConfiguration(suite.ID(), "default-config", "vus: 100\nduration: 5m\n", "s3://bucket/configs/default.yaml", true)
+		config, err := model.NewConfiguration(suite.ID(), "default-config", "Default configuration description", "vus: 100\nduration: 5m\n", "s3://bucket/configs/default.yaml", true)
 		require.NoError(t, err)
 
 		// 1. Save
@@ -247,10 +247,11 @@ func TestRepositories_FullCRUD(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, config.ID(), found.ID())
 		assert.Equal(t, "default-config", found.Name())
+		assert.Equal(t, "Default configuration description", found.Description())
 		assert.True(t, found.IsDefault())
 
 		// 3. Unique (suite_id, name) collision -> ErrConflict
-		dupConfig, err := model.NewConfiguration(suite.ID(), "default-config", "vus: 50\n", "s3://bucket/configs/dup.yaml", false)
+		dupConfig, err := model.NewConfiguration(suite.ID(), "default-config", "Duplicate config description", "vus: 50\n", "s3://bucket/configs/dup.yaml", false)
 		require.NoError(t, err)
 		err = configRepo.Save(ctx, dupConfig)
 		assert.ErrorIs(t, err, model.ErrConflict)

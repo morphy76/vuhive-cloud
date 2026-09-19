@@ -334,3 +334,48 @@ func TestSecretService_GetDecryptedSecrets(t *testing.T) {
 		assert.ErrorIs(t, err, model.ErrMissingSecret)
 	})
 }
+
+func TestSecretService_DisabledAndNilHandling(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("nil receiver returns ErrSecretsDisabled without panicking", func(t *testing.T) {
+		var nilSvc *service.SecretService
+
+		_, err := nilSvc.CreateSecret(ctx, inbound.CreateSecretCommand{SuiteID: "suite-1", Key: "TEST", Value: "val"})
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+
+		_, err = nilSvc.ListSecrets(ctx, "suite-1")
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+
+		_, err = nilSvc.UpdateSecret(ctx, inbound.UpdateSecretCommand{SuiteID: "suite-1", SecretID: "sec-1", Value: "val"})
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+
+		err = nilSvc.DeleteSecret(ctx, "suite-1", "sec-1")
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+
+		_, err = nilSvc.GetDecryptedSecrets(ctx, "suite-1", []string{"KEY"})
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+	})
+
+	t.Run("uninitialized encryptor returns ErrSecretsDisabled without panicking", func(t *testing.T) {
+		repo := new(mockSecretRepo)
+		suiteRepo := new(mockSuiteRepoForSecrets)
+		svc := service.NewSecretService(suiteRepo, repo, nil)
+
+		_, err := svc.CreateSecret(ctx, inbound.CreateSecretCommand{SuiteID: "suite-1", Key: "TEST", Value: "val"})
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+
+		_, err = svc.ListSecrets(ctx, "suite-1")
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+
+		_, err = svc.UpdateSecret(ctx, inbound.UpdateSecretCommand{SuiteID: "suite-1", SecretID: "sec-1", Value: "val"})
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+
+		err = svc.DeleteSecret(ctx, "suite-1", "sec-1")
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+
+		_, err = svc.GetDecryptedSecrets(ctx, "suite-1", []string{"KEY"})
+		assert.ErrorIs(t, err, model.ErrSecretsDisabled)
+	})
+}
+

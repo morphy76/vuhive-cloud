@@ -27,11 +27,12 @@ func (r *ConfigurationRepository) Save(ctx context.Context, config *model.Config
 	log.Debug().Msg("saving configuration")
 
 	query := `
-		INSERT INTO configurations (id, suite_id, name, content_yaml, s3_config_key, is_default, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO configurations (id, suite_id, name, description, content_yaml, s3_config_key, is_default, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (id) DO UPDATE SET
 			suite_id = EXCLUDED.suite_id,
 			name = EXCLUDED.name,
+			description = EXCLUDED.description,
 			content_yaml = EXCLUDED.content_yaml,
 			s3_config_key = EXCLUDED.s3_config_key,
 			is_default = EXCLUDED.is_default
@@ -40,6 +41,7 @@ func (r *ConfigurationRepository) Save(ctx context.Context, config *model.Config
 		config.ID(),
 		config.SuiteID(),
 		config.Name(),
+		config.Description(),
 		config.ContentYAML(),
 		config.S3ConfigKey(),
 		config.IsDefault(),
@@ -61,7 +63,7 @@ func (r *ConfigurationRepository) FindByID(ctx context.Context, id string) (*mod
 	log.Debug().Msg("finding configuration by id")
 
 	query := `
-		SELECT id, suite_id, name, content_yaml, s3_config_key, is_default, created_at
+		SELECT id, suite_id, name, description, content_yaml, s3_config_key, is_default, created_at
 		FROM configurations
 		WHERE id = $1
 	`
@@ -69,13 +71,14 @@ func (r *ConfigurationRepository) FindByID(ctx context.Context, id string) (*mod
 		configID    string
 		suiteID     string
 		name        string
+		description string
 		contentYAML string
 		s3ConfigKey string
 		isDefault   bool
 		createdAt   time.Time
 	)
 	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&configID, &suiteID, &name, &contentYAML, &s3ConfigKey, &isDefault, &createdAt,
+		&configID, &suiteID, &name, &description, &contentYAML, &s3ConfigKey, &isDefault, &createdAt,
 	)
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to find configuration by id")
@@ -83,7 +86,7 @@ func (r *ConfigurationRepository) FindByID(ctx context.Context, id string) (*mod
 	}
 
 	config, err := model.NewConfigurationWithID(
-		configID, suiteID, name, contentYAML, s3ConfigKey, isDefault, createdAt,
+		configID, suiteID, name, description, contentYAML, s3ConfigKey, isDefault, createdAt,
 	)
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to reconstitute configuration")
@@ -101,7 +104,7 @@ func (r *ConfigurationRepository) ListBySuiteID(ctx context.Context, suiteID str
 	log.Debug().Msg("listing configurations by suite id")
 
 	query := `
-		SELECT id, suite_id, name, content_yaml, s3_config_key, is_default, created_at
+		SELECT id, suite_id, name, description, content_yaml, s3_config_key, is_default, created_at
 		FROM configurations
 		WHERE suite_id = $1
 		ORDER BY created_at ASC
@@ -119,19 +122,20 @@ func (r *ConfigurationRepository) ListBySuiteID(ctx context.Context, suiteID str
 			configID    string
 			sID         string
 			name        string
+			description string
 			contentYAML string
 			s3ConfigKey string
 			isDefault   bool
 			createdAt   time.Time
 		)
 		if err := rows.Scan(
-			&configID, &sID, &name, &contentYAML, &s3ConfigKey, &isDefault, &createdAt,
+			&configID, &sID, &name, &description, &contentYAML, &s3ConfigKey, &isDefault, &createdAt,
 		); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan configuration row")
 			return nil, MapError(err)
 		}
 		config, err := model.NewConfigurationWithID(
-			configID, sID, name, contentYAML, s3ConfigKey, isDefault, createdAt,
+			configID, sID, name, description, contentYAML, s3ConfigKey, isDefault, createdAt,
 		)
 		if err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to reconstitute configuration from row")

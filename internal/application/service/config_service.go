@@ -81,6 +81,7 @@ func (s *ConfigService) CreateConfig(ctx context.Context, cmd inbound.CreateConf
 		configID,
 		trimmedSuiteID,
 		trimmedName,
+		cmd.Description,
 		cmd.ContentYAML,
 		s3Key,
 		cmd.IsDefault,
@@ -276,7 +277,7 @@ func (s *ConfigService) UpdateConfig(ctx context.Context, cmd inbound.UpdateConf
 	if trimmedName == "" {
 		return nil, model.ErrEmptyName
 	}
-	if err := config.SetName(trimmedName); err != nil {
+	if err := config.UpdateDetails(trimmedName, cmd.Description); err != nil {
 		return nil, err
 	}
 

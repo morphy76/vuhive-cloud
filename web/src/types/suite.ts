@@ -19,6 +19,7 @@ export interface SuiteConfiguration {
   id: string
   suiteId: string
   name: string
+  description?: string
   contentYaml: string
   s3ConfigKey?: string
   isDefault: boolean

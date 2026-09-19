@@ -125,5 +125,8 @@ var (
 
 	// ErrMissingSecret indicates a configuration template references secrets that do not exist.
 	ErrMissingSecret = errors.New("configuration references missing secrets")
+
+	// ErrSecretsDisabled indicates secrets management is disabled because SECRETS_ENCRYPTION_KEY is unconfigured.
+	ErrSecretsDisabled = errors.New("secrets management is disabled: SECRETS_ENCRYPTION_KEY is not configured on the control plane")
 )
 

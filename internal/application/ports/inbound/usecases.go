@@ -29,6 +29,7 @@ type SuitesUseCase interface {
 type CreateConfigCommand struct {
 	SuiteID     string
 	Name        string
+	Description string
 	ContentYAML string
 	IsDefault   bool
 }
@@ -38,6 +39,7 @@ type UpdateConfigCommand struct {
 	SuiteID     string
 	ConfigID    string
 	Name        string
+	Description string
 	ContentYAML string
 	IsDefault   *bool
 }

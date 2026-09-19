@@ -213,13 +213,14 @@ curl -i -X POST http://localhost:8080/api/v1/suites \
 
 #### Step 2: Attach Scenario Configurations (`vuhive.yaml`)
 
-Upload an execution profile specifying virtual users (VUs), duration, ramp-up stages, and SLA latency thresholds conforming to the `vuhive` SDK v1.1.5 specification:
+Upload an execution profile specifying virtual users (VUs), duration, ramp-up stages, and SLA latency thresholds conforming to the `vuhive` SDK v1.1.5 specification (optionally providing a human-readable `description` of the traffic profile or test objective):
 
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs \
   -H "Content-Type: application/json" \
   -d '{
     "name": "staging-load",
+    "description": "Peak hour staging traffic profile simulating 50 concurrent virtual users",
     "content_yaml": "version: \"1.0\"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 50\n    ramp_up: 10s\n    run_period: 60s\n    ramp_down: 5s\n    vu_timeout: 5s\n    thresholds:\n      - metric: vuhive.http.req_duration\n        stat: p95\n        operator: \"<\"\n        target: \"250ms\"\n      - metric: vuhive.http.req_failed\n        stat: rate\n        operator: \"<=\"\n        target: \"0.01\"\n",
     "is_default": true
   }'
@@ -232,6 +233,7 @@ curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389
   "id": "7fa1205c-d38e-4f51-b924-11883395bcf8",
   "suite_id": "3e04a02e-bf34-4398-8b40-6389bca12c97",
   "name": "staging-load",
+  "description": "Peak hour staging traffic profile simulating 50 concurrent virtual users",
   "content_yaml": "version: \"1.0\"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 50\n    ramp_up: 10s\n    run_period: 60s\n    ramp_down: 5s\n    vu_timeout: 5s\n    thresholds:\n      - metric: vuhive.http.req_duration\n        stat: p95\n        operator: \"<\"\n        target: \"250ms\"\n      - metric: vuhive.http.req_failed\n        stat: rate\n        operator: \"<=\"\n        target: \"0.01\"\n",
   "s3_config_key": "suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs/7fa1205c-d38e-4f51-b924-11883395bcf8.yaml",
   "is_default": true,
@@ -246,6 +248,7 @@ curl -i -X PUT http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389b
   -H "Content-Type: application/json" \
   -d '{
     "name": "staging-load-updated",
+    "description": "High-volume stress test profile with updated concurrency limits (100 VUs)",
     "content_yaml": "version: \"1.0\"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 100\n    ramp_up: 20s\n    run_period: 120s\n    ramp_down: 10s\n    vu_timeout: 5s\n    thresholds:\n      - metric: vuhive.http.req_duration\n        stat: p95\n        operator: \"<\"\n        target: \"200ms\"\n      - metric: vuhive.http.req_failed\n        stat: rate\n        operator: \"<=\"\n        target: \"0.005\"\n",
     "is_default": true
   }'
@@ -1482,7 +1485,7 @@ The Test Suite catalog view (`web/src/views/SuitesView.tsx`) provides high-densi
   - **1-Click Activate & Dispatch (`TriggerRunDialog.tsx`)**: When dispatching from a `DRAFT` suite, provides pre-flight warning feedback and an **Activate & Dispatch** action that activates the suite and initiates execution in a single step, preventing unhandled domain 409 errors.
   - **Reactive Build Completion Guidance**: Real-time SSE listener automatically prompts operators with a toast notification to activate the suite as soon as an ephemeral compilation Job succeeds (`status: READY`).
   - **Attached Configurations**: List of attached YAML scenarios with inline YAML viewing, editing, diffing, and deletion controls.
-  - **Suite-Scoped Secrets**: Dedicated Secrets tab with AES-256-GCM encrypted storage in PostgreSQL, masked values, and interactive dialogs (`CreateSecretDialog`, `EditSecretDialog`, `DeleteSecretDialog`). Integrates directly with the scenario YAML editor via an "Insert Secret" toolbar dropdown for inserting `${secrets.KEY}` placeholders.
+  - **Suite-Scoped Secrets**: Dedicated Secrets tab with AES-256-GCM encrypted storage in PostgreSQL, masked values, and interactive dialogs (`CreateSecretDialog`, `EditSecretDialog`, `DeleteSecretDialog`). Integrates directly with the scenario YAML editor via an "Insert Secret" toolbar dropdown for inserting `${secrets.KEY}` placeholders. When `SECRETS_ENCRYPTION_KEY` is not configured on the control plane, the endpoints return `501 Not Implemented` and the Secrets tab renders an informational warning banner with creation controls gracefully disabled.
   - **Compiled Artifacts**: Cross-compiled binaries by target architecture with SHA256 integrity checksums, retry/cancel controls, and build logs.
   - **Historical Runs**: Execution history filtered for the suite, displaying status badges, duration, TPS, and latency percentiles.
 

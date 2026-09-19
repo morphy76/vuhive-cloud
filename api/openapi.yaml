@@ -1648,6 +1648,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       summary: Create a suite secret
       description: |
@@ -1697,6 +1703,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)
           content:
             application/json:
               schema:
@@ -1759,6 +1771,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       summary: Delete a suite secret
       description: Permanently removes a suite-scoped secret.
@@ -1795,6 +1813,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Secret or test suite not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Secrets management is disabled (missing SECRETS_ENCRYPTION_KEY)
           content:
             application/json:
               schema:
@@ -3750,6 +3774,9 @@ components:
         name:
           type: string
           example: staging-profile
+        description:
+          type: string
+          example: High-volume stress test profile for staging environment
         content_yaml:
           type: string
           example: |
@@ -3773,6 +3800,9 @@ components:
         name:
           type: string
           example: staging-profile-updated
+        description:
+          type: string
+          example: High-volume stress test profile with updated concurrency limits
         content_yaml:
           type: string
           example: |
@@ -3793,6 +3823,7 @@ components:
         - id
         - suite_id
         - name
+        - description
         - content_yaml
         - s3_config_key
         - is_default
@@ -3809,6 +3840,9 @@ components:
         name:
           type: string
           example: staging-profile
+        description:
+          type: string
+          example: High-volume stress test profile for staging environment
         content_yaml:
           type: string
           example: |
