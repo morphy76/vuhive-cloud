@@ -656,6 +656,7 @@ export const api = {
         id: c.id,
         suiteId: c.suite_id || suiteId,
         name: c.name,
+        description: c.description,
         contentYaml: c.content_yaml,
         s3ConfigKey: c.s3_config_key,
         isDefault: !!c.is_default,
@@ -667,7 +668,7 @@ export const api = {
 
   async createSuiteConfig(
     suiteId: string,
-    data: { name: string; content_yaml: string; is_default?: boolean }
+    data: { name: string; description?: string; content_yaml: string; is_default?: boolean }
   ): Promise<SuiteConfiguration> {
     const c = await apiRequest<any>(`/suites/${encodeURIComponent(suiteId)}/configs`, {
       method: 'POST',
@@ -679,6 +680,7 @@ export const api = {
       id: c.id,
       suiteId: c.suite_id || suiteId,
       name: c.name,
+      description: c.description,
       contentYaml: c.content_yaml,
       s3ConfigKey: c.s3_config_key,
       isDefault: !!c.is_default,
@@ -689,7 +691,7 @@ export const api = {
   async updateSuiteConfig(
     suiteId: string,
     configId: string,
-    data: { name: string; content_yaml: string; is_default?: boolean }
+    data: { name: string; description?: string; content_yaml: string; is_default?: boolean }
   ): Promise<SuiteConfiguration> {
     const c = await apiRequest<any>(
       `/suites/${encodeURIComponent(suiteId)}/configs/${encodeURIComponent(configId)}`,
@@ -704,6 +706,7 @@ export const api = {
       id: c.id,
       suiteId: c.suite_id || suiteId,
       name: c.name,
+      description: c.description,
       contentYaml: c.content_yaml,
       s3ConfigKey: c.s3_config_key,
       isDefault: !!c.is_default,

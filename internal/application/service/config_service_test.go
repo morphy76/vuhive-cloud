@@ -58,13 +58,14 @@ func TestConfigService_CreateConfig(t *testing.T) {
 
 		configRepo := new(MockConfigurationRepository)
 		configRepo.On("Save", mock.Anything, mock.MatchedBy(func(c *model.Configuration) bool {
-			return c.SuiteID() == suite.ID() && c.Name() == "default" && c.ContentYAML() == "scenario: test" && c.IsDefault()
+			return c.SuiteID() == suite.ID() && c.Name() == "default" && c.Description() == "Test config description" && c.ContentYAML() == "scenario: test" && c.IsDefault()
 		})).Return(nil).Once()
 
 		svc := service.NewConfigService(suiteRepo, configRepo, storage)
 		cfg, err := svc.CreateConfig(ctx, inbound.CreateConfigCommand{
 			SuiteID:     suite.ID(),
 			Name:        "default",
+			Description: "Test config description",
 			ContentYAML: "scenario: test",
 			IsDefault:   true,
 		})
@@ -73,6 +74,7 @@ func TestConfigService_CreateConfig(t *testing.T) {
 		require.NotNil(t, cfg)
 		assert.Equal(t, suite.ID(), cfg.SuiteID())
 		assert.Equal(t, "default", cfg.Name())
+		assert.Equal(t, "Test config description", cfg.Description())
 		assert.Equal(t, "scenario: test", cfg.ContentYAML())
 		assert.True(t, cfg.IsDefault())
 		assert.NotEmpty(t, cfg.S3ConfigKey())
@@ -93,6 +95,7 @@ func TestConfigService_CreateConfig(t *testing.T) {
 		cfg, err := svc.CreateConfig(ctx, inbound.CreateConfigCommand{
 			SuiteID:     "missing-suite",
 			Name:        "default",
+			Description: "desc",
 			ContentYAML: "scenario: test",
 		})
 
@@ -113,6 +116,7 @@ func TestConfigService_CreateConfig(t *testing.T) {
 		cfg, err := svc.CreateConfig(ctx, inbound.CreateConfigCommand{
 			SuiteID:     suite.ID(),
 			Name:        "   ",
+			Description: "desc",
 			ContentYAML: "scenario: test",
 		})
 
@@ -133,6 +137,7 @@ func TestConfigService_CreateConfig(t *testing.T) {
 		cfg, err := svc.CreateConfig(ctx, inbound.CreateConfigCommand{
 			SuiteID:     suite.ID(),
 			Name:        "default",
+			Description: "desc",
 			ContentYAML: "   ",
 		})
 
@@ -156,6 +161,7 @@ func TestConfigService_CreateConfig(t *testing.T) {
 		cfg, err := svc.CreateConfig(ctx, inbound.CreateConfigCommand{
 			SuiteID:     suite.ID(),
 			Name:        "default",
+			Description: "desc",
 			ContentYAML: "scenario: test",
 		})
 
@@ -169,7 +175,7 @@ func TestConfigService_GetConfig(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successfully retrieves configuration belonging to suite", func(t *testing.T) {
-		cfg, _ := model.NewConfiguration("suite-1", "default", "scenario: test", "s3/key", true)
+		cfg, _ := model.NewConfiguration("suite-1", "default", "desc", "scenario: test", "s3/key", true)
 
 		configRepo := new(MockConfigurationRepository)
 		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
@@ -180,10 +186,11 @@ func TestConfigService_GetConfig(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, cfg.ID(), found.ID())
 		assert.Equal(t, "default", found.Name())
+		assert.Equal(t, "desc", found.Description())
 	})
 
 	t.Run("returns ErrNotFound when configuration belongs to another suite", func(t *testing.T) {
-		cfg, _ := model.NewConfiguration("suite-1", "default", "scenario: test", "s3/key", true)
+		cfg, _ := model.NewConfiguration("suite-1", "default", "desc", "scenario: test", "s3/key", true)
 
 		configRepo := new(MockConfigurationRepository)
 		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
@@ -217,8 +224,8 @@ func TestConfigService_ListConfigs(t *testing.T) {
 		suiteRepo := new(MockTestSuiteRepository)
 		suiteRepo.On("FindByID", mock.Anything, suite.ID()).Return(suite, nil).Once()
 
-		c1, _ := model.NewConfiguration(suite.ID(), "c1", "yaml1", "k1", true)
-		c2, _ := model.NewConfiguration(suite.ID(), "c2", "yaml2", "k2", false)
+		c1, _ := model.NewConfiguration(suite.ID(), "c1", "desc1", "yaml1", "k1", true)
+		c2, _ := model.NewConfiguration(suite.ID(), "c2", "desc2", "yaml2", "k2", false)
 
 		configRepo := new(MockConfigurationRepository)
 		configRepo.On("ListBySuiteID", mock.Anything, suite.ID()).Return([]*model.Configuration{c1, c2}, nil).Once()
@@ -250,7 +257,7 @@ func TestConfigService_DeleteConfig(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("successfully deletes configuration and removes S3 object", func(t *testing.T) {
-		cfg, _ := model.NewConfiguration("suite-1", "default", "scenario: test", "suites/suite-1/configs/c1.yaml", true)
+		cfg, _ := model.NewConfiguration("suite-1", "default", "desc", "scenario: test", "suites/suite-1/configs/c1.yaml", true)
 
 		configRepo := new(MockConfigurationRepository)
 		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
@@ -268,7 +275,7 @@ func TestConfigService_DeleteConfig(t *testing.T) {
 	})
 
 	t.Run("returns ErrNotFound when configuration belongs to another suite", func(t *testing.T) {
-		cfg, _ := model.NewConfiguration("suite-1", "default", "scenario: test", "s3/key", true)
+		cfg, _ := model.NewConfiguration("suite-1", "default", "desc", "scenario: test", "s3/key", true)
 
 		configRepo := new(MockConfigurationRepository)
 		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
@@ -295,12 +302,12 @@ func TestConfigService_DeleteConfig(t *testing.T) {
 func TestConfigService_UpdateConfig(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("successfully updates configuration name, yaml content, and isDefault", func(t *testing.T) {
+	t.Run("successfully updates configuration name, description, yaml content, and isDefault", func(t *testing.T) {
 		suite, _ := model.NewTestSuite("suite-1", "desc")
 		suiteRepo := new(MockTestSuiteRepository)
 		suiteRepo.On("FindByID", mock.Anything, suite.ID()).Return(suite, nil).Once()
 
-		cfg, _ := model.NewConfiguration(suite.ID(), "old-name", "duration: 1m", "suites/"+suite.ID()+"/configs/c1.yaml", false)
+		cfg, _ := model.NewConfiguration(suite.ID(), "old-name", "old-desc", "duration: 1m", "suites/"+suite.ID()+"/configs/c1.yaml", false)
 		configRepo := new(MockConfigurationRepository)
 		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
 
@@ -308,7 +315,7 @@ func TestConfigService_UpdateConfig(t *testing.T) {
 		storage.On("Upload", mock.Anything, cfg.S3ConfigKey(), mock.Anything, int64(len("duration: 5m\nconcurrency: 100\n")), "application/x-yaml").Return(nil).Once()
 
 		configRepo.On("Save", mock.Anything, mock.MatchedBy(func(c *model.Configuration) bool {
-			return c.ID() == cfg.ID() && c.Name() == "new-name" && c.ContentYAML() == "duration: 5m\nconcurrency: 100\n" && c.IsDefault()
+			return c.ID() == cfg.ID() && c.Name() == "new-name" && c.Description() == "new-description" && c.ContentYAML() == "duration: 5m\nconcurrency: 100\n" && c.IsDefault()
 		})).Return(nil).Once()
 
 		svc := service.NewConfigService(suiteRepo, configRepo, storage)
@@ -317,6 +324,7 @@ func TestConfigService_UpdateConfig(t *testing.T) {
 			SuiteID:     suite.ID(),
 			ConfigID:    cfg.ID(),
 			Name:        "new-name",
+			Description: "new-description",
 			ContentYAML: "duration: 5m\nconcurrency: 100\n",
 			IsDefault:   &isDefault,
 		})
@@ -324,6 +332,7 @@ func TestConfigService_UpdateConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, updated)
 		assert.Equal(t, "new-name", updated.Name())
+		assert.Equal(t, "new-description", updated.Description())
 		assert.Equal(t, "duration: 5m\nconcurrency: 100\n", updated.ContentYAML())
 		assert.True(t, updated.IsDefault())
 
@@ -337,7 +346,7 @@ func TestConfigService_UpdateConfig(t *testing.T) {
 		suiteRepo := new(MockTestSuiteRepository)
 		suiteRepo.On("FindByID", mock.Anything, suite.ID()).Return(suite, nil).Once()
 
-		cfg, _ := model.NewConfiguration("other-suite", "cfg-name", "duration: 1m", "key", false)
+		cfg, _ := model.NewConfiguration("other-suite", "cfg-name", "desc", "duration: 1m", "key", false)
 		configRepo := new(MockConfigurationRepository)
 		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
 
@@ -346,6 +355,7 @@ func TestConfigService_UpdateConfig(t *testing.T) {
 			SuiteID:     suite.ID(),
 			ConfigID:    cfg.ID(),
 			Name:        "new-name",
+			Description: "new-desc",
 			ContentYAML: "duration: 2m",
 		})
 
@@ -358,7 +368,7 @@ func TestConfigService_UpdateConfig(t *testing.T) {
 		suiteRepo := new(MockTestSuiteRepository)
 		suiteRepo.On("FindByID", mock.Anything, suite.ID()).Return(suite, nil).Once()
 
-		cfg, _ := model.NewConfiguration(suite.ID(), "old-name", "duration: 1m", "key", false)
+		cfg, _ := model.NewConfiguration(suite.ID(), "old-name", "desc", "duration: 1m", "key", false)
 		configRepo := new(MockConfigurationRepository)
 		configRepo.On("FindByID", mock.Anything, cfg.ID()).Return(cfg, nil).Once()
 
@@ -367,6 +377,7 @@ func TestConfigService_UpdateConfig(t *testing.T) {
 			SuiteID:     suite.ID(),
 			ConfigID:    cfg.ID(),
 			Name:        "",
+			Description: "desc",
 			ContentYAML: "duration: 2m",
 		})
 

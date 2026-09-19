@@ -156,7 +156,7 @@ func TestScheduleService_CreateSchedule(t *testing.T) {
 	ctx, svc, suiteRepo, artifactRepo, configRepo, _, scheduleRepo, orchestrator, suite, artifact, profile := setupScheduleTestContext(t)
 
 	t.Run("successfully creates schedule and triggers K8s CronJob creation", func(t *testing.T) {
-		cfg, err := model.NewConfiguration(suite.ID(), "default", "concurrency: 10", "configs/vuhive.yaml", false)
+		cfg, err := model.NewConfiguration(suite.ID(), "default", "default config", "concurrency: 10", "configs/vuhive.yaml", false)
 		require.NoError(t, err)
 		require.NoError(t, configRepo.Save(ctx, cfg))
 		cfgID := cfg.ID()

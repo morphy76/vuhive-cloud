@@ -12,6 +12,7 @@ type Configuration struct {
 	id          string
 	suiteID     string
 	name        string
+	description string
 	contentYAML string
 	s3ConfigKey string
 	isDefault   bool
@@ -19,7 +20,7 @@ type Configuration struct {
 }
 
 // NewConfiguration creates a new Configuration entity.
-func NewConfiguration(suiteID, name, contentYAML, s3ConfigKey string, isDefault bool) (*Configuration, error) {
+func NewConfiguration(suiteID, name, description, contentYAML, s3ConfigKey string, isDefault bool) (*Configuration, error) {
 	trimmedSuiteID := strings.TrimSpace(suiteID)
 	trimmedName := strings.TrimSpace(name)
 	trimmedYAML := strings.TrimSpace(contentYAML)
@@ -39,6 +40,7 @@ func NewConfiguration(suiteID, name, contentYAML, s3ConfigKey string, isDefault 
 		id:          uuid.NewString(),
 		suiteID:     trimmedSuiteID,
 		name:        trimmedName,
+		description: strings.TrimSpace(description),
 		contentYAML: contentYAML,
 		s3ConfigKey: trimmedKey,
 		isDefault:   isDefault,
@@ -48,7 +50,7 @@ func NewConfiguration(suiteID, name, contentYAML, s3ConfigKey string, isDefault 
 
 // NewConfigurationWithID reconstructs a Configuration entity from persistence.
 func NewConfigurationWithID(
-	id, suiteID, name, contentYAML, s3ConfigKey string,
+	id, suiteID, name, description, contentYAML, s3ConfigKey string,
 	isDefault bool,
 	createdAt time.Time,
 ) (*Configuration, error) {
@@ -71,6 +73,7 @@ func NewConfigurationWithID(
 		id:          id,
 		suiteID:     trimmedSuiteID,
 		name:        trimmedName,
+		description: strings.TrimSpace(description),
 		contentYAML: contentYAML,
 		s3ConfigKey: trimmedKey,
 		isDefault:   isDefault,
@@ -96,6 +99,11 @@ func (c *Configuration) SuiteID() string {
 // Name returns the configuration profile name.
 func (c *Configuration) Name() string {
 	return c.name
+}
+
+// Description returns the optional description of the scenario configuration.
+func (c *Configuration) Description() string {
+	return c.description
 }
 
 // ContentYAML returns the raw YAML content.
@@ -147,6 +155,22 @@ func (c *Configuration) SetName(name string) error {
 		return ErrEmptyName
 	}
 	c.name = trimmedName
+	return nil
+}
+
+// SetDescription updates the configuration description.
+func (c *Configuration) SetDescription(description string) {
+	c.description = strings.TrimSpace(description)
+}
+
+// UpdateDetails updates the configuration name and description.
+func (c *Configuration) UpdateDetails(name, description string) error {
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		return ErrEmptyName
+	}
+	c.name = trimmedName
+	c.description = strings.TrimSpace(description)
 	return nil
 }
 

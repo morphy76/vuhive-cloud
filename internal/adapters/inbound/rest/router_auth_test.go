@@ -178,7 +178,7 @@ func TestRouter_RBACProtection(t *testing.T) {
 		suite, _ := model.NewTestSuite("dev-suite", "desc")
 		mockSuites.On("CreateSuite", mock.Anything, "dev-suite", "desc").Return(suite, nil).Once()
 
-		cfg, _ := model.NewConfiguration(suite.ID(), "default", "vus: 1", "key", true)
+		cfg, _ := model.NewConfiguration(suite.ID(), "default", "default config", "vus: 1", "key", true)
 		mockConfigs.On("CreateConfig", mock.Anything, inbound.CreateConfigCommand{
 			SuiteID:     suite.ID(),
 			Name:        "default",
