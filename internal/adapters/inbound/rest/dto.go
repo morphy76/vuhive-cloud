@@ -635,6 +635,7 @@ type SuiteListResponse struct {
 // CreateConfigRequest represents the request body to upload and attach a configuration to a TestSuite.
 type CreateConfigRequest struct {
 	Name        string `json:"name" binding:"required"`
+	Description string `json:"description,omitempty"`
 	ContentYAML string `json:"content_yaml" binding:"required"`
 	IsDefault   bool   `json:"is_default,omitempty"`
 }
@@ -642,6 +643,7 @@ type CreateConfigRequest struct {
 // UpdateConfigRequest represents the request body to update an attached configuration.
 type UpdateConfigRequest struct {
 	Name        string `json:"name" binding:"required"`
+	Description string `json:"description,omitempty"`
 	ContentYAML string `json:"content_yaml" binding:"required"`
 	IsDefault   *bool  `json:"is_default,omitempty"`
 }
@@ -651,6 +653,7 @@ type ConfigResponse struct {
 	ID          string `json:"id"`
 	SuiteID     string `json:"suite_id"`
 	Name        string `json:"name"`
+	Description string `json:"description"`
 	ContentYAML string `json:"content_yaml"`
 	S3ConfigKey string `json:"s3_config_key"`
 	IsDefault   bool   `json:"is_default"`
@@ -693,6 +696,7 @@ func ToConfigResponse(c *model.Configuration) ConfigResponse {
 		ID:          c.ID(),
 		SuiteID:     c.SuiteID(),
 		Name:        c.Name(),
+		Description: c.Description(),
 		ContentYAML: c.ContentYAML(),
 		S3ConfigKey: c.S3ConfigKey(),
 		IsDefault:   c.IsDefault(),

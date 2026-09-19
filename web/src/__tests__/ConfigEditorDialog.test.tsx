@@ -45,6 +45,7 @@ describe('ConfigEditorDialog', () => {
     id: 'cfg-1',
     suiteId: 's-1',
     name: 'existing.yaml',
+    description: 'An existing test description',
     contentYaml:
       'version: "1.0"\ndefault_scenario: standard_load\nscenarios:\n  standard_load:\n    type: constant_vus\n    vus: 50\n    run_period: 60s\n',
     isDefault: false,
@@ -62,6 +63,7 @@ describe('ConfigEditorDialog', () => {
 
     expect(screen.getByRole('heading', { name: /attach scenario configuration/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/configuration name/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^description$/i)).toBeInTheDocument()
     expect(screen.getByText(/load template/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /attach configuration/i })).toBeInTheDocument()
   })
@@ -78,6 +80,7 @@ describe('ConfigEditorDialog', () => {
 
     expect(screen.getByRole('heading', { name: /edit configuration/i })).toBeInTheDocument()
     expect(screen.getByDisplayValue('existing.yaml')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('An existing test description')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /editor/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /diff/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument()
@@ -103,6 +106,39 @@ describe('ConfigEditorDialog', () => {
         'cfg-1',
         expect.objectContaining({
           name: 'existing.yaml',
+          description: 'An existing test description',
+        })
+      )
+      expect(onOpenChange).toHaveBeenCalledWith(false)
+    })
+  })
+
+  it('submits create mutation with description in create mode', async () => {
+    const onOpenChange = vi.fn()
+    renderWithClient(
+      <ConfigEditorDialog
+        suiteId="s-1"
+        open={true}
+        onOpenChange={onOpenChange}
+      />
+    )
+
+    fireEvent.change(screen.getByLabelText(/configuration name/i), {
+      target: { value: 'custom.yaml' },
+    })
+    fireEvent.change(screen.getByLabelText(/^description$/i), {
+      target: { value: 'Custom load scenario' },
+    })
+
+    const attachBtn = screen.getByRole('button', { name: /attach configuration/i })
+    fireEvent.click(attachBtn)
+
+    await waitFor(() => {
+      expect(api.createSuiteConfig).toHaveBeenCalledWith(
+        's-1',
+        expect.objectContaining({
+          name: 'custom.yaml',
+          description: 'Custom load scenario',
         })
       )
       expect(onOpenChange).toHaveBeenCalledWith(false)

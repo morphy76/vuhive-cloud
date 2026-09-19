@@ -9,7 +9,7 @@ import { CreateSuiteDialog } from '@/components/dialogs/CreateSuiteDialog'
 import { RecipeProvider } from '@/context/RecipeContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { api } from '@/lib/api'
-import type { TestSuite } from '@/types/suite'
+import type { TestSuite, SuiteConfiguration } from '@/types/suite'
 
 const createTestWrapper = () => {
   const queryClient = new QueryClient({
@@ -428,5 +428,42 @@ describe('SuiteDetailView Artifact Actions (Cancel, Retry, Delete)', () => {
     cancelSpy.mockRestore()
     retrySpy.mockRestore()
     deleteSpy.mockRestore()
+  })
+
+  it('renders configurations with descriptions in Configurations tab', async () => {
+    const mockConfigs: SuiteConfiguration[] = [
+      {
+        id: 'cfg-1',
+        suiteId: mockSuites[0].id,
+        name: 'staging-load.yaml',
+        description: 'Staging traffic profile with 50 VUs',
+        contentYaml: 'vus: 50\n',
+        isDefault: true,
+        createdAt: '2026-03-10T10:00:00Z',
+      },
+      {
+        id: 'cfg-2',
+        suiteId: mockSuites[0].id,
+        name: 'soak-test.yaml',
+        contentYaml: 'vus: 20\n',
+        isDefault: false,
+        createdAt: '2026-03-10T11:00:00Z',
+      },
+    ]
+
+    const getConfigsSpy = vi.spyOn(api, 'getSuiteConfigs').mockResolvedValue(mockConfigs)
+    const Wrapper = createTestWrapper()
+    render(<SuiteDetailView suite={mockSuites[0]} onBack={() => {}} />, { wrapper: Wrapper })
+
+    // Switch to Configurations tab
+    const configsTab = screen.getByRole('tab', { name: /configurations/i })
+    fireEvent.mouseDown(configsTab, { button: 0 })
+    fireEvent.click(configsTab)
+
+    expect(await screen.findByText('staging-load.yaml')).toBeInTheDocument()
+    expect(screen.getByText('Staging traffic profile with 50 VUs')).toBeInTheDocument()
+    expect(screen.getByText('soak-test.yaml')).toBeInTheDocument()
+
+    getConfigsSpy.mockRestore()
   })
 })

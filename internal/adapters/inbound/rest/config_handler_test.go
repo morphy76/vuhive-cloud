@@ -77,17 +77,18 @@ func setupConfigTestRouter(mockUC *MockConfigsUseCase) *gin.Engine {
 func TestConfigHandler_CreateConfig(t *testing.T) {
 	t.Run("creates configuration returning HTTP 201 Created", func(t *testing.T) {
 		mockUC := new(MockConfigsUseCase)
-		cfg, _ := model.NewConfiguration("s-1", "staging", "vus: 10", "suites/s-1/configs/c-1.yaml", true)
+		cfg, _ := model.NewConfiguration("s-1", "staging", "staging load profile", "vus: 10", "suites/s-1/configs/c-1.yaml", true)
 		mockUC.On("CreateConfig", mock.Anything, inbound.CreateConfigCommand{
 			SuiteID:     "s-1",
 			Name:        "staging",
+			Description: "staging load profile",
 			ContentYAML: "vus: 10",
 			IsDefault:   true,
 		}).Return(cfg, nil).Once()
 
 		router := setupConfigTestRouter(mockUC)
 
-		body := []byte(`{"name":"staging","content_yaml":"vus: 10","is_default":true}`)
+		body := []byte(`{"name":"staging","description":"staging load profile","content_yaml":"vus: 10","is_default":true}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/suites/s-1/configs", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -101,6 +102,7 @@ func TestConfigHandler_CreateConfig(t *testing.T) {
 		assert.Equal(t, cfg.ID(), resp.ID)
 		assert.Equal(t, "s-1", resp.SuiteID)
 		assert.Equal(t, "staging", resp.Name)
+		assert.Equal(t, "staging load profile", resp.Description)
 		assert.True(t, resp.IsDefault)
 		mockUC.AssertExpectations(t)
 	})
@@ -139,7 +141,7 @@ func TestConfigHandler_CreateConfig(t *testing.T) {
 func TestConfigHandler_GetConfig(t *testing.T) {
 	t.Run("returns HTTP 200 with configuration details", func(t *testing.T) {
 		mockUC := new(MockConfigsUseCase)
-		cfg, _ := model.NewConfiguration("s-1", "staging", "vus: 10", "key", false)
+		cfg, _ := model.NewConfiguration("s-1", "staging", "staging description", "vus: 10", "key", false)
 		mockUC.On("GetConfig", mock.Anything, "s-1", cfg.ID()).Return(cfg, nil).Once()
 
 		router := setupConfigTestRouter(mockUC)
@@ -175,8 +177,8 @@ func TestConfigHandler_GetConfig(t *testing.T) {
 func TestConfigHandler_ListConfigs(t *testing.T) {
 	t.Run("returns HTTP 200 with list of configurations", func(t *testing.T) {
 		mockUC := new(MockConfigsUseCase)
-		c1, _ := model.NewConfiguration("s-1", "cfg-1", "yaml1", "k1", true)
-		c2, _ := model.NewConfiguration("s-1", "cfg-2", "yaml2", "k2", false)
+		c1, _ := model.NewConfiguration("s-1", "cfg-1", "desc1", "yaml1", "k1", true)
+		c2, _ := model.NewConfiguration("s-1", "cfg-2", "desc2", "yaml2", "k2", false)
 		mockUC.On("ListConfigs", mock.Anything, "s-1").Return([]*model.Configuration{c1, c2}, nil).Once()
 
 		router := setupConfigTestRouter(mockUC)
@@ -192,6 +194,8 @@ func TestConfigHandler_ListConfigs(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 2, resp.Count)
 		assert.Len(t, resp.Configs, 2)
+		assert.Equal(t, "desc1", resp.Configs[0].Description)
+		assert.Equal(t, "desc2", resp.Configs[1].Description)
 	})
 }
 
@@ -228,19 +232,20 @@ func TestConfigHandler_DeleteConfig(t *testing.T) {
 func TestConfigHandler_UpdateConfig(t *testing.T) {
 	t.Run("updates configuration returning HTTP 200 OK", func(t *testing.T) {
 		mockUC := new(MockConfigsUseCase)
-		cfg, _ := model.NewConfiguration("s-1", "staging-updated", "vus: 20", "suites/s-1/configs/c-1.yaml", true)
+		cfg, _ := model.NewConfiguration("s-1", "staging-updated", "updated description", "vus: 20", "suites/s-1/configs/c-1.yaml", true)
 		isDefault := true
 		mockUC.On("UpdateConfig", mock.Anything, inbound.UpdateConfigCommand{
 			SuiteID:     "s-1",
 			ConfigID:    "c-1",
 			Name:        "staging-updated",
+			Description: "updated description",
 			ContentYAML: "vus: 20",
 			IsDefault:   &isDefault,
 		}).Return(cfg, nil).Once()
 
 		router := setupConfigTestRouter(mockUC)
 
-		body := []byte(`{"name":"staging-updated","content_yaml":"vus: 20","is_default":true}`)
+		body := []byte(`{"name":"staging-updated","description":"updated description","content_yaml":"vus: 20","is_default":true}`)
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/suites/s-1/configs/c-1", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -253,6 +258,7 @@ func TestConfigHandler_UpdateConfig(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, cfg.ID(), resp.ID)
 		assert.Equal(t, "staging-updated", resp.Name)
+		assert.Equal(t, "updated description", resp.Description)
 		assert.Equal(t, "vus: 20", resp.ContentYAML)
 		assert.True(t, resp.IsDefault)
 		mockUC.AssertExpectations(t)

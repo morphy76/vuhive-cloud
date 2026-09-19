@@ -3742,6 +3742,9 @@ components:
         name:
           type: string
           example: staging-profile
+        description:
+          type: string
+          example: High-volume stress test profile for staging environment
         content_yaml:
           type: string
           example: |
@@ -3765,6 +3768,9 @@ components:
         name:
           type: string
           example: staging-profile-updated
+        description:
+          type: string
+          example: High-volume stress test profile with updated concurrency limits
         content_yaml:
           type: string
           example: |
@@ -3785,6 +3791,7 @@ components:
         - id
         - suite_id
         - name
+        - description
         - content_yaml
         - s3_config_key
         - is_default
@@ -3801,6 +3808,9 @@ components:
         name:
           type: string
           example: staging-profile
+        description:
+          type: string
+          example: High-volume stress test profile for staging environment
         content_yaml:
           type: string
           example: |

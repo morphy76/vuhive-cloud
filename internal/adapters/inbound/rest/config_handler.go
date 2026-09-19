@@ -31,6 +31,7 @@ func (h *ConfigHandler) CreateConfig(c *gin.Context) {
 	cmd := inbound.CreateConfigCommand{
 		SuiteID:     suiteID,
 		Name:        req.Name,
+		Description: req.Description,
 		ContentYAML: req.ContentYAML,
 		IsDefault:   req.IsDefault,
 	}
@@ -86,6 +87,7 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 		SuiteID:     suiteID,
 		ConfigID:    configID,
 		Name:        req.Name,
+		Description: req.Description,
 		ContentYAML: req.ContentYAML,
 		IsDefault:   req.IsDefault,
 	}

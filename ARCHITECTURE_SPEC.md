@@ -253,6 +253,7 @@ CREATE TABLE configurations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     suite_id UUID NOT NULL REFERENCES test_suites(id) ON DELETE CASCADE,
     name VARCHAR(128) NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
     content_yaml TEXT NOT NULL,
     s3_config_key VARCHAR(512) NOT NULL,
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
