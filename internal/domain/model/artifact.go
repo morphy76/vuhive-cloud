@@ -57,19 +57,20 @@ func (s ArtifactStatus) IsValid() bool {
 
 // Artifact is the domain entity representing a compiled multi-arch test binary artifact.
 type Artifact struct {
-	id              string
-	suiteID         string
-	platform        Platform
-	s3BinaryKey     string
-	sha256Checksum  string
-	buildLogsS3Key  string
-	status          ArtifactStatus
-	errorMessage    string
-	createdAt       time.Time
+	id             string
+	suiteID        string
+	platform       Platform
+	description    string
+	s3BinaryKey    string
+	sha256Checksum string
+	buildLogsS3Key string
+	status         ArtifactStatus
+	errorMessage   string
+	createdAt      time.Time
 }
 
 // NewArtifact creates a new Artifact entity in PENDING status.
-func NewArtifact(suiteID string, platform Platform) (*Artifact, error) {
+func NewArtifact(suiteID string, platform Platform, description ...string) (*Artifact, error) {
 	trimmedSuiteID := strings.TrimSpace(suiteID)
 	if trimmedSuiteID == "" {
 		return nil, ErrValidation
@@ -78,12 +79,18 @@ func NewArtifact(suiteID string, platform Platform) (*Artifact, error) {
 		return nil, ErrInvalidPlatform
 	}
 
+	var desc string
+	if len(description) > 0 {
+		desc = strings.TrimSpace(description[0])
+	}
+
 	return &Artifact{
-		id:        uuid.NewString(),
-		suiteID:   trimmedSuiteID,
-		platform:  platform,
-		status:    ArtifactStatusPending,
-		createdAt: time.Now().UTC(),
+		id:          uuid.NewString(),
+		suiteID:     trimmedSuiteID,
+		platform:    platform,
+		description: desc,
+		status:      ArtifactStatusPending,
+		createdAt:   time.Now().UTC(),
 	}, nil
 }
 
@@ -91,6 +98,7 @@ func NewArtifact(suiteID string, platform Platform) (*Artifact, error) {
 func NewArtifactWithID(
 	id, suiteID string,
 	platform Platform,
+	description string,
 	s3BinaryKey, sha256Checksum, buildLogsS3Key string,
 	status ArtifactStatus,
 	errorMessage string,
@@ -111,6 +119,7 @@ func NewArtifactWithID(
 		id:             id,
 		suiteID:        trimmedSuiteID,
 		platform:       platform,
+		description:    strings.TrimSpace(description),
 		s3BinaryKey:    s3BinaryKey,
 		sha256Checksum: sha256Checksum,
 		buildLogsS3Key: buildLogsS3Key,
@@ -138,6 +147,16 @@ func (a *Artifact) SuiteID() string {
 // Platform returns the compilation platform.
 func (a *Artifact) Platform() Platform {
 	return a.platform
+}
+
+// Description returns the optional description of the artifact.
+func (a *Artifact) Description() string {
+	return a.description
+}
+
+// SetDescription updates the artifact description.
+func (a *Artifact) SetDescription(desc string) {
+	a.description = strings.TrimSpace(desc)
 }
 
 // S3BinaryKey returns the S3 object storage key where the binary is stored.

@@ -102,6 +102,7 @@ type BuildOptions struct {
 	AllowInsecureImports bool
 	GoVersion            string
 	GoImage              string
+	Description          string
 }
 
 // BuildsUseCase defines driving use cases for compiling test suite sources into binary artifacts.

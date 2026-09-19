@@ -431,7 +431,7 @@ export const TriggerRunDialog: React.FC<TriggerRunDialogProps> = ({
                 )}
                 {filteredArtifacts.map((a) => (
                   <option key={a.id} value={a.id} disabled={a.status !== 'READY'}>
-                    {a.platform} - {a.id} ({a.status})
+                    {a.platform} - {a.description ? `${a.description} - ` : ''}{a.id} ({a.status})
                     {a.sha256Checksum ? ` [${a.sha256Checksum.substring(0, 8)}]` : ''}
                   </option>
                 ))}

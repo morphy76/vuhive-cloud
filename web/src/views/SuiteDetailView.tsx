@@ -788,6 +788,11 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                               {art.status}
                             </Badge>
                           </div>
+                          {art.description && (
+                            <p className="text-xs font-medium text-slate-800 dark:text-slate-200 mt-1">
+                              {art.description}
+                            </p>
+                          )}
                           {art.sha256Checksum && (
                             <div className="text-xs text-slate-500 font-mono mt-1 truncate max-w-md">
                               SHA256: {art.sha256Checksum}

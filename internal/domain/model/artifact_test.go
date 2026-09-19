@@ -48,8 +48,18 @@ func TestNewArtifact(t *testing.T) {
 		assert.Equal(t, model.ArtifactStatusPending, art.Status())
 		assert.Empty(t, art.S3BinaryKey())
 		assert.Empty(t, art.SHA256Checksum())
-		assert.Empty(t, art.ErrorMessage())
+		assert.Empty(t, art.Description())
 		assert.False(t, art.CreatedAt().IsZero())
+	})
+
+	t.Run("successfully create artifact with description", func(t *testing.T) {
+		art, err := model.NewArtifact("suite-123", model.PlatformLinuxAmd64, "  Initial checkout benchmark  ")
+		require.NoError(t, err)
+		require.NotNil(t, art)
+		assert.Equal(t, "Initial checkout benchmark", art.Description())
+
+		art.SetDescription("  Updated benchmark description  ")
+		assert.Equal(t, "Updated benchmark description", art.Description())
 	})
 
 	t.Run("fail with empty suiteID", func(t *testing.T) {
@@ -287,17 +297,20 @@ func TestNewArtifactWithID(t *testing.T) {
 	t.Run("reconstitute valid artifact", func(t *testing.T) {
 		art, err := model.NewArtifactWithID(
 			"art-123", "suite-123", model.PlatformLinuxAmd64,
+			"Initial build description",
 			"key", validChecksum, "logs-key",
 			model.ArtifactStatusReady, "", now,
 		)
 		require.NoError(t, err)
 		assert.Equal(t, "art-123", art.ID())
+		assert.Equal(t, "Initial build description", art.Description())
 		assert.Equal(t, model.ArtifactStatusReady, art.Status())
 	})
 
 	t.Run("reconstitute with invalid platform fails", func(t *testing.T) {
 		_, err := model.NewArtifactWithID(
 			"art-123", "suite-123", "darwin/arm64",
+			"some description",
 			"key", validChecksum, "logs-key",
 			model.ArtifactStatusReady, "", now,
 		)
@@ -307,6 +320,7 @@ func TestNewArtifactWithID(t *testing.T) {
 	t.Run("reconstitute with invalid status fails", func(t *testing.T) {
 		_, err := model.NewArtifactWithID(
 			"art-123", "suite-123", model.PlatformLinuxAmd64,
+			"some description",
 			"key", validChecksum, "logs-key",
 			"UNKNOWN_STATUS", "", now,
 		)

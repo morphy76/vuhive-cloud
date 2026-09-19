@@ -181,7 +181,7 @@ func TestRepositories_FullCRUD(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, suiteRepo.Save(ctx, suite))
 
-		artifact, err := model.NewArtifact(suite.ID(), model.PlatformLinuxAmd64)
+		artifact, err := model.NewArtifact(suite.ID(), model.PlatformLinuxAmd64, "Integration test artifact")
 		require.NoError(t, err)
 
 		// 1. Save PENDING artifact
@@ -194,14 +194,17 @@ func TestRepositories_FullCRUD(t *testing.T) {
 		assert.Equal(t, artifact.ID(), found.ID())
 		assert.Equal(t, model.ArtifactStatusPending, found.Status())
 		assert.Equal(t, model.PlatformLinuxAmd64, found.Platform())
+		assert.Equal(t, "Integration test artifact", found.Description())
 
-		// 3. MarkBuilding & Save
+		// 3. Update description & MarkBuilding & Save
+		artifact.SetDescription("Updated artifact description")
 		require.NoError(t, artifact.MarkBuilding())
 		require.NoError(t, artifactRepo.Save(ctx, artifact))
 
 		foundBuilding, err := artifactRepo.FindByID(ctx, artifact.ID())
 		require.NoError(t, err)
 		assert.Equal(t, model.ArtifactStatusBuilding, foundBuilding.Status())
+		assert.Equal(t, "Updated artifact description", foundBuilding.Description())
 
 		// 4. MarkReady & Save
 		checksum := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

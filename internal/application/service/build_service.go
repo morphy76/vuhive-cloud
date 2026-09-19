@@ -166,7 +166,7 @@ func (s *BuildService) TriggerBuildWithOptions(
 		}
 
 		if found == nil {
-			newArt, err := model.NewArtifact(trimmedSuiteID, p)
+			newArt, err := model.NewArtifact(trimmedSuiteID, p, opts.Description)
 			if err != nil {
 				log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed creating artifact model")
 				return nil, err
@@ -183,6 +183,9 @@ func (s *BuildService) TriggerBuildWithOptions(
 					log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed resetting failed artifact for retry")
 					return nil, err
 				}
+				if strings.TrimSpace(opts.Description) != "" {
+					found.SetDescription(opts.Description)
+				}
 				if err := s.artifactRepo.Save(ctx, found); err != nil {
 					log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed persisting artifact retry reset")
 					return nil, err
@@ -196,6 +199,7 @@ func (s *BuildService) TriggerBuildWithOptions(
 		AllowInsecureImports: opts.AllowInsecureImports,
 		GoVersion:            resolvedGoVersion,
 		GoImage:              resolvedGoImage,
+		Description:          opts.Description,
 	}
 
 	// Trigger build jobs asynchronously

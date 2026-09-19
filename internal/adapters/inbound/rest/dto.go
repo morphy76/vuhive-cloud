@@ -13,6 +13,7 @@ type ArtifactResponse struct {
 	ID             string `json:"id"`
 	SuiteID        string `json:"suite_id"`
 	Platform       string `json:"platform"`
+	Description    string `json:"description"`
 	S3BinaryKey    string `json:"s3_binary_key,omitempty"`
 	SHA256Checksum string `json:"sha256_checksum,omitempty"`
 	BuildLogsS3Key string `json:"build_logs_s3_key,omitempty"`
@@ -49,6 +50,7 @@ func ToArtifactResponse(a *model.Artifact) ArtifactResponse {
 		ID:             a.ID(),
 		SuiteID:        a.SuiteID(),
 		Platform:       string(a.Platform()),
+		Description:    a.Description(),
 		S3BinaryKey:    a.S3BinaryKey(),
 		SHA256Checksum: a.SHA256Checksum(),
 		BuildLogsS3Key: a.BuildLogsS3Key(),
