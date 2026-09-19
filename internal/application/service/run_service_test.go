@@ -535,7 +535,7 @@ func TestRunService_TriggerRun(t *testing.T) {
 	t.Run("successfully trigger run with configuration", func(t *testing.T) {
 		svc, _, _, configRepo, _, _, _, suite, artifact, profile := setupTestRunService(t)
 
-		cfg, err := model.NewConfiguration(suite.ID(), "staging", "vus: 100", "vuhive-configs/staging.yaml", false)
+		cfg, err := model.NewConfiguration(suite.ID(), "staging", "staging description", "vus: 100", "vuhive-configs/staging.yaml", false)
 		require.NoError(t, err)
 		require.NoError(t, configRepo.Save(ctx, cfg))
 
@@ -591,7 +591,7 @@ func TestRunService_TriggerRun(t *testing.T) {
 	t.Run("fail triggering run when configuration belongs to another suite", func(t *testing.T) {
 		svc, _, _, configRepo, _, _, _, suite, artifact, profile := setupTestRunService(t)
 
-		otherCfg, err := model.NewConfiguration("other-suite", "prod", "vus: 10", "key.yaml", false)
+		otherCfg, err := model.NewConfiguration("other-suite", "prod", "prod description", "vus: 10", "key.yaml", false)
 		require.NoError(t, err)
 		require.NoError(t, configRepo.Save(ctx, otherCfg))
 

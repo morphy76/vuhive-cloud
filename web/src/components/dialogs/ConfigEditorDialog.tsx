@@ -60,6 +60,7 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
   const isEditMode = Boolean(initialConfig)
 
   const [configName, setConfigName] = React.useState('')
+  const [description, setDescription] = React.useState('')
   const [contentYaml, setContentYaml] = React.useState(DEFAULT_STARTER_YAML)
   const [isDefault, setIsDefault] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<'editor' | 'diff'>('editor')
@@ -75,10 +76,12 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
     if (open) {
       if (initialConfig) {
         setConfigName(initialConfig.name)
+        setDescription(initialConfig.description || '')
         setContentYaml(initialConfig.contentYaml)
         setIsDefault(initialConfig.isDefault)
       } else {
         setConfigName('')
+        setDescription('')
         setContentYaml(DEFAULT_STARTER_YAML)
         setIsDefault(false)
       }
@@ -113,6 +116,7 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
           configId: initialConfig.id,
           data: {
             name: configName.trim(),
+            description: description.trim(),
             content_yaml: contentYaml,
             is_default: isDefault,
           },
@@ -120,6 +124,7 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
       } else {
         await createMutation.mutateAsync({
           name: configName.trim(),
+          description: description.trim(),
           content_yaml: contentYaml,
           is_default: isDefault,
         })
@@ -142,6 +147,7 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
 
       await createMutation.mutateAsync({
         name: targetName,
+        description: description.trim(),
         content_yaml: contentYaml,
         is_default: isDefault,
       })
@@ -212,6 +218,29 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
                 aria-label="Set as default configuration"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <label
+                htmlFor="config-description"
+                className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                Description
+              </label>
+              <HelpTooltip
+                text="Optional objective, traffic profile, or target environment description."
+                label="Help for config description"
+              />
+            </div>
+            <input
+              id="config-description"
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. High-volume stress test profile for staging environment"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            />
           </div>
 
           {/* Editor and Diff Tabs */}

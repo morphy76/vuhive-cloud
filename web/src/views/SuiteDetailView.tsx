@@ -632,6 +632,11 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
                         </span>
                         {cfg.isDefault && <Badge variant="info">Default</Badge>}
                       </div>
+                      {cfg.description && (
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                          {cfg.description}
+                        </p>
+                      )}
                       <div className="text-xs text-slate-400 font-mono mt-1">
                         {cfg.id} • Attached {new Date(cfg.createdAt).toLocaleDateString()}
                       </div>

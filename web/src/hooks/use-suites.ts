@@ -103,7 +103,7 @@ export function useCreateSuiteConfig(suiteId: string) {
 
   return useMutation(
     {
-      mutationFn: (data: { name: string; content_yaml: string; is_default?: boolean }) =>
+      mutationFn: (data: { name: string; description?: string; content_yaml: string; is_default?: boolean }) =>
         api.createSuiteConfig(suiteId, data),
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['suites', suiteId, 'configs'] })
@@ -134,7 +134,7 @@ export function useUpdateSuiteConfig(suiteId: string) {
     {
       mutationFn: (args: {
         configId: string
-        data: { name: string; content_yaml: string; is_default?: boolean }
+        data: { name: string; description?: string; content_yaml: string; is_default?: boolean }
       }) => api.updateSuiteConfig(suiteId, args.configId, args.data),
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['suites', suiteId, 'configs'] })
