@@ -585,6 +585,7 @@ func TestBuildService_TriggerBuild_RetryAfterFailure(t *testing.T) {
 				failedArtifact.ID(),
 				failedArtifact.SuiteID(),
 				failedArtifact.Platform(),
+				failedArtifact.Description(),
 				"", "", "",
 				model.ArtifactStatusPending,
 				"",
@@ -876,7 +877,7 @@ func TestBuildService_RetryBuild(t *testing.T) {
 		repo.On("Save", mock.Anything, mock.AnythingOfType("*model.Artifact")).Return(nil).Maybe()
 
 		// Async build mocks
-		asyncArt, _ := model.NewArtifactWithID(art.ID(), art.SuiteID(), art.Platform(), art.S3BinaryKey(), art.SHA256Checksum(), art.BuildLogsS3Key(), model.ArtifactStatusPending, "", art.CreatedAt())
+		asyncArt, _ := model.NewArtifactWithID(art.ID(), art.SuiteID(), art.Platform(), art.Description(), art.S3BinaryKey(), art.SHA256Checksum(), art.BuildLogsS3Key(), model.ArtifactStatusPending, "", art.CreatedAt())
 		repo.On("FindByID", mock.Anything, art.ID()).Return(asyncArt, nil).Maybe()
 		storage.On("Exists", mock.Anything, mock.Anything).Return(true, nil).Maybe()
 		storage.On("PresignDownload", mock.Anything, mock.Anything, mock.Anything).Return("https://download", nil).Maybe()
@@ -1086,6 +1087,80 @@ func NewScenario() *vuhive.Scenario {
 		case <-time.After(2 * time.Second):
 			t.Fatal("timed out waiting for async dispatch")
 		}
+	})
+}
+
+func TestBuildService_DescriptionSupport(t *testing.T) {
+	ctx := context.Background()
+	suiteID := "suite-desc"
+
+	dummyArchive := createBuildServiceTestArchive(t, map[string]string{
+		"go.mod": "module test\n\ngo 1.26\n\nrequire github.com/morphy76/vuhive v1.0.0\n",
+		"scenario.go": `package scenario
+import "github.com/morphy76/vuhive/pkg/vuhive"
+func NewScenario() *vuhive.Scenario { return &vuhive.Scenario{} }
+`,
+	})
+
+	t.Run("TriggerBuildWithOptions propagates description to newly created artifact", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		svc := service.NewBuildService(nil, repo, storage, orchestrator)
+
+		storage.On("Upload", ctx, mock.Anything, mock.Anything, mock.Anything, "application/gzip").Return(nil)
+		repo.On("ListBySuiteID", ctx, suiteID).Return([]*model.Artifact{}, nil)
+		repo.On("Save", ctx, mock.MatchedBy(func(a *model.Artifact) bool {
+			return a.Description() == "Feature scenario tuning"
+		})).Return(nil)
+		repo.On("FindByID", mock.Anything, mock.Anything).Return(func(_ context.Context, id string) *model.Artifact {
+			a, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+			return a
+		}, nil).Maybe()
+		storage.On("Exists", mock.Anything, mock.Anything).Return(false, nil).Maybe()
+		orchestrator.On("DispatchBuildJob", mock.Anything, mock.Anything).Return("job-1", nil)
+
+		platform := model.PlatformLinuxAmd64
+		artifacts, err := svc.TriggerBuildWithOptions(ctx, suiteID, &platform, bytes.NewReader(dummyArchive), int64(len(dummyArchive)), inbound.BuildOptions{
+			Description: "Feature scenario tuning",
+		})
+		require.NoError(t, err)
+		require.Len(t, artifacts, 1)
+		assert.Equal(t, "Feature scenario tuning", artifacts[0].Description())
+	})
+
+	t.Run("TriggerBuildWithOptions updates description on retried failed artifact", func(t *testing.T) {
+		repo := new(MockArtifactRepository)
+		storage := new(MockStoragePort)
+		orchestrator := new(MockBuildOrchestratorPort)
+
+		svc := service.NewBuildService(nil, repo, storage, orchestrator)
+
+		failedArt, err := model.NewArtifact(suiteID, model.PlatformLinuxAmd64, "Old failing description")
+		require.NoError(t, err)
+		require.NoError(t, failedArt.MarkBuilding())
+		require.NoError(t, failedArt.MarkFailed("syntax error", "s3://logs"))
+
+		storage.On("Upload", ctx, mock.Anything, mock.Anything, mock.Anything, "application/gzip").Return(nil)
+		repo.On("ListBySuiteID", ctx, suiteID).Return([]*model.Artifact{failedArt}, nil)
+		repo.On("Save", ctx, mock.MatchedBy(func(a *model.Artifact) bool {
+			return a.Description() == "Updated retry description" && a.Status() == model.ArtifactStatusPending
+		})).Return(nil)
+		repo.On("FindByID", mock.Anything, mock.Anything).Return(func(_ context.Context, id string) *model.Artifact {
+			a, _ := model.NewArtifact(suiteID, model.PlatformLinuxAmd64)
+			return a
+		}, nil).Maybe()
+		storage.On("Exists", mock.Anything, mock.Anything).Return(false, nil).Maybe()
+		orchestrator.On("DispatchBuildJob", mock.Anything, mock.Anything).Return("job-2", nil)
+
+		platform := model.PlatformLinuxAmd64
+		artifacts, err := svc.TriggerBuildWithOptions(ctx, suiteID, &platform, bytes.NewReader(dummyArchive), int64(len(dummyArchive)), inbound.BuildOptions{
+			Description: "Updated retry description",
+		})
+		require.NoError(t, err)
+		require.Len(t, artifacts, 1)
+		assert.Equal(t, "Updated retry description", artifacts[0].Description())
 	})
 }
 

@@ -310,6 +310,7 @@ func TestHousekeepingService_Execute(t *testing.T) {
 	orphanTime := now.Add(-48 * time.Hour)
 	orphanArt, err := model.NewArtifactWithID(
 		"art-orphan", suite.ID(), model.PlatformLinuxAmd64,
+		"",
 		"", "", "suites/test-suite/artifacts/art-orphan/build.log",
 		model.ArtifactStatusFailed, "compilation failed", orphanTime,
 	)
@@ -321,6 +322,7 @@ func TestHousekeepingService_Execute(t *testing.T) {
 	expBinaryTime := now.Add(-40 * 24 * time.Hour)
 	expArt, err := model.NewArtifactWithID(
 		"art-expired", suite.ID(), model.PlatformLinuxAmd64,
+		"",
 		"suites/test-suite/artifacts/art-expired/linux-amd64/runner", "sha256", "build.log",
 		model.ArtifactStatusReady, "", expBinaryTime,
 	)

@@ -1848,6 +1848,10 @@ paths:
                   type: string
                   description: Target architecture (linux/amd64, linux/arm64, or all)
                   default: linux/amd64
+                description:
+                  type: string
+                  description: Optional human-readable description or version note for this compiled artifact iteration (e.g. scenario variant, git branch, or tuning change)
+                  example: "Added checkout timeout handling"
                 allow_insecure_imports:
                   type: boolean
                   description: Optional override to allow suspicious packages (e.g., syscall, unsafe) if permitted by cluster deployment policy
@@ -2606,6 +2610,10 @@ components:
           type: string
         platform:
           type: string
+        description:
+          type: string
+          description: Human-readable note or version label describing this compiled artifact
+          example: "Added checkout timeout handling"
         s3_binary_key:
           type: string
         sha256_checksum:

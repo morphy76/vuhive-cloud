@@ -91,11 +91,13 @@ func (h *ArtifactHandler) UploadAndBuild(c *gin.Context) {
 	}
 
 	goImage := strings.TrimSpace(c.Request.FormValue("go_image"))
+	description := strings.TrimSpace(c.Request.FormValue("description"))
 
 	artifacts, err := h.buildsUC.TriggerBuildWithOptions(ctx, suiteID, targetPlatform, file, header.Size, inbound.BuildOptions{
 		AllowInsecureImports: allowInsecure,
 		GoVersion:            goVersion,
 		GoImage:              goImage,
+		Description:          description,
 	})
 	if err != nil {
 		log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed triggering build")

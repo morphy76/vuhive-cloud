@@ -263,12 +263,14 @@ Upload the Go source archive to trigger synchronous static analysis and schedule
 curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/builds \
   -F "source=@test-suite.tar.gz" \
   -F "platform=linux/amd64" \
+  -F "description=Added checkout timeout handling" \
   -F "go_version=1.27"
 ```
 
 > [!TIP]
 > **Platform & Go Compiler Options**:
 > - **Platform**: Target `linux/amd64` or `linux/arm64`. If `platform` is omitted or set to `all`, artifacts for both architectures will be scheduled for compilation.
+> - **Build Description (`description`)**: Optional human-readable note or version label attached to the compiled artifact (e.g. `description="Added checkout timeout handling"` or `"v1.2-alpha release"`). Distinguishes multiple artifact iterations in the web console and API.
 > - **Go Compiler Version (`go_version`)**: Specify `1.26` or `1.27` (e.g. `go_version=1.27`). If omitted, the Go version is automatically parsed and detected from the `go <version>` directive in `go.mod`.
 > - **Custom Compiler Image (`go_image`)**: Override the compiler image directly (e.g. `go_image=custom-registry.io/golang:1.27-alpine`).
 > - **Resolution Precedence**: `go_image` $\to$ `go_version` (`golang:<version>-alpine`) $\to$ `go.mod` auto-detection $\to$ cluster default (`golang:1.26-alpine`).
@@ -305,6 +307,7 @@ curl -i -X POST http://localhost:8080/api/v1/suites/suite-auth-checkout/builds \
       "id": "c7a6e118-20ab-48d6-953b-e01140026e61",
       "suite_id": "suite-auth-checkout",
       "platform": "linux/amd64",
+      "description": "Added checkout timeout handling",
       "status": "PENDING",
       "created_at": "2026-09-05T10:00:00Z"
     }

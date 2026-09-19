@@ -183,6 +183,37 @@ func TestArtifactHandler_UploadAndBuild(t *testing.T) {
 		assert.Equal(t, http.StatusAccepted, rec.Code)
 	})
 
+	t.Run("success with description form value", func(t *testing.T) {
+		mockUC := new(MockBuildsUseCase)
+		router := rest.SetupRouter(mockUC, nil, nil, nil)
+
+		expectedPlatform := model.PlatformLinuxAmd64
+		art, err := model.NewArtifact(suiteID, expectedPlatform, "Added checkout timeout handling")
+		require.NoError(t, err)
+
+		mockUC.On("TriggerBuildWithOptions", mock.Anything, suiteID, &expectedPlatform, mock.Anything, mock.AnythingOfType("int64"), inbound.BuildOptions{
+			AllowInsecureImports: false,
+			Description:          "Added checkout timeout handling",
+		}).Return([]*model.Artifact{art}, nil)
+
+		req, _ := createMultipartRequest(t, "/api/v1/suites/"+suiteID+"/builds", "file", "source.tar.gz", []byte("fake-tarball"), map[string]string{
+			"platform":    "linux/amd64",
+			"description": "Added checkout timeout handling",
+		})
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusAccepted, rec.Code)
+
+		var resp rest.BuildTriggerResponse
+		err = json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.Equal(t, "build triggered successfully", resp.Message)
+		require.Len(t, resp.Artifacts, 1)
+		assert.Equal(t, "Added checkout timeout handling", resp.Artifacts[0].Description)
+	})
+
 	t.Run("success with multi-arch when arch is omitted or all", func(t *testing.T) {
 		mockUC := new(MockBuildsUseCase)
 		router := rest.SetupRouter(mockUC, nil, nil, nil)
@@ -423,6 +454,7 @@ func TestArtifactHandler_ListArtifacts(t *testing.T) {
 
 		art1, err := model.NewArtifactWithID(
 			"art-1", suiteID, model.PlatformLinuxAmd64,
+			"Baseline AMD64 artifact",
 			"suites/suite-100/artifacts/art-1/linux-amd64/runner",
 			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			"suites/suite-100/artifacts/art-1/build.log",
@@ -432,6 +464,7 @@ func TestArtifactHandler_ListArtifacts(t *testing.T) {
 
 		art2, err := model.NewArtifactWithID(
 			"art-2", suiteID, model.PlatformLinuxArm64,
+			"ARM64 secondary binary",
 			"suites/suite-100/artifacts/art-2/linux-arm64/runner",
 			"a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e",
 			"suites/suite-100/artifacts/art-2/build.log",
@@ -452,6 +485,8 @@ func TestArtifactHandler_ListArtifacts(t *testing.T) {
 		err = json.Unmarshal(rec.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.Equal(t, 2, resp.Count)
+		assert.Equal(t, "Baseline AMD64 artifact", resp.Artifacts[0].Description)
+		assert.Equal(t, "ARM64 secondary binary", resp.Artifacts[1].Description)
 		require.Len(t, resp.Artifacts, 2)
 		assert.Equal(t, "art-1", resp.Artifacts[0].ID)
 		assert.Equal(t, "linux/amd64", resp.Artifacts[0].Platform)

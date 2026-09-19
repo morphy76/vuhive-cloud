@@ -27,11 +27,12 @@ func (r *ArtifactRepository) Save(ctx context.Context, artifact *model.Artifact)
 	log.Debug().Msg("saving artifact")
 
 	query := `
-		INSERT INTO artifacts (id, suite_id, platform, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO artifacts (id, suite_id, platform, description, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (id) DO UPDATE SET
 			suite_id = EXCLUDED.suite_id,
 			platform = EXCLUDED.platform,
+			description = EXCLUDED.description,
 			s3_binary_key = EXCLUDED.s3_binary_key,
 			sha256_checksum = EXCLUDED.sha256_checksum,
 			build_logs_s3_key = EXCLUDED.build_logs_s3_key,
@@ -42,6 +43,7 @@ func (r *ArtifactRepository) Save(ctx context.Context, artifact *model.Artifact)
 		artifact.ID(),
 		artifact.SuiteID(),
 		string(artifact.Platform()),
+		artifact.Description(),
 		artifact.S3BinaryKey(),
 		artifact.SHA256Checksum(),
 		artifact.BuildLogsS3Key(),
@@ -65,7 +67,7 @@ func (r *ArtifactRepository) FindByID(ctx context.Context, id string) (*model.Ar
 	log.Debug().Msg("finding artifact by id")
 
 	query := `
-		SELECT id, suite_id, platform, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at
+		SELECT id, suite_id, platform, description, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at
 		FROM artifacts
 		WHERE id = $1
 	`
@@ -73,6 +75,7 @@ func (r *ArtifactRepository) FindByID(ctx context.Context, id string) (*model.Ar
 		artifactID     string
 		suiteID        string
 		platform       string
+		description    string
 		s3BinaryKey    string
 		sha256Checksum string
 		buildLogsS3Key string
@@ -81,7 +84,7 @@ func (r *ArtifactRepository) FindByID(ctx context.Context, id string) (*model.Ar
 		createdAt      time.Time
 	)
 	err := r.pool.QueryRow(ctx, query, id).Scan(
-		&artifactID, &suiteID, &platform, &s3BinaryKey, &sha256Checksum,
+		&artifactID, &suiteID, &platform, &description, &s3BinaryKey, &sha256Checksum,
 		&buildLogsS3Key, &status, &errorMessage, &createdAt,
 	)
 	if err != nil {
@@ -91,6 +94,7 @@ func (r *ArtifactRepository) FindByID(ctx context.Context, id string) (*model.Ar
 
 	artifact, err := model.NewArtifactWithID(
 		artifactID, suiteID, model.Platform(platform),
+		description,
 		s3BinaryKey, sha256Checksum, buildLogsS3Key,
 		model.ArtifactStatus(status), errorMessage, createdAt,
 	)
@@ -110,7 +114,7 @@ func (r *ArtifactRepository) ListBySuiteID(ctx context.Context, suiteID string) 
 	log.Debug().Msg("listing artifacts by suite id")
 
 	query := `
-		SELECT id, suite_id, platform, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at
+		SELECT id, suite_id, platform, description, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at
 		FROM artifacts
 		WHERE suite_id = $1
 		ORDER BY created_at ASC
@@ -128,6 +132,7 @@ func (r *ArtifactRepository) ListBySuiteID(ctx context.Context, suiteID string) 
 			artifactID     string
 			sID            string
 			platform       string
+			description    string
 			s3BinaryKey    string
 			sha256Checksum string
 			buildLogsS3Key string
@@ -136,7 +141,7 @@ func (r *ArtifactRepository) ListBySuiteID(ctx context.Context, suiteID string) 
 			createdAt      time.Time
 		)
 		if err := rows.Scan(
-			&artifactID, &sID, &platform, &s3BinaryKey, &sha256Checksum,
+			&artifactID, &sID, &platform, &description, &s3BinaryKey, &sha256Checksum,
 			&buildLogsS3Key, &status, &errorMessage, &createdAt,
 		); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan artifact row")
@@ -144,6 +149,7 @@ func (r *ArtifactRepository) ListBySuiteID(ctx context.Context, suiteID string) 
 		}
 		artifact, err := model.NewArtifactWithID(
 			artifactID, sID, model.Platform(platform),
+			description,
 			s3BinaryKey, sha256Checksum, buildLogsS3Key,
 			model.ArtifactStatus(status), errorMessage, createdAt,
 		)
@@ -199,7 +205,7 @@ func (r *ArtifactRepository) ListOrphanedArtifacts(ctx context.Context, before t
 	log.Debug().Msg("listing orphaned artifacts")
 
 	query := `
-		SELECT id, suite_id, platform, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at
+		SELECT id, suite_id, platform, description, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at
 		FROM artifacts
 		WHERE created_at < $1
 		  AND (status = 'FAILED' OR status = 'PENDING' OR status = 'CANCELLED')
@@ -221,6 +227,7 @@ func (r *ArtifactRepository) ListOrphanedArtifacts(ctx context.Context, before t
 			artifactID     string
 			sID            string
 			platform       string
+			description    string
 			s3BinaryKey    string
 			sha256Checksum string
 			buildLogsS3Key string
@@ -229,7 +236,7 @@ func (r *ArtifactRepository) ListOrphanedArtifacts(ctx context.Context, before t
 			createdAt      time.Time
 		)
 		if err := rows.Scan(
-			&artifactID, &sID, &platform, &s3BinaryKey, &sha256Checksum,
+			&artifactID, &sID, &platform, &description, &s3BinaryKey, &sha256Checksum,
 			&buildLogsS3Key, &status, &errorMessage, &createdAt,
 		); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan orphaned artifact row")
@@ -237,6 +244,7 @@ func (r *ArtifactRepository) ListOrphanedArtifacts(ctx context.Context, before t
 		}
 		artifact, err := model.NewArtifactWithID(
 			artifactID, sID, model.Platform(platform),
+			description,
 			s3BinaryKey, sha256Checksum, buildLogsS3Key,
 			model.ArtifactStatus(status), errorMessage, createdAt,
 		)
@@ -271,7 +279,7 @@ func (r *ArtifactRepository) ListExpiredArtifacts(ctx context.Context, before ti
 	log.Debug().Msg("listing expired artifacts")
 
 	query := `
-		SELECT id, suite_id, platform, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at
+		SELECT id, suite_id, platform, description, s3_binary_key, sha256_checksum, build_logs_s3_key, status, error_message, created_at
 		FROM artifacts
 		WHERE created_at < $1
 		  AND ($2::text IS NULL OR suite_id = $2::uuid)
@@ -292,6 +300,7 @@ func (r *ArtifactRepository) ListExpiredArtifacts(ctx context.Context, before ti
 			artifactID     string
 			sID            string
 			platform       string
+			description    string
 			s3BinaryKey    string
 			sha256Checksum string
 			buildLogsS3Key string
@@ -300,7 +309,7 @@ func (r *ArtifactRepository) ListExpiredArtifacts(ctx context.Context, before ti
 			createdAt      time.Time
 		)
 		if err := rows.Scan(
-			&artifactID, &sID, &platform, &s3BinaryKey, &sha256Checksum,
+			&artifactID, &sID, &platform, &description, &s3BinaryKey, &sha256Checksum,
 			&buildLogsS3Key, &status, &errorMessage, &createdAt,
 		); err != nil {
 			log.Error().Err(err).Dur("duration_ms", time.Since(start)).Msg("failed to scan expired artifact row")
@@ -308,6 +317,7 @@ func (r *ArtifactRepository) ListExpiredArtifacts(ctx context.Context, before ti
 		}
 		artifact, err := model.NewArtifactWithID(
 			artifactID, sID, model.Platform(platform),
+			description,
 			s3BinaryKey, sha256Checksum, buildLogsS3Key,
 			model.ArtifactStatus(status), errorMessage, createdAt,
 		)

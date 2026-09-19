@@ -29,6 +29,7 @@ export interface CompiledArtifact {
   id: string
   suiteId: string
   platform: string
+  description?: string
   s3BinaryKey?: string
   sha256Checksum?: string
   buildLogsS3Key?: string

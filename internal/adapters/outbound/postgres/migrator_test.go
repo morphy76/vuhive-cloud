@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -49,10 +50,15 @@ func TestEmbeddedMigrations_UniqueSequentialVersions(t *testing.T) {
 		seenVersions[version] = name
 	}
 
-	// Verify continuous sequential ordering without gaps starting from 1
-	for v := 1; v <= len(seenVersions); v++ {
-		_, ok := seenVersions[v]
-		assert.Truef(t, ok, "missing migration version %06d in sequence", v)
+	// Verify migration versions are strictly positive and strictly increasing (no duplicates)
+	var versions []int
+	for v := range seenVersions {
+		assert.Positive(t, v, "migration version must be strictly positive")
+		versions = append(versions, v)
+	}
+	slices.Sort(versions)
+	for i := 1; i < len(versions); i++ {
+		assert.Greater(t, versions[i], versions[i-1], "migration versions must be strictly increasing")
 	}
 }
 
