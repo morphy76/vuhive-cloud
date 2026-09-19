@@ -23,3 +23,6 @@ bff:
 
 s3:
   endpoint: "http://vuhive-infra-minio.vuhive-system.svc.cluster.local:9000"
+
+secrets:
+  encryptionKey: "dev-secrets-encryption-key-32b!!"

@@ -77,7 +77,14 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedArtifactForDelete, setSelectedArtifactForDelete] = useState<CompiledArtifact | null>(null)
   const [isDeleteArtifactOpen, setIsDeleteArtifactOpen] = useState(false)
-  const { data: secrets = [] } = useSuiteSecrets(currentSuite.id)
+  const { data: secrets = [], isError: isSecretsError, error: secretsError } = useSuiteSecrets(currentSuite.id)
+  const isSecretsDisabled = Boolean(
+    isSecretsError && (
+      (secretsError as any)?.status === 501 ||
+      String((secretsError as any)?.message || '').toLowerCase().includes('secrets_encryption_key') ||
+      String((secretsError as any)?.message || '').toLowerCase().includes('disabled')
+    )
+  )
   const deleteSecretMutation = useDeleteSuiteSecret(currentSuite.id)
   const [isCreateSecretOpen, setIsCreateSecretOpen] = useState(false)
   const [selectedSecretForEdit, setSelectedSecretForEdit] = useState<SuiteSecret | null>(null)
@@ -1036,6 +1043,7 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
               </div>
               <Button
                 onClick={() => setIsCreateSecretOpen(true)}
+                disabled={isSecretsDisabled}
                 className="gap-2 min-h-[40px] shadow-sm"
               >
                 <Plus className="w-4 h-4" />
@@ -1043,7 +1051,26 @@ export const SuiteDetailView: React.FC<SuiteDetailViewProps> = ({ suite, onBack 
               </Button>
             </div>
 
-            {secrets.length === 0 ? (
+            {isSecretsDisabled ? (
+              <div className="text-center py-12 px-4 border border-dashed border-amber-200 dark:border-amber-900/60 rounded-xl bg-amber-50/20 dark:bg-amber-950/10">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-3 border border-amber-200 dark:border-amber-900/60">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                  Secrets Management Disabled
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto mb-4 leading-relaxed">
+                  Suite secrets management requires <span className="font-mono text-slate-700 dark:text-slate-300 font-medium">SECRETS_ENCRYPTION_KEY</span> configured on the control plane deployment. Configure a 32-byte AES-256-GCM encryption key to enable creating and referencing encrypted suite secrets.
+                </p>
+                <Button
+                  disabled
+                  className="gap-1.5 text-xs min-h-[36px]"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Suite Secret</span>
+                </Button>
+              </div>
+            ) : secrets.length === 0 ? (
               <div className="text-center py-12 px-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-800/20">
                 <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto mb-3 border border-brand-200 dark:border-brand-900/60">
                   <ShieldCheck className="w-6 h-6" />

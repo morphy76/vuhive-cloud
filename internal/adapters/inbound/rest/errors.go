@@ -49,6 +49,8 @@ func HandleError(c *gin.Context, err error) {
 		errors.Is(err, model.ErrBarrierReleased),
 		errors.Is(err, model.ErrTerminalState):
 		c.JSON(http.StatusConflict, ErrorResponse{Error: err.Error()})
+	case errors.Is(err, model.ErrSecretsDisabled):
+		c.JSON(http.StatusNotImplemented, ErrorResponse{Error: err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
 	}
