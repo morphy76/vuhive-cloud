@@ -14,10 +14,11 @@ require (
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/rs/zerolog v1.35.1
+	github.com/sony/gobreaker/v2 v2.4.0
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/minio v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
-	github.com/zitadel/oidc/v3 v3.49.6
+	github.com/zitadel/oidc/v3 v3.51.1
 	go.uber.org/automaxprocs v1.6.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sync v0.23.0
@@ -125,7 +126,6 @@ require (
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.6 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
-	github.com/sony/gobreaker/v2 v2.4.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/testcontainers/testcontainers-go v0.44.0 // indirect
