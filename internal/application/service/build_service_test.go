@@ -693,7 +693,7 @@ func TestBuildService_TriggerBuild_WithStaticAnalyzer(t *testing.T) {
 		svc := service.NewBuildService(suiteRepo, repo, storage, orchestrator, analyzer)
 
 		archive := createBuildServiceTestArchive(t, map[string]string{
-			"go.mod": "module mytest\n\ngo 1.26\n\nrequire github.com/morphy76/vuhive v1.1.5\n",
+			"go.mod": "module mytest\n\ngo 1.26\n\nrequire github.com/morphy76/vuhive v1.1.6\n",
 			"scenario.go": `package scenario
 
 import (
@@ -1062,7 +1062,7 @@ func TestBuildService_GoVersionSupport(t *testing.T) {
 
 go 1.27
 
-require github.com/morphy76/vuhive v1.1.5
+require github.com/morphy76/vuhive v1.1.6
 `,
 			"scenario.go": `package scenario
 

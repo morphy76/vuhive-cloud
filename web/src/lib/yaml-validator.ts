@@ -217,7 +217,7 @@ export function validateVuhiveSchema(parsed: any): SchemaValidationResult {
   // Detect deprecated/legacy format
   if (parsed.execution !== undefined) {
     errors.push(
-      'Detected legacy root "execution" block. In vuhive SDK v1.1.5, scenarios must be declared under the "scenarios" mapping (e.g. scenarios.<name>.type: constant_vus).'
+      'Detected legacy root "execution" block. In vuhive SDK v1.1.6, scenarios must be declared under the "scenarios" mapping (e.g. scenarios.<name>.type: constant_vus).'
     )
   }
 

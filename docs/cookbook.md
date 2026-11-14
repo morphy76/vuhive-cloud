@@ -61,7 +61,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
 
 ### A. Test Scenario Structure & Inverted Control Contract
 
-`vuhive-cloud` executes Go test modules implementing load testing scenarios with the [`github.com/morphy76/vuhive`](https://github.com/morphy76/vuhive) engine (current release `v1.1.5`).
+`vuhive-cloud` executes Go test modules implementing load testing scenarios with the [`github.com/morphy76/vuhive`](https://github.com/morphy76/vuhive) engine (current release `v1.1.6`).
 
 To enforce consistent operational behavior, signal handling, and metrics collection across distributed Kubernetes runners, `vuhive-cloud` utilizes an **Inverted Control** architectural model:
 - **`package scenario` Enforcement:** User test code **must** declare `package scenario`. User-defined `package main` and `func main()` are strictly forbidden.
@@ -120,7 +120,7 @@ module my-load-test
 
 go 1.26
 
-require github.com/morphy76/vuhive v1.1.5
+require github.com/morphy76/vuhive v1.1.6
 ```
 
 ### B. Packaging Source Archives
@@ -213,7 +213,7 @@ curl -i -X POST http://localhost:8080/api/v1/suites \
 
 #### Step 2: Attach Scenario Configurations (`vuhive.yaml`)
 
-Upload an execution profile specifying virtual users (VUs), duration, ramp-up stages, and SLA latency thresholds conforming to the `vuhive` SDK v1.1.5 specification (optionally providing a human-readable `description` of the traffic profile or test objective):
+Upload an execution profile specifying virtual users (VUs), duration, ramp-up stages, and SLA latency thresholds conforming to the `vuhive` SDK v1.1.6 specification (optionally providing a human-readable `description` of the traffic profile or test objective):
 
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs \

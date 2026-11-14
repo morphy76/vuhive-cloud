@@ -782,9 +782,9 @@ By default, builder pods run without any proxy configuration and rely on direct 
 If you see errors like the following in builder pod logs, network configuration is required:
 
 ```
-go: downloading github.com/morphy76/vuhive v1.1.5
+go: downloading github.com/morphy76/vuhive v1.1.6
 go: github.com/morphy76/my-load-test imports
-    github.com/morphy76/vuhive/pkg/vuhive: github.com/morphy76/vuhive@v1.1.5:
+    github.com/morphy76/vuhive/pkg/vuhive: github.com/morphy76/vuhive@v1.1.6:
     Get "https://proxy.golang.org/...": dial tcp 127.0.0.1:443: connect: connection refused
 ```
 

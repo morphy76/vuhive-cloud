@@ -230,7 +230,7 @@ module smoke-test
 
 go 1.26
 
-require github.com/morphy76/vuhive v1.1.5
+require github.com/morphy76/vuhive v1.1.6
 EOF
 
 tar -czf /tmp/smoke-suite.tar.gz -C /tmp/smoke-test-module scenario.go go.mod
