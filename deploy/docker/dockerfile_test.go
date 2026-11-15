@@ -44,9 +44,9 @@ func TestBFFDockerfileStructure(t *testing.T) {
 		assert.Regexp(t, regexp.MustCompile(`pnpm\s+.*build`), content, "must execute pnpm build to generate static assets")
 	})
 
-	t.Run("Stage 2 - Golang 1.26 Builder embedding frontend assets", func(t *testing.T) {
-		assert.Regexp(t, regexp.MustCompile(`(?m)^FROM\s+golang:1.26-alpine\s+AS\s+builder`), content,
-			"must use golang:1.26-alpine for Go compilation stage")
+	t.Run("Stage 2 - Golang 1.27 Builder embedding frontend assets", func(t *testing.T) {
+		assert.Regexp(t, regexp.MustCompile(`(?m)^FROM\s+golang:1.27-alpine\s+AS\s+builder`), content,
+			"must use golang:1.27-alpine for Go compilation stage")
 		assert.Regexp(t, regexp.MustCompile(`COPY\s+--from=(frontend-builder|frontend)\s+.*dist.*web/dist`), content,
 			"must copy compiled frontend dist assets from frontend stage into web/dist")
 		assert.Contains(t, content, "CGO_ENABLED=0", "must compile statically without cgo")
@@ -77,4 +77,23 @@ func TestDockerignorePresent(t *testing.T) {
 	assert.True(t, strings.Contains(content, ".git"), ".dockerignore must exclude .git")
 	assert.True(t, strings.Contains(content, "node_modules"), ".dockerignore must exclude node_modules")
 	assert.True(t, strings.Contains(content, "bin/"), ".dockerignore must exclude compiled binaries")
+}
+
+func TestServerAndRunnerInitDockerfileBuilderImage(t *testing.T) {
+	repoRoot := findRepoRoot(t)
+	dockerfiles := []string{
+		"server.Dockerfile",
+		"runner-init.Dockerfile",
+	}
+
+	builderRegex := regexp.MustCompile(`(?m)^FROM\s+golang:1\.27-alpine\s+AS\s+builder`)
+	for _, name := range dockerfiles {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(repoRoot, "deploy", "docker", name)
+			contentBytes, err := os.ReadFile(path)
+			require.NoError(t, err, "%s must exist", name)
+			assert.Regexp(t, builderRegex, string(contentBytes),
+				"%s must use golang:1.27-alpine for Go builder stage", name)
+		})
+	}
 }

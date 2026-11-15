@@ -11,7 +11,7 @@ This rule enforces general software constraints, technology stack lock-in, monor
 
 The following software versions, frameworks, and client libraries are strictly locked. Any deviation or addition requires formal approval/constitution amendment:
 
-- **Core Language:** Go 1.26
+- **Core Language:** Go 1.27
 - **HTTP Routing:** Gin (`github.com/gin-gonic/gin`)
 - **Structured Logging:** zerolog (`github.com/rs/zerolog`)
 - **Testing Libraries:** testify (`github.com/stretchr/testify`) and testcontainers-go

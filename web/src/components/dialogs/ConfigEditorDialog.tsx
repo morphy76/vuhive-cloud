@@ -173,7 +173,7 @@ export const ConfigEditorDialog: React.FC<ConfigEditorDialogProps> = ({
             <DialogDescription>
               {isEditMode
                 ? 'Tune scenario virtual users, pacing models, stage plateaus, and SLA quality gates with real-time YAML validation and side-by-side diffing.'
-                : 'Upload or declare scenario parameters, pacing engines (constant_vus, arrival_rate, ramping_vus), and SLA thresholds conforming to the vuhive SDK v1.1.5 specification.'}
+                : 'Upload or declare scenario parameters, pacing engines (constant_vus, arrival_rate, ramping_vus), and SLA thresholds conforming to the vuhive SDK v1.1.6 specification.'}
             </DialogDescription>
           </DialogHeader>
 
