@@ -3,7 +3,7 @@
 **Project:** `vuhive-cloud`  
 **Repository:** `github.com/morphy76/vuhive-cloud`  
 **Target Core Dependency:** `github.com/morphy76/vuhive`  
-**Language & Runtime:** Go 1.26+  
+**Language & Runtime:** Go 1.27 (scenario builds support Go 1.26+)  
 **Target Platform:** Kubernetes (1.28+)  
 
 ---
@@ -43,7 +43,7 @@ flowchart TD
 
     subgraph K8sCluster["Kubernetes Cluster (vuhive-runners namespace)"]
         subgraph BuildSub["Ephemeral Build Subsystem (vuhive-system)"]
-            BuildJob["Ephemeral Build Job\n(golang:1.26-alpine)"]
+            BuildJob["Ephemeral Build Job\n(golang:1.27-alpine)"]
             ASTValidator["Pre-Build Gate:\n- go.mod verification\n- Go AST inspection\n- Import blocklist\n- Injected main.go driver"]
             BuildJob --> ASTValidator
         end
@@ -166,7 +166,7 @@ vuhive-cloud/
    - **Platform-Managed Driver Injection (`main.go`):** Normalizes user code under `scenario/` and injects an immutable, trusted `main.go` driver importing `github.com/morphy76/vuhive/pkg/vuhive` and wiring CLI flags (`--summary-export`, `--config`) and OS signal handling (`SIGINT`, `SIGTERM`).
    - **Fast Rejection:** If static inspection fails, `POST /api/v1/suites/{id}/builds` immediately aborts with `400 Bad Request` (or `403 Forbidden`), preventing malformed or dangerous archives from consuming cluster build resources.
 3. **Staging:** Control plane saves the normalized source archive with injected driver to S3 bucket `vuhive-sources/{suite_id}/{build_id}.tar.gz`.
-4. **Build Job Dispatch:** Control plane dispatches an ephemeral Kubernetes Job (`vuhive-build-{build_id}`) in `vuhive-system` using image `golang:1.26-alpine`.
+4. **Build Job Dispatch:** Control plane dispatches an ephemeral Kubernetes Job (`vuhive-build-{build_id}`) in `vuhive-system` using image `golang:1.27-alpine`.
 5. **Compilation:** The build pod tidies module dependencies and compiles the static binary:
    ```bash
    go mod tidy
@@ -550,7 +550,7 @@ All issues and milestones are actively tracked via the [GitHub Issues Tracker](h
 
 #### Epic 1.2: Source Compilation & Framework Enforcement Subsystem
 - [**Issue 1.2.1: Ephemeral Build Job Generator**](https://github.com/morphy76/vuhive-cloud/issues/4)
-  - Implement K8s client adapter to generate and launch `golang:1.26-alpine` build pods.
+  - Implement K8s client adapter to generate and launch `golang:1.27-alpine` build pods.
   - Inject cross-compilation environment variables (`GOOS=linux`, `GOARCH=amd64/arm64`).
 - [**Issue 1.2.2: Build Status Tracking & Artifact Registry Inbound API**](https://github.com/morphy76/vuhive-cloud/issues/5)
   - Provide endpoints `POST /api/v1/suites/{id}/builds` and callback handlers for build completion.

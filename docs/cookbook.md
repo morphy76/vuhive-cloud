@@ -276,7 +276,7 @@ curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389
 > - **Build Description (`description`)**: Optional human-readable note or version label attached to the compiled artifact (e.g. `description="Added checkout timeout handling"` or `"v1.2-alpha release"`). Distinguishes multiple artifact iterations in the web console and API.
 > - **Go Compiler Version (`go_version`)**: Specify `1.26` or `1.27` (e.g. `go_version=1.27`). If omitted, the Go version is automatically parsed and detected from the `go <version>` directive in `go.mod`.
 > - **Custom Compiler Image (`go_image`)**: Override the compiler image directly (e.g. `go_image=custom-registry.io/golang:1.27-alpine`).
-> - **Resolution Precedence**: `go_image` $\to$ `go_version` (`golang:<version>-alpine`) $\to$ `go.mod` auto-detection $\to$ cluster default (`golang:1.26-alpine`).
+> - **Resolution Precedence**: `go_image` $\to$ `go_version` (`golang:<version>-alpine`) $\to$ `go.mod` auto-detection $\to$ cluster default (`golang:1.27-alpine`).
 > - **Version Minimum**: Vuhive requires Go 1.26+. Any version older than 1.26 is rejected with `400 Bad Request` (`code: "UNSUPPORTED_GO_VERSION"`).
 
 #### Pre-Build Static Validation & Fast Rejection:

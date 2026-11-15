@@ -384,6 +384,11 @@ func TestHelmChart_ValuesProduction_BFFRendering(t *testing.T) {
 	dbSecret, dbKey := findEnvSecretRef("DATABASE_URL")
 	assert.Equal(t, "vuhive-db-secret", dbSecret)
 	assert.Equal(t, "DATABASE_URL", dbKey)
+
+	cm := findResource(docs, "ConfigMap", "vuhive-vuhive-cloud")
+	require.NotNil(t, cm, "ConfigMap should exist in production template")
+	cmData := cm["data"].(map[string]interface{})
+	assert.Equal(t, "golang:1.27-alpine", cmData["BUILDER_IMAGE"])
 }
 
 func TestHelmChart_NetworkPolicyRendering(t *testing.T) {
@@ -716,6 +721,7 @@ func TestHelmChart_GoRuntimeAndProbeOptimizations(t *testing.T) {
 	cm := findResource(docs, "ConfigMap", "vuhive-vuhive-cloud")
 	require.NotNil(t, cm, "ConfigMap should exist")
 	cmData := cm["data"].(map[string]interface{})
+	assert.Equal(t, "golang:1.27-alpine", cmData["BUILDER_IMAGE"])
 	assert.Equal(t, "1000m", cmData["BUILDER_CPU_REQUEST"])
 	assert.Equal(t, "2000m", cmData["BUILDER_CPU_LIMIT"])
 	assert.Equal(t, "1Gi", cmData["BUILDER_MEMORY_REQUEST"])

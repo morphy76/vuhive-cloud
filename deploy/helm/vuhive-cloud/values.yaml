@@ -232,7 +232,7 @@ builder:
   # set createNamespace: true to let Helm create the namespace automatically.
   # The namespace is created with "helm.sh/resource-policy: keep" so it is NOT deleted on helm uninstall.
   createNamespace: true
-  image: "golang:1.26-alpine"
+  image: "golang:1.27-alpine"
   resources:
     requests:
       cpu: 1000m
