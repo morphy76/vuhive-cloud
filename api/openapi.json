@@ -4608,8 +4608,8 @@
                     "type": "boolean"
                   },
                   "go_image": {
-                    "description": "Optional explicit container compiler image override (e.g., golang:1.26-alpine). Takes precedence over go_version.",
-                    "example": "golang:1.26-alpine",
+                    "description": "Optional explicit container compiler image override (e.g., golang:1.27-alpine). Takes precedence over go_version.",
+                    "example": "golang:1.27-alpine",
                     "type": "string"
                   },
                   "go_version": {

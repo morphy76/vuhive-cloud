@@ -172,7 +172,7 @@ export const CreateSuiteDialog: React.FC<CreateSuiteDialogProps> = ({
                   Target Architecture
                 </span>
                 <HelpTooltip
-                  text="Target CPU architectures for ephemeral cross-compilation in golang:1.26-alpine build containers."
+                  text="Target CPU architectures for ephemeral cross-compilation in golang:1.27-alpine build containers."
                   label="Help for target architecture"
                 />
               </div>

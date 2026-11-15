@@ -110,7 +110,7 @@ type Config struct {
 }
 
 // DefaultGoImage is the cluster-wide fallback container image for ephemeral compilation jobs.
-const DefaultGoImage = "golang:1.26-alpine"
+const DefaultGoImage = "golang:1.27-alpine"
 
 // DefaultConfig returns a Config initialized with production-grade defaults.
 func DefaultConfig() Config {

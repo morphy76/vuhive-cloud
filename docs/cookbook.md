@@ -61,7 +61,7 @@ Welcome to the `vuhive-cloud` adoption cookbook. This guide provides an end-to-e
 
 ### A. Test Scenario Structure & Inverted Control Contract
 
-`vuhive-cloud` executes Go test modules implementing load testing scenarios with the [`github.com/morphy76/vuhive`](https://github.com/morphy76/vuhive) engine (current release `v1.1.5`).
+`vuhive-cloud` executes Go test modules implementing load testing scenarios with the [`github.com/morphy76/vuhive`](https://github.com/morphy76/vuhive) engine (current release `v1.1.6`).
 
 To enforce consistent operational behavior, signal handling, and metrics collection across distributed Kubernetes runners, `vuhive-cloud` utilizes an **Inverted Control** architectural model:
 - **`package scenario` Enforcement:** User test code **must** declare `package scenario`. User-defined `package main` and `func main()` are strictly forbidden.
@@ -120,7 +120,7 @@ module my-load-test
 
 go 1.26
 
-require github.com/morphy76/vuhive v1.1.5
+require github.com/morphy76/vuhive v1.1.6
 ```
 
 ### B. Packaging Source Archives
@@ -213,7 +213,7 @@ curl -i -X POST http://localhost:8080/api/v1/suites \
 
 #### Step 2: Attach Scenario Configurations (`vuhive.yaml`)
 
-Upload an execution profile specifying virtual users (VUs), duration, ramp-up stages, and SLA latency thresholds conforming to the `vuhive` SDK v1.1.5 specification (optionally providing a human-readable `description` of the traffic profile or test objective):
+Upload an execution profile specifying virtual users (VUs), duration, ramp-up stages, and SLA latency thresholds conforming to the `vuhive` SDK v1.1.6 specification (optionally providing a human-readable `description` of the traffic profile or test objective):
 
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389bca12c97/configs \
@@ -276,7 +276,7 @@ curl -i -X POST http://localhost:8080/api/v1/suites/3e04a02e-bf34-4398-8b40-6389
 > - **Build Description (`description`)**: Optional human-readable note or version label attached to the compiled artifact (e.g. `description="Added checkout timeout handling"` or `"v1.2-alpha release"`). Distinguishes multiple artifact iterations in the web console and API.
 > - **Go Compiler Version (`go_version`)**: Specify `1.26` or `1.27` (e.g. `go_version=1.27`). If omitted, the Go version is automatically parsed and detected from the `go <version>` directive in `go.mod`.
 > - **Custom Compiler Image (`go_image`)**: Override the compiler image directly (e.g. `go_image=custom-registry.io/golang:1.27-alpine`).
-> - **Resolution Precedence**: `go_image` $\to$ `go_version` (`golang:<version>-alpine`) $\to$ `go.mod` auto-detection $\to$ cluster default (`golang:1.26-alpine`).
+> - **Resolution Precedence**: `go_image` $\to$ `go_version` (`golang:<version>-alpine`) $\to$ `go.mod` auto-detection $\to$ cluster default (`golang:1.27-alpine`).
 > - **Version Minimum**: Vuhive requires Go 1.26+. Any version older than 1.26 is rejected with `400 Bad Request` (`code: "UNSUPPORTED_GO_VERSION"`).
 
 #### Pre-Build Static Validation & Fast Rejection:

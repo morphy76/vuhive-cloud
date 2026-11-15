@@ -24,7 +24,7 @@ RUN pnpm build
 # ==============================================================================
 # Stage 2: Go binary compilation (BFF service embedding frontend assets)
 # ==============================================================================
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 WORKDIR /src
 

@@ -56,7 +56,7 @@ func TestBuildJobGenerator_GenerateBuildJob_Amd64(t *testing.T) {
 	require.Len(t, podSpec.Containers, 1)
 	container := podSpec.Containers[0]
 	assert.Equal(t, "builder", container.Name)
-	assert.Equal(t, "golang:1.26-alpine", container.Image)
+	assert.Equal(t, "golang:1.27-alpine", container.Image)
 
 	// Security Context of container
 	require.NotNil(t, container.SecurityContext)
@@ -393,6 +393,18 @@ func TestBuildJobGenerator_GoImageResolution(t *testing.T) {
 		assert.Equal(t, "golang:1.26-alpine-custom", job.Spec.Template.Spec.Containers[0].Image)
 	})
 
+	t.Run("supports explicit Go 1.26 user scenario version", func(t *testing.T) {
+		cfg := k8s.DefaultConfig()
+		generator := k8s.NewBuildJobGenerator(cfg)
+
+		opts := baseOpts
+		opts.GoVersion = "1.26"
+
+		job, err := generator.GenerateBuildJob(opts)
+		require.NoError(t, err)
+		assert.Equal(t, "golang:1.26-alpine", job.Spec.Template.Spec.Containers[0].Image)
+	})
+
 	t.Run("falls back to DefaultGoImage when cfg.BuilderImage is empty", func(t *testing.T) {
 		cfg := k8s.DefaultConfig()
 		cfg.BuilderImage = ""
@@ -400,6 +412,7 @@ func TestBuildJobGenerator_GoImageResolution(t *testing.T) {
 
 		job, err := generator.GenerateBuildJob(baseOpts)
 		require.NoError(t, err)
+		assert.Equal(t, "golang:1.27-alpine", k8s.DefaultGoImage)
 		assert.Equal(t, k8s.DefaultGoImage, job.Spec.Template.Spec.Containers[0].Image)
 	})
 }

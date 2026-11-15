@@ -41,7 +41,7 @@ We strictly separate engineering responsibilities between humans and AI agents:
 │ DETERMINISTIC QUALITY GATES (Mechanical Verification)                             │
 │                                                                                   │
 │  • Compile-Time Interface Assertions (var _ Port = (*Adapter)(nil))               │
-│  • Go 1.26 Strict Compiler & golangci-lint                                        │
+│  • Go 1.27 Strict Compiler & golangci-lint                                        │
 │  • Race Detector (-race) & Test Coverage                                          │
 │  • Kubernetes Pod Security Standard Verification (Restricted Profile)             │
 │  • Mandatory Human Pull Request Review & Merge Approval                           │
@@ -73,7 +73,7 @@ The repository maintains an executable `.agents/` rulebook that every coding age
 | [`.agents/rules/code-architecture.md`](./.agents/rules/code-architecture.md) | **Hexagonal Architecture (Ports & Adapters) & Domain-Driven Design (DDD)**:<br>• Pure domain layer (`domain/`) has zero dependencies on application or adapters.<br>• Application layer (`application/`) depends only on domain and port interfaces (`ports/inbound`, `ports/outbound`).<br>• Infrastructure layer (`adapters/`) implements outbound ports and drives inbound ports.<br>• Reactive Go concurrency (goroutines, worker pools, channels, context cancellation, no unbounded concurrency). |
 | [`.agents/rules/golang.md`](./.agents/rules/golang.md) | **Static Compile-Time Interface Verification**:<br>• Mandatory static type assertions (`var _ Port = (*Adapter)(nil)`) on every adapter struct.<br>• Minimal, focused interfaces ("accept interfaces, return structs"). |
 | [`.agents/rules/tdd.md`](./.agents/rules/tdd.md) | **Strict Test-Driven Development (TDD)**:<br>• Mandatory Red-Green-Refactor cycle.<br>• Zero production code introduced without a prior failing test.<br>• Continuous regression verification. |
-| [`.agents/rules/nonfunctional.md`](./.agents/rules/nonfunctional.md) | **Non-Functional Requirements & Stack Lock-in**:<br>• Go 1.26, Gin, `zerolog` structured logging (no unstructured format strings, mandatory enter/exit log patterns with duration ms), Viper, `testify`.<br>• Monorepo root `Makefile` with atomic compile-time version injection via `ldflags`.<br>• Graceful teardown listening for OS termination signals. |
+| [`.agents/rules/nonfunctional.md`](./.agents/rules/nonfunctional.md) | **Non-Functional Requirements & Stack Lock-in**:<br>• Go 1.27, Gin, `zerolog` structured logging (no unstructured format strings, mandatory enter/exit log patterns with duration ms), Viper, `testify`.<br>• Monorepo root `Makefile` with atomic compile-time version injection via `ldflags`.<br>• Graceful teardown listening for OS termination signals. |
 | [`.agents/rules/k8s-local-validation.md`](./.agents/rules/k8s-local-validation.md) | **Local Kubernetes Validation Safety (Rancher Desktop)**:<br>• Context verification locked to `rancher-desktop`.<br>• Isolated ephemeral namespaces (`vuhive-smoke-*`) with guaranteed post-validation teardown.<br>• BuildKit `--load` image containment and in-cluster probing.<br>• Robust probe file-staging patterns (Base64 stdin pipeline avoiding container `tar` dependencies). |
 
 ### Architectural Spec (`ARCHITECTURE_SPEC.md`)

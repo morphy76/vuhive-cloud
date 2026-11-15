@@ -66,7 +66,7 @@ scenarios:
   })
 })
 
-describe('Vuhive Schema Validator (SDK v1.1.5 specification)', () => {
+describe('Vuhive Schema Validator (SDK v1.1.6 specification)', () => {
   it('validates compliant constant_vus scenario', () => {
     const yaml = `
 version: "1.0"
@@ -280,7 +280,7 @@ scenarios:
     expect(schemaResult.warnings.some((w) => w.includes('non_existent'))).toBe(true)
   })
 
-  it('provides predefined valid templates conforming to SDK v1.1.5 specification', () => {
+  it('provides predefined valid templates conforming to SDK v1.1.6 specification', () => {
     expect(VUHIVE_YAML_TEMPLATES.length).toBeGreaterThanOrEqual(3)
     const templateIds = VUHIVE_YAML_TEMPLATES.map((t) => t.id)
     expect(templateIds).toContain('standard-load')

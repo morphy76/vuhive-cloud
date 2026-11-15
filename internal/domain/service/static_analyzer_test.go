@@ -100,7 +100,7 @@ func validGoMod() string {
 
 go 1.26
 
-require github.com/morphy76/vuhive v1.1.5
+require github.com/morphy76/vuhive v1.1.6
 `
 }
 
@@ -184,7 +184,7 @@ require github.com/google/uuid v1.6.0
 
 go 1.26
 
-require github.com/morphy76/vuhive v1.1.5 // indirect
+require github.com/morphy76/vuhive v1.1.6 // indirect
 `,
 			"scenario.go": validScenarioCode(),
 		})
@@ -657,7 +657,7 @@ func TestStaticAnalyzer_GoVersionDetection(t *testing.T) {
 
 go 1.26
 
-require github.com/morphy76/vuhive v1.1.5
+require github.com/morphy76/vuhive v1.1.6
 `,
 			"scenario.go": validScenarioCode(),
 		})
@@ -673,7 +673,7 @@ require github.com/morphy76/vuhive v1.1.5
 
 go 1.27
 
-require github.com/morphy76/vuhive v1.1.5
+require github.com/morphy76/vuhive v1.1.6
 `,
 			"scenario.go": validScenarioCode(),
 		})
@@ -689,7 +689,7 @@ require github.com/morphy76/vuhive v1.1.5
 
 go 1.24
 
-require github.com/morphy76/vuhive v1.1.5
+require github.com/morphy76/vuhive v1.1.6
 `,
 			"scenario.go": validScenarioCode(),
 		})
@@ -705,7 +705,7 @@ require github.com/morphy76/vuhive v1.1.5
 
 go 1.27
 
-require github.com/morphy76/vuhive v1.1.5
+require github.com/morphy76/vuhive v1.1.6
 `,
 			"scenario.go": validScenarioCode(),
 		})
