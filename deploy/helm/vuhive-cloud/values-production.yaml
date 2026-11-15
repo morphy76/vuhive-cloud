@@ -155,7 +155,7 @@ runner:
 builder:
   namespace: "vuhive-system"
   createNamespace: true
-  image: "golang:1.26-alpine"
+  image: "golang:1.27-alpine"
 
 # ── Execution Artifact Retention & Housekeeping ───────────────────────────
 housekeeping:

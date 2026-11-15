@@ -1886,8 +1886,8 @@ paths:
                   example: "1.26"
                 go_image:
                   type: string
-                  description: Optional explicit container compiler image override (e.g., golang:1.26-alpine). Takes precedence over go_version.
-                  example: "golang:1.26-alpine"
+                  description: Optional explicit container compiler image override (e.g., golang:1.27-alpine). Takes precedence over go_version.
+                  example: "golang:1.27-alpine"
       responses:
         '202':
           description: Compilation build job accepted

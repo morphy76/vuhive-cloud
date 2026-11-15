@@ -782,9 +782,9 @@ By default, builder pods run without any proxy configuration and rely on direct 
 If you see errors like the following in builder pod logs, network configuration is required:
 
 ```
-go: downloading github.com/morphy76/vuhive v1.1.5
+go: downloading github.com/morphy76/vuhive v1.1.6
 go: github.com/morphy76/my-load-test imports
-    github.com/morphy76/vuhive/pkg/vuhive: github.com/morphy76/vuhive@v1.1.5:
+    github.com/morphy76/vuhive/pkg/vuhive: github.com/morphy76/vuhive@v1.1.6:
     Get "https://proxy.golang.org/...": dial tcp 127.0.0.1:443: connect: connection refused
 ```
 
@@ -936,7 +936,7 @@ This creates a `NetworkPolicy` in `builder.namespace` targeting `app.kubernetes.
 | `networkPolicy.additionalEgress` | Additional custom egress rules appended to the runner NetworkPolicy | `[]` |
 | `builder.namespace` | Namespace where test builder jobs run | `vuhive-system` |
 | `builder.createNamespace` | Automatically create `builder.namespace` if it does not exist (ignored when `rbac.clusterScoped=true` or namespace equals release/runner namespace) | `true` |
-| `builder.image` | Builder container image | `golang:1.26-alpine` |
+| `builder.image` | Builder container image | `golang:1.27-alpine` |
 | `builder.resources.requests.cpu` | Ephemeral compilation Job CPU request | `1000m` |
 | `builder.resources.requests.memory` | Ephemeral compilation Job memory request | `1Gi` |
 | `builder.resources.limits.cpu` | Ephemeral compilation Job CPU limit | `2000m` |

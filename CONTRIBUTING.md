@@ -39,7 +39,7 @@ See [`AI_DISCLOSURE.md`](./AI_DISCLOSURE.md) for full details.
 
 ### Prerequisites
 
-- **Go**: Version `1.26`
+- **Go**: Version `1.27`
 - **Node.js**: Version `22+` (for React 19 frontend development)
 - **pnpm**: Fast, disk space efficient package manager (enabled via `corepack enable` or standalone install)
 - **Docker / Rancher Desktop**: Docker 29+ (or nerdctl) with BuildKit enabled
