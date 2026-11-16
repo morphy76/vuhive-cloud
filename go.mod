@@ -18,9 +18,9 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go/modules/minio v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
-	github.com/zitadel/oidc/v3 v3.51.3
+	github.com/zitadel/oidc/v3 v3.52.0
 	go.uber.org/automaxprocs v1.6.0
-	golang.org/x/oauth2 v0.37.0
+	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sync v0.25.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.37.1
@@ -66,7 +66,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.9 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
